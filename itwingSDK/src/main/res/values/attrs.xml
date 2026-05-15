@@ -1,0 +1,33 @@
+<resources>
+    <declare-styleable name="ITWingBannerView">
+        <attr name="ITWingBannerPlacement" format="string" />
+        <attr name="ITWingBannerText" format="string" />
+        <attr name="ITWingBannerTextColor" format="color" />
+        <attr name="ITWingBannerTextSize" format="dimension" />
+        <attr name="ITWingBannerStrokeColor" format="color" />
+        <attr name="ITWingBannerBackgroundColor" format="color" />
+        <attr name="ITWingBannerStrokeWidth" format="dimension" />
+        <attr name="ITWingBannerCornerRadius" format="dimension" />
+        <attr name="ITWingBannerType">
+            <enum name="adaptive" value="0" />
+            <enum name="collapsible_top" value="1" />
+            <enum name="collapsible_bottom" value="2" />
+        </attr>
+    </declare-styleable>
+
+    <declare-styleable name="ITWingNativeAdView">
+        <attr name="ITWingNativeAdViewPlacement" format="string" />
+        <attr name="ITWingNativeAdViewText" format="string" />
+        <attr name="ITWingNativeAdViewTextColor" format="color" />
+        <attr name="ITWingNativeAdViewTextSize" format="dimension" />
+        <attr name="ITWingNativeAdViewStrokeColor" format="color" />
+        <attr name="ITWingNativeAdViewBackgroundColor" format="color" />
+        <attr name="ITWingNativeAdViewStrokeWidth" format="dimension" />
+        <attr name="ITWingNativeAdViewCornerRadius" format="dimension" />
+        <attr name="ITWingNativeAdViewType">
+            <enum name="small" value="0" />
+            <enum name="large" value="1" />
+        </attr>
+    </declare-styleable>
+
+</resources>

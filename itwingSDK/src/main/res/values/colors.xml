@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="orange">#FFAB00</color>
+    <color name="grey">#686B6B6B</color>
+
+    <color name="colorPrimary">#304FFE</color>
+    <color name="colorAccent">#304FFE</color>
+    <color name="shimmer_placeholder_color">#8C9A8C</color>
+    <color name="gray_transparent">#80000000</color>
+</resources>

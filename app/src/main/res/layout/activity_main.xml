@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context=".MainActivity">
+
+    <!--        <com.itwingtech.itwingsdk.ads.ITWingBannerView-->
+    <!--            android:id="@+id/top"-->
+    <!--            android:layout_width="match_parent"-->
+    <!--            android:layout_height="wrap_content"-->
+    <!--            android:layout_alignParentTop="true"-->
+    <!--            app:ITWingBannerPlacement="top_collapsible"/>-->
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="@dimen/_5sdp"
+            android:orientation="vertical">
+
+            <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:ITWingNativeAdViewPlacement="native_small" />
+
+            <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:ITWingNativeAdViewPlacement="native_large" />
+
+            <com.itwingtech.itwingsdk.ads.ITWingBannerView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:ITWingBannerPlacement="custom_banner" />
+
+            <Button
+                android:id="@+id/interstitial"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Show Interstitial" />
+
+            <Button
+                android:id="@+id/rewarded"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Show Rewarded" />
+
+            <Button
+                android:id="@+id/rewardedInterstitial"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Show Rewarded Interstitial" />
+
+            <Button
+                android:id="@+id/appOpen"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Show App Open" />
+
+
+        </LinearLayout>
+    </ScrollView>
+
+    <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        app:ITWingNativeAdViewPlacement="custom_native" />
+
+</RelativeLayout>
