@@ -24,6 +24,8 @@ import java.lang.ref.WeakReference
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import androidx.core.net.toUri
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 
 object ITWingSDK {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -112,7 +114,7 @@ object ITWingSDK {
                 initializeMobileAds(activity) {
                     ads.startAutomaticAppOpen(activity)
                 }
-                NotificationRuntimeManager.configure(activity.applicationContext, config, repository)
+                NotificationRuntimeManager.configure(activity, config, repository)
                 notifyListeners { it.onNotificationsReady() }
                 updates.check(activity)
                 subscriptions.connect(activity)
@@ -136,7 +138,7 @@ object ITWingSDK {
                     ads.startAutomaticAppOpen(activity)
                     notifyListeners { it.onAdsReady() }
                 }
-                NotificationRuntimeManager.configure(activity.applicationContext, config, repository)
+                NotificationRuntimeManager.configure(activity, config, repository)
                 notifyListeners { it.onNotificationsReady() }
                 updates.check(activity)
                 subscriptions.connect(activity)
@@ -275,6 +277,26 @@ object ITWingSDK {
     }
 
     @JvmStatic
+    fun getDouble(key: String, defaultValue: Double = 0.0): Double {
+        return when (val value = config.remoteConfig[key]) {
+            is Number -> value.toDouble()
+            is String -> value.toDoubleOrNull() ?: defaultValue
+            else -> defaultValue
+        }
+    }
+
+    @JvmStatic
+    fun getRemoteConfig(key: String): Map<String, Any?> {
+        return config.remoteConfig[key] as? Map<String, Any?> ?: emptyMap()
+    }
+
+    @JvmStatic
+    fun getRemoteModule(name: String): Map<String, Any?> {
+        val modules = config.remoteConfig["modules"] as? Map<*, *> ?: return emptyMap()
+        return modules[name] as? Map<String, Any?> ?: emptyMap()
+    }
+
+    @JvmStatic
     fun getApiConfig(key: String): ApiKeyConfig? {
         config.apiKeys[key]?.let { return it.sanitizedApiKeyConfig() }
         return config.apiProviders[key]?.let {
@@ -290,7 +312,10 @@ object ITWingSDK {
 
     @JvmStatic
     fun getApiKey(key: String, defaultValue: String = ""): String {
-        return config.apiKeys[key]?.value.cleanConfigString() ?: defaultValue
+        val apiConfig = config.apiKeys[key] ?: return defaultValue
+        val value = apiConfig.value.cleanConfigString() ?: return defaultValue
+        reportApiKeyUsage(key, apiConfig)
+        return value
     }
 
     @JvmStatic
@@ -309,6 +334,32 @@ object ITWingSDK {
     }
 
     @JvmStatic
+    fun getApiProxyBaseUrl(key: String, defaultValue: String = ""): String {
+        val endpoint = repository?.endpointBaseUrl().cleanConfigString() ?: return defaultValue
+        val proxy = getApiProxyEndpoint(key).cleanConfigString() ?: return defaultValue
+        return (endpoint.trimEnd('/') + "/" + proxy.trim('/')).normalizeBaseUrl()
+            ?: defaultValue.normalizeBaseUrl()
+            ?: defaultValue
+    }
+
+    @JvmStatic
+    fun getApiProxyUrl(key: String, path: String = "", defaultValue: String = ""): String {
+        val base = getApiProxyBaseUrl(key, defaultValue).normalizeBaseUrl() ?: return defaultValue
+        val cleanPath = path.trim('/')
+        return if (cleanPath.isBlank()) base else base + cleanPath
+    }
+
+    @JvmStatic
+    fun apiProxyInterceptor(): Interceptor? = repository?.sdkSigningInterceptor()
+
+    @JvmStatic
+    fun createApiProxyOkHttpClient(baseClient: OkHttpClient? = null): OkHttpClient {
+        val builder = baseClient?.newBuilder() ?: OkHttpClient.Builder()
+        repository?.sdkSigningInterceptor()?.let { builder.addInterceptor(it) }
+        return builder.build()
+    }
+
+    @JvmStatic
     fun isAdFree(): Boolean {
         return ::subscriptions.isInitialized && subscriptions.isAdFree()
     }
@@ -323,7 +374,7 @@ object ITWingSDK {
     }
 
     @JvmStatic
-    fun syncNotificationToken(token: String, provider: String = "fcm") {
+    fun syncNotificationToken(token: String, provider: String = "itwing") {
         NotificationRuntimeManager.registerDeviceToken(token, provider, repository)
     }
 
@@ -529,6 +580,8 @@ object ITWingSDK {
                      */
 
                     activeActivity = WeakReference(activity)
+                    NotificationRuntimeManager.reportOpened(activity.intent?.getStringExtra("itwing_notification_id"))
+                    NotificationRuntimeManager.syncNow()
 
                     /*
                      |--------------------------------------------------------------------------
@@ -644,6 +697,7 @@ object ITWingSDK {
 
     private fun ApiKeyConfig.sanitizedApiKeyConfig(): ApiKeyConfig {
         return copy(
+            id = id.cleanConfigString(),
             value = value.cleanConfigString().orEmpty(),
             provider = provider.cleanConfigString(),
             proxyEndpoint = proxyEndpoint.cleanConfigString(),
@@ -652,12 +706,26 @@ object ITWingSDK {
         )
     }
 
+    private fun reportApiKeyUsage(key: String, apiConfig: ApiKeyConfig) {
+        scope.launch(Dispatchers.IO) {
+            val response = runCatching {
+                repository?.reportApiKeyUsage(key, apiConfig.id)
+            }.getOrNull()
+            val shouldRotate = response
+                ?.optJSONObject("data")
+                ?.optBoolean("rotate", false) == true
+            if (shouldRotate) {
+                refreshConfig()
+            }
+        }
+    }
+
     private fun String?.cleanConfigString(): String? {
         val value = this?.trim() ?: return null
         return value.takeUnless {
             it.isBlank() ||
-                    it.equals("null", ignoreCase = true) ||
-                    it.equals("undefined", ignoreCase = true)
+                it.equals("null", ignoreCase = true) ||
+                it.equals("undefined", ignoreCase = true)
         }
     }
 
@@ -671,9 +739,9 @@ object ITWingSDK {
 
     private fun Throwable.isNetworkFailure(): Boolean {
         return this is UnknownHostException ||
-                this is SocketTimeoutException ||
-                message?.contains("network_dns_unavailable", ignoreCase = true) == true ||
-                cause?.isNetworkFailure() == true
+            this is SocketTimeoutException ||
+            message?.contains("network_dns_unavailable", ignoreCase = true) == true ||
+            cause?.isNetworkFailure() == true
     }
 
     private fun Throwable.toSdkErrorMessage(): String {

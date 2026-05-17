@@ -1,9 +1,11 @@
 package com.itwingtech.itwingsdk.ads
 
 import android.app.Activity
+import android.app.Application
 import android.content.Intent
-import android.graphics.BitmapFactory
-import android.net.Uri
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -12,6 +14,7 @@ import android.widget.ImageView
 import android.widget.RatingBar
 import android.widget.TextView
 import androidx.annotation.LayoutRes
+import com.bumptech.glide.Glide
 import com.facebook.shimmer.ShimmerFrameLayout
 import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
 import com.google.android.libraries.ads.mobile.sdk.common.VideoController
@@ -24,15 +27,25 @@ import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdView
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.AdPlacementConfig
 import com.itwingtech.itwingsdk.core.CustomAdConfig
-import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.core.ITWingConfig
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import com.itwingtech.itwingsdk.core.ITWingSDK
+import com.itwingtech.itwingsdk.utils.SDKMediaView
+import androidx.core.graphics.toColorInt
+import androidx.core.net.toUri
 
+class NativeLoader(
+    private val configProvider: () -> ITWingConfig
+) {
 
-class NativeLoader(private val configProvider: () -> ITWingConfig) {
-    private var currentNativeAd: NativeAd? = null
-    private val imageClient = OkHttpClient.Builder().build()
+    private var currentNativeAd: NativeAd? =
+        null
+
+    /*
+    |--------------------------------------------------------------------------
+    | Load
+    |--------------------------------------------------------------------------
+    */
+
     fun load(
         activity: Activity,
         container: ViewGroup,
@@ -41,60 +54,64 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
         shimmerView: View? = null,
     ) {
 
-        val config = configProvider()
+        val config =
+            configProvider()
 
         if (!config.ads.globalEnabled) {
+
             destroy(container)
+
             return
         }
 
-        val placement = config.ads.placements.firstOrNull {
-            it.name == placementName &&
-                    it.enabled &&
-                    it.format == "native"
-        } ?: run {
-            destroy(container)
-            return
-        }
+        val placement =
+            config.ads.placements.firstOrNull {
+
+                it.name == placementName &&
+                        it.enabled &&
+                        it.format == "native"
+            } ?: run {
+
+                destroy(container)
+
+                return
+            }
 
         val resolvedNativeType =
-            resolveNativeType(placement, nativeTypeOverride)
+            resolveNativeType(
+                placement,
+                nativeTypeOverride
+            )
 
         /*
         |--------------------------------------------------------------------------
-        | Start Shimmer ONCE
+        | Shimmer
         |--------------------------------------------------------------------------
         */
 
-        val loadingView = shimmerView
-            ?: createDefaultShimmer(
+        val loadingView =
+            shimmerView ?: createDefaultShimmer(
                 activity,
                 container,
                 resolvedNativeType
             )
 
         loadingView?.let {
-
             container.removeAllViews()
-
             container.addView(it)
-
             it.visibility = View.VISIBLE
-
-            (it as? ShimmerFrameLayout)
-                ?.startShimmer()
+            (it as? ShimmerFrameLayout)?.startShimmer()
         }
 
         /*
         |--------------------------------------------------------------------------
-        | Custom Native Ads
+        | Custom Native
         |--------------------------------------------------------------------------
         */
 
         val customAd = selectedCustomAd(config, placement)
 
         if (customAd != null) {
-
             preloadCustomAd(
                 activity = activity,
                 container = container,
@@ -108,42 +125,45 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
 
         /*
         |--------------------------------------------------------------------------
-        | AdMob Native Ads
+        | AdMob
         |--------------------------------------------------------------------------
         */
 
-        val unit = placement.units.firstOrNull {
-            it.network == "admob"
-        } ?: run {
+        val unit =
+            placement.units.firstOrNull {
+                it.network == "admob"
+            } ?: run {
 
-            (loadingView as? ShimmerFrameLayout)
-                ?.stopShimmer()
+                stopShimmer(
+                    loadingView
+                )
 
-            loadingView?.visibility = View.GONE
+                destroy(container)
 
-            destroy(container)
+                return
+            }
 
-            return
-        }
+        if (
+            activity.isFinishing ||
+            activity.isDestroyed
+        ) {
 
-        if (activity.isFinishing || activity.isDestroyed) {
-
-            (loadingView as? ShimmerFrameLayout)
-                ?.stopShimmer()
-
-            loadingView?.visibility = View.GONE
+            stopShimmer(
+                loadingView
+            )
 
             return
         }
 
         try {
 
-            val request = NativeAdRequest.Builder(
-                adUnitId = unit.adUnitId,
-                nativeAdTypes = listOf(
-                    NativeAd.NativeAdType.NATIVE
-                )
-            ).build()
+            val request =
+                NativeAdRequest.Builder(
+                    adUnitId = unit.adUnitId,
+                    nativeAdTypes = listOf(
+                        NativeAd.NativeAdType.NATIVE
+                    )
+                ).build()
 
             NativeAdLoader.load(
                 request,
@@ -157,18 +177,21 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
 
                             currentNativeAd?.destroy()
 
-                            currentNativeAd = nativeAd
+                            currentNativeAd =
+                                nativeAd
 
                             @LayoutRes
-                            val layoutRes = when (
-                                resolvedNativeType
-                            ) {
-                                NativeType.LARGE ->
-                                    R.layout.native_admob_large
+                            val layoutRes =
+                                when (
+                                    resolvedNativeType
+                                ) {
 
-                                NativeType.SMALL ->
-                                    R.layout.native_admob_small
-                            }
+                                    NativeType.LARGE ->
+                                        R.layout.native_admob_large
+
+                                    NativeType.SMALL ->
+                                        R.layout.native_admob_small
+                                }
 
                             val adView =
                                 LayoutInflater.from(activity)
@@ -178,23 +201,9 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
                                         false
                                     ) as NativeAdView
 
-                            /*
-                            |--------------------------------------------------------------------------
-                            | Stop Shimmer
-                            |--------------------------------------------------------------------------
-                            */
-
-                            (loadingView as? ShimmerFrameLayout)
-                                ?.stopShimmer()
-
-                            loadingView?.visibility =
-                                View.GONE
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | Render Ad
-                            |--------------------------------------------------------------------------
-                            */
+                            stopShimmer(
+                                loadingView
+                            )
 
                             container.removeAllViews()
 
@@ -203,22 +212,10 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
                             container.visibility =
                                 View.VISIBLE
 
-                            /*
-                            |--------------------------------------------------------------------------
-                            | Populate
-                            |--------------------------------------------------------------------------
-                            */
-
                             populateNativeAdView(
                                 nativeAd,
                                 adView
                             )
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | Smooth Fade
-                            |--------------------------------------------------------------------------
-                            */
 
                             adView.alpha = 0f
 
@@ -235,11 +232,9 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
 
                         activity.runOnUiThread {
 
-                            (loadingView as? ShimmerFrameLayout)
-                                ?.stopShimmer()
-
-                            loadingView?.visibility =
-                                View.GONE
+                            stopShimmer(
+                                loadingView
+                            )
 
                             container.visibility =
                                 View.GONE
@@ -250,157 +245,134 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
 
         } catch (_: Exception) {
 
-            (loadingView as? ShimmerFrameLayout)
-                ?.stopShimmer()
+            stopShimmer(
+                loadingView
+            )
 
-            loadingView?.visibility = View.GONE
-
-            container.visibility = View.GONE
+            container.visibility =
+                View.GONE
         }
     }
-//    fun load(activity: Activity, container: ViewGroup, placementName: String, nativeTypeOverride: NativeType? = null, shimmerView: View? = null, ) {
-//        val config = configProvider()
-//        if (!config.ads.globalEnabled) {
-//            destroy(container)
-//            return
-//        }
-//
-//        val placement = config.ads.placements.firstOrNull {
-//            it.name == placementName && it.enabled && it.format == "native" } ?: run {
-//            destroy(container)
-//            return
-//        }
-//
-//        val resolvedNativeType = resolveNativeType(placement, nativeTypeOverride)
-////        val customAd = selectedCustomAd(config, placement)
-////        if (customAd != null) {
-////            renderCustomNative(activity, container, customAd, resolvedNativeType)
-////            return
-////        }
-//        val loadingView = shimmerView ?: createDefaultShimmer(activity, container, resolvedNativeType)
-//        loadingView?.let { container.removeAllViews()
-//            container.addView(it)
-//            it.visibility = View.VISIBLE
-//            (it as? ShimmerFrameLayout)?.startShimmer()
-//        }
-//
-//        val customAd = selectedCustomAd(config, placement)
-//        if (customAd != null) {
-//            preloadCustomAd(
-//                activity = activity,
-//                container = container,
-//                ad = customAd,
-//                type = resolvedNativeType,
-//                loadingView = loadingView
-//            )
-//
-//            return
-//        }
-//
-//        val unit = placement.units.firstOrNull { it.network == "admob" } ?: run {
-//            destroy(container)
-//            return
-//        }
-//
-//        if (activity.isFinishing) {
-//            return
-//        }
-//
-//        try {
-//            val loadingView = shimmerView ?: createDefaultShimmer(activity, container, resolvedNativeType)
-//            loadingView?.let {
-//            container.removeAllViews()
-//            container.addView(it)
-//            it.visibility = View.VISIBLE
-//            (it as? ShimmerFrameLayout)?.startShimmer()
-//        }
-//
-//            val request = NativeAdRequest.Builder(adUnitId = unit.adUnitId, nativeAdTypes = listOf(NativeAd.NativeAdType.NATIVE)).build()
-//            NativeAdLoader.load(request, object : NativeAdLoaderCallback {
-//                override fun onNativeAdLoaded(nativeAd: NativeAd) {
-//                    activity.runOnUiThread {
-//                        currentNativeAd?.destroy()
-//                        currentNativeAd = nativeAd
-//                        @LayoutRes
-//                        val layoutRes = when (resolvedNativeType) {
-//                            NativeType.LARGE -> R.layout.native_admob_large
-//                            NativeType.SMALL -> R.layout.native_admob_small
-//                        }
-//
-//                        val adView = LayoutInflater.from(activity)
-//                            .inflate(layoutRes, container, false) as NativeAdView
-//                        (loadingView as? ShimmerFrameLayout)?.stopShimmer()
-//                        loadingView?.visibility = View.GONE
-//                        container.removeAllViews()
-//                        container.addView(adView)
-//                        container.requestLayout()
-//                        container.invalidate()
-//                        container.visibility = View.VISIBLE
-//                        populateNativeAdView(nativeAd, adView)
-//                    }
-//                }
-//
-//                override fun onAdFailedToLoad(adError: LoadAdError) {
-//                    activity.runOnUiThread {
-//                        (loadingView as? ShimmerFrameLayout)?.stopShimmer()
-//                        loadingView?.visibility = View.GONE
-//                        container.visibility = View.GONE
-//                    }
-//                }
-//            }
-//            )
-//
-//        } catch (_: Exception) {
-//            container.visibility = View.GONE
-//        }
-//    }
 
-    fun destroy(container: ViewGroup? = null) {
+    /*
+    |--------------------------------------------------------------------------
+    | Destroy
+    |--------------------------------------------------------------------------
+    */
+
+    fun destroy(
+        container: ViewGroup? = null
+    ) {
+
         try {
+
             currentNativeAd?.destroy()
+
         } catch (_: Exception) {
         }
+
         currentNativeAd = null
-        container?.removeAllViews()
+
+        container?.let {
+
+            releaseMediaViews(it)
+
+            it.removeAllViews()
+        }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | AdMob Populate
+    |--------------------------------------------------------------------------
+    */
+
     private fun populateNativeAdView(nativeAd: NativeAd, adView: NativeAdView) {
-        adView.headlineView = adView.findViewById<View?>(R.id.ad_headline)
-        adView.bodyView = adView.findViewById<View?>(R.id.ad_body)
-        adView.callToActionView = adView.findViewById<View?>(R.id.ad_call_to_action)
-        adView.iconView = adView.findViewById<View?>(R.id.ad_app_icon)
-        adView.priceView = adView.findViewById<View?>(R.id.ad_price)
-        adView.starRatingView = adView.findViewById<View?>(R.id.ad_stars)
-        adView.storeView = adView.findViewById<View?>(R.id.ad_store)
-        adView.advertiserView = adView.findViewById<View?>(R.id.ad_advertiser)
-        (adView.headlineView as? TextView)?.text = nativeAd.headline
-        nativeAd.body?.let {
-            (adView.bodyView as? TextView)?.text = it
-            adView.bodyView?.visibility = View.VISIBLE
+
+        val ad_tag = adView.findViewById<TextView>(R.id.ad_ic)
+
+
+        adView.headlineView = adView.findViewById(R.id.ad_headline)
+
+        adView.bodyView =
+            adView.findViewById(
+                R.id.ad_body
+            )
+
+        adView.callToActionView =
+            adView.findViewById(
+                R.id.ad_call_to_action
+            )
+
+        adView.iconView =
+            adView.findViewById(
+                R.id.ad_app_icon
+            )
+
+
+        adView.priceView =
+            adView.findViewById(
+                R.id.ad_price
+            )
+
+        adView.starRatingView =
+            adView.findViewById(
+                R.id.ad_stars
+            )
+
+        adView.storeView =
+            adView.findViewById(
+                R.id.ad_store
+            )
+
+        adView.advertiserView =
+            adView.findViewById(
+                R.id.ad_advertiser
+            )
+
+        (adView.headlineView as? TextView)
+            ?.text = nativeAd.headline
+
+        nativeAd.body?.let { (adView.bodyView as? TextView)?.text = it
+            adView.bodyView?.visibility =
+                View.VISIBLE
+
         } ?: run {
+
             adView.bodyView?.visibility = View.INVISIBLE
         }
 
-        nativeAd.callToAction?.let { (adView.callToActionView as? Button)?.text = it
+        nativeAd.callToAction?.let {
+            (adView.callToActionView as? Button)?.text = it
             adView.callToActionView?.visibility = View.VISIBLE
         } ?: run {
             adView.callToActionView?.visibility = View.INVISIBLE
         }
 
+        val ctaDrawable = adView.callToActionView?.background?.mutate() as? GradientDrawable
+        ctaDrawable?.setColor(parseColorSafe(ITWingSDK.getColor("primary"), Color.rgb(37, 99, 235)))
+
+        val adTagColor = ad_tag?.background?.mutate() as? GradientDrawable
+        adTagColor?.setColor(parseColorSafe(ITWingSDK.getColor("primary"), Color.rgb(37, 99, 235)))
+
+
         nativeAd.icon?.drawable?.let {
             (adView.iconView as? ImageView)?.setImageDrawable(it)
-            adView.iconView?.visibility = View.VISIBLE
+            adView.iconView?.visibility =
+                View.VISIBLE
+
         } ?: run { adView.iconView?.visibility = View.GONE }
+
         nativeAd.price?.let {
             (adView.priceView as? TextView)?.text = it
             adView.priceView?.visibility = View.VISIBLE
         } ?: run {
             adView.priceView?.visibility = View.INVISIBLE
         }
+
         nativeAd.store?.let {
             (adView.storeView as? TextView)?.text = it
-            adView.storeView?.visibility =
-                View.VISIBLE
+            adView.storeView?.visibility = View.VISIBLE
 
         } ?: run {
 
@@ -409,22 +381,16 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
         }
 
         nativeAd.starRating?.let {
-
-            (adView.starRatingView as? RatingBar)
-                ?.rating = it.toFloat()
-
-            adView.starRatingView?.visibility =
-                View.VISIBLE
-
+            (adView.starRatingView as? RatingBar)?.rating = it.toFloat()
+            adView.starRatingView?.visibility = View.VISIBLE
         } ?: run {
-
-            adView.starRatingView?.visibility =
-                View.INVISIBLE
+            adView.starRatingView?.visibility = View.INVISIBLE
         }
 
         nativeAd.advertiser?.let {
 
-            (adView.advertiserView as? TextView)?.text = it
+            (adView.advertiserView as? TextView)
+                ?.text = it
 
             adView.advertiserView?.visibility =
                 View.VISIBLE
@@ -436,47 +402,13 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
         }
 
         adView.registerNativeAd(nativeAd, adView.findViewById(R.id.ad_media))
-        val mediaContent: MediaContent = nativeAd.mediaContent
-        val videoController: VideoController? = mediaContent.videoController
-        if (videoController != null && mediaContent.hasVideoContent) {
-            videoController.videoLifecycleCallbacks =
-                object : VideoController.VideoLifecycleCallbacks {
-
-                }
-        }
     }
 
-    private fun resolveNativeType(placement: AdPlacementConfig, override: NativeType?, ): NativeType {
-        if (override != null) { return override }
-        return when ((placement.metadata["native_type"] ?: placement.metadata["native_template"])?.toString()?.lowercase()) {
-            "large" -> NativeType.LARGE
-            "small" -> NativeType.SMALL
-            else -> NativeType.LARGE
-        }
-    }
-
-    private fun createDefaultShimmer(activity: Activity, container: ViewGroup, nativeType: NativeType): View? {
-        return runCatching {
-            val layoutRes = when (nativeType) {
-                NativeType.LARGE -> R.layout.large_shimmer
-                NativeType.SMALL -> R.layout.small_shimmer
-            }
-            LayoutInflater.from(activity).inflate(layoutRes, container, false)
-        }.getOrNull()
-    }
-
-    private fun selectedCustomAd(config: ITWingConfig, placement: AdPlacementConfig): CustomAdConfig? {
-        val source = placement.metadata["source"]?.toString()?.lowercase()
-        if (source != "custom" && source != "custom_ad" && placement.customAd == null) {
-            return null
-        }
-        placement.customAd?.let { return it }
-        val requestedId = placement.metadata["custom_ad_id"]?.toString()?.takeIf { it.isNotBlank() }
-        return config.ads.customAds
-            .filter { it.format == "native" || it.format == "image" || it.format == "html" }
-            .filter { requestedId == null || it.id == requestedId }
-            .minByOrNull { it.priority }
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | Custom Native
+    |--------------------------------------------------------------------------
+    */
 
     private fun renderCustomNative(
         activity: Activity,
@@ -488,57 +420,167 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
         destroy(container)
 
         @LayoutRes
-        val layoutRes = when (type) {
-            NativeType.LARGE -> R.layout.custom_native_large
-            NativeType.SMALL -> R.layout.custom_native_small
-        }
+        val layoutRes =
+            when (type) {
 
-        val root = LayoutInflater.from(activity)
-            .inflate(layoutRes, container, false)
+                NativeType.LARGE ->
+                    R.layout.custom_native_large
+
+                NativeType.SMALL ->
+                    R.layout.custom_native_small
+            }
+
+        val root =
+            LayoutInflater.from(activity)
+                .inflate(
+                    layoutRes,
+                    container,
+                    false
+                )
 
         /*
         |--------------------------------------------------------------------------
-        | Find Views Safely
+        | Views
         |--------------------------------------------------------------------------
         */
 
         val headlineView =
-            root.findViewById<TextView?>(R.id.ad_headline)
+            root.findViewById<TextView?>(
+                R.id.ad_headline
+            )
 
         val bodyView =
-            root.findViewById<TextView?>(R.id.ad_body)
+            root.findViewById<TextView?>(
+                R.id.ad_body
+            )
 
         val ctaView =
-            root.findViewById<Button?>(R.id.ad_call_to_action)
+            root.findViewById<Button?>(
+                R.id.ad_call_to_action
+            )
 
-        val iconView =
-            root.findViewById<ImageView?>(R.id.ad_app_icon)
+        val adIcon =
+            root.findViewById<ImageView?>(
+                R.id.ad_app_icon
+            )
 
         val advertiserView =
-            root.findViewById<TextView?>(R.id.ad_advertiser)
+            root.findViewById<TextView?>(
+                R.id.ad_advertiser
+            )
 
-        val mediaImage =
-            root.findViewById<ImageView?>(R.id.ad_media)
+        val mediaView =
+            root.findViewById<SDKMediaView?>(
+                R.id.ad_media
+            )
+
+        val ratingView =
+            root.findViewById<RatingBar?>(
+                R.id.ad_stars
+            )
+
+        val storeView =
+            root.findViewById<TextView?>(
+                R.id.ad_store
+            )
+
+        val priceView =
+            root.findViewById<TextView?>(
+                R.id.ad_price
+            )
+
+        val adTag =
+            root.findViewById<TextView?>(
+                R.id.ad_ic
+            )
 
         /*
         |--------------------------------------------------------------------------
-        | Populate Text
+        | Text
         |--------------------------------------------------------------------------
         */
 
         headlineView?.text =
-            ad.headline?.takeIf { it.isNotBlank() }
-                ?: ad.name.ifBlank { "Sponsored" }
+            ad.headline?.takeIf {
+                it.isNotBlank()
+            }
+                ?: ad.name.ifBlank {
+                    "Sponsored"
+                }
 
         bodyView?.text =
-            ad.body?.takeIf { it.isNotBlank() }
+            ad.body?.takeIf {
+                it.isNotBlank()
+            }
                 ?: "Promoted content"
 
         ctaView?.text =
-            ad.cta?.takeIf { it.isNotBlank() }
+            ad.cta?.takeIf {
+                it.isNotBlank()
+            }
                 ?: "Install"
 
-        advertiserView?.text = "Sponsored"
+        advertiserView?.text =
+            ad.brandName()
+                ?: "Sponsored"
+
+        storeView?.text = ""
+
+        priceView?.text = ""
+
+        ratingView?.rating =
+            ad.brandRating()
+
+        adTag?.text =
+            ad.adIcon()
+
+        /*
+        |--------------------------------------------------------------------------
+        | Colors
+        |--------------------------------------------------------------------------
+        */
+
+        val adTagDrawable =
+            adTag?.background
+                ?.mutate() as? GradientDrawable
+
+        adTagDrawable?.setColor(
+            parseColorSafe(
+                ad.primaryColor(),
+                Color.rgb(
+                    37,
+                    99,
+                    235
+                )
+            )
+        )
+
+        val ctaDrawable =
+            ctaView?.background
+                ?.mutate() as? GradientDrawable
+
+        ctaDrawable?.setColor(
+            parseColorSafe(
+                ad.primaryColor(),
+                Color.rgb(
+                    37,
+                    99,
+                    235
+                )
+            )
+        )
+
+        /*
+        |--------------------------------------------------------------------------
+        | Icon
+        |--------------------------------------------------------------------------
+        */
+
+        loadImage(
+            ad.brandLogoUrl(),
+            adIcon,
+            activity
+        )
 
         /*
         |--------------------------------------------------------------------------
@@ -546,57 +588,155 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
         |--------------------------------------------------------------------------
         */
 
-        headlineView?.visibility = View.VISIBLE
-        bodyView?.visibility = View.VISIBLE
-        ctaView?.visibility = View.VISIBLE
-        advertiserView?.visibility = View.VISIBLE
+        headlineView?.visibility =
+            View.VISIBLE
+
+        bodyView?.visibility =
+            View.VISIBLE
+
+        ctaView?.visibility =
+            View.VISIBLE
+
+        advertiserView?.visibility =
+            View.VISIBLE
+
+        storeView?.visibility =
+            View.VISIBLE
+
+        ratingView?.visibility =
+            View.VISIBLE
 
         /*
         |--------------------------------------------------------------------------
-        | Load Images
+        | Media
         |--------------------------------------------------------------------------
         */
 
-        loadImage(ad.imageUrl, mediaImage, activity)
+        mediaView?.apply {
 
-        loadImage(ad.imageUrl, iconView, activity)
-
-        /*
-        |--------------------------------------------------------------------------
-        | Click Handling
-        |--------------------------------------------------------------------------
-        */
-
-        val clickListener = View.OnClickListener {
-
-            ITWingSDK.trackCustomAdClick(
-                ad.id,
-                mapOf(
-                    "placement" to "native",
-                    "native_type" to type.name.lowercase()
-                )
+            render(
+                ad.mediaUrl(),
+                ad.isVideo()
             )
 
-            ad.targetUrl
-                ?.takeIf { it.isNotBlank() }
-                ?.let {
-
-                    runCatching {
-
-                        activity.startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse(it)
-                            )
-                        )
-
-                    }
-                }
+            play()
         }
 
-        root.setOnClickListener(clickListener)
+        /*
+        |--------------------------------------------------------------------------
+        | Click
+        |--------------------------------------------------------------------------
+        */
 
-        ctaView?.setOnClickListener(clickListener)
+        val clickListener =
+            View.OnClickListener {
+
+                ITWingSDK.trackCustomAdClick(
+                    ad.id,
+                    mapOf(
+                        "placement" to "native",
+                        "native_type" to type.name.lowercase()
+                    )
+                )
+
+                ad.targetUrl
+                    ?.takeIf {
+                        it.isNotBlank()
+                    }
+                    ?.let { url ->
+
+                        runCatching {
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | Pause ONLY clicked media
+                            |--------------------------------------------------------------------------
+                            */
+
+                            mediaView?.pauseForExternalNavigation()
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | Open Browser
+                            |--------------------------------------------------------------------------
+                            */
+
+                            activity.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    url.toUri()
+                                )
+                            )
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | Resume ONLY clicked media
+                            |--------------------------------------------------------------------------
+                            */
+
+                            activity.application
+                                .registerActivityLifecycleCallbacks(
+                                    object : Application.ActivityLifecycleCallbacks {
+
+                                        override fun onActivityResumed(
+                                            resumedActivity: Activity
+                                        ) {
+
+                                            if (
+                                                resumedActivity ==
+                                                activity
+                                            ) {
+
+                                                mediaView?.resumeFromExternalNavigation()
+
+                                                activity.application.unregisterActivityLifecycleCallbacks(this)
+                                            }
+                                        }
+
+                                        override fun onActivityCreated(
+                                            activity: Activity,
+                                            savedInstanceState: Bundle?
+                                        ) {
+                                        }
+
+                                        override fun onActivityStarted(
+                                            activity: Activity
+                                        ) {
+                                        }
+
+                                        override fun onActivityPaused(
+                                            activity: Activity
+                                        ) {
+                                        }
+
+                                        override fun onActivityStopped(
+                                            activity: Activity
+                                        ) {
+                                        }
+
+                                        override fun onActivitySaveInstanceState(
+                                            activity: Activity,
+                                            outState: Bundle
+                                        ) {
+                                        }
+
+                                        override fun onActivityDestroyed(
+                                            activity: Activity
+                                        ) {
+                                        }
+                                    }
+                                )
+                        }
+                    }
+            }
+
+        root.setOnClickListener(
+            clickListener
+        )
+
+        ctaView?.setOnClickListener(
+            clickListener
+        )
 
         /*
         |--------------------------------------------------------------------------
@@ -608,11 +748,12 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
 
         container.addView(root)
 
-        container.visibility = View.VISIBLE
+        container.visibility =
+            View.VISIBLE
 
         /*
         |--------------------------------------------------------------------------
-        | Track Impression
+        | Impression
         |--------------------------------------------------------------------------
         */
 
@@ -625,80 +766,286 @@ class NativeLoader(private val configProvider: () -> ITWingConfig) {
         )
     }
 
-    private fun loadImage(url: String?, imageView: ImageView, activity: Activity) {
-        if (url.isNullOrBlank()) return
-        Thread {
+    private fun loadImage(url: String?, imageView: ImageView?, activity: Activity) {
+        if (url.isNullOrBlank()) {
+            return
+        }
+        activity.runOnUiThread {
             runCatching {
-                val request = Request.Builder().url(url).build()
-                imageClient.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val bytes = response.body.bytes()
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    } else {
-                        null
-                    }
+                imageView?.let {
+                    Glide.with(activity)
+                        .load(url)
+                        .fitCenter()
+                        .into(it)
                 }
-            }.getOrNull()?.let { bitmap ->
-                activity.runOnUiThread {
-                    imageView.setImageBitmap(bitmap)
-                    imageView.visibility = View.VISIBLE
-                }
+
+                imageView?.visibility = View.VISIBLE
             }
-        }.start()
+        }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Helpers
+    |--------------------------------------------------------------------------
+    */
 
-    private fun preloadCustomAd(activity: Activity, container: ViewGroup, ad: CustomAdConfig, type: NativeType, loadingView: View?) {
-        Thread {
-            var imageLoaded = false
+    private fun resolveNativeType(
+        placement: AdPlacementConfig,
+        override: NativeType?,
+    ): NativeType {
+        if (override != null) {
+            return override
+        }
 
-            runCatching {
-                ad.imageUrl?.takeIf { it.isNotBlank() }?.let { imageUrl ->
-                    val request = Request.Builder()
-                        .url(imageUrl)
-                        .build()
+        return when ((
+                placement.metadata["native_type"]
+                    ?: placement.metadata["native_template"]
+                )
+            ?.toString()
+            ?.lowercase()
+        ) {
 
-                    imageClient.newCall(request)
-                        .execute()
-                        .use { response ->
+            "small" ->
+                NativeType.SMALL
 
-                            if (response.isSuccessful) {
+            else ->
+                NativeType.LARGE
+        }
+    }
 
-                                response.body.bytes()
+    private fun createDefaultShimmer(
+        activity: Activity,
+        container: ViewGroup,
+        nativeType: NativeType
+    ): View? {
 
-                                imageLoaded = true
-                            }
-                        }
+        return runCatching {
+
+            val layoutRes =
+                when (nativeType) {
+
+                    NativeType.LARGE ->
+                        R.layout.large_shimmer
+
+                    NativeType.SMALL ->
+                        R.layout.small_shimmer
                 }
 
+            LayoutInflater.from(activity)
+                .inflate(
+                    layoutRes,
+                    container,
+                    false
+                )
+
+        }.getOrNull()
+    }
+
+    private fun stopShimmer(
+        loadingView: View?
+    ) {
+
+        (loadingView as? ShimmerFrameLayout)
+            ?.stopShimmer()
+
+        loadingView?.visibility =
+            View.GONE
+    }
+
+    private fun selectedCustomAd(
+        config: ITWingConfig,
+        placement: AdPlacementConfig
+    ): CustomAdConfig? {
+
+        val source =
+            placement.metadata["source"]
+                ?.toString()
+                ?.lowercase()
+
+        if (
+            source != "custom" &&
+            source != "custom_ad" &&
+            placement.customAd == null
+        ) {
+
+            return null
+        }
+
+        placement.customAd?.let {
+            return it
+        }
+
+        val requestedId =
+            placement.metadata["custom_ad_id"]
+                ?.toString()
+                ?.takeIf {
+                    it.isNotBlank()
+                }
+
+        return config.ads.customAds
+            .filter {
+                it.format == "native" ||
+                        it.format == "image" ||
+                        it.format == "html"
             }
+            .filter {
+
+                requestedId == null ||
+                        it.id == requestedId
+            }
+            .minByOrNull {
+                it.priority
+            }
+    }
+
+    private fun preloadCustomAd(
+        activity: Activity,
+        container: ViewGroup,
+        ad: CustomAdConfig,
+        type: NativeType,
+        loadingView: View?
+    ) {
+
+        val media = ad.mediaUrl()
+
+        /*
+        |--------------------------------------------------------------------------
+        | No Media
+        |--------------------------------------------------------------------------
+        */
+
+        if (media.isNullOrBlank()) {
+            activity.runOnUiThread {
+                stopShimmer(loadingView)
+                renderCustomNative(activity = activity, container = container, ad = ad, type = type)
+            }
+
+            return
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Keep shimmer visible while preloading
+        |--------------------------------------------------------------------------
+        */
+
+        Glide.with(activity.applicationContext).load(media).preload()
+
+        /*
+        |--------------------------------------------------------------------------
+        | Simulate real network loading behavior
+        |--------------------------------------------------------------------------
+        */
+
+        container.postDelayed({
 
             activity.runOnUiThread {
 
-                (loadingView as? ShimmerFrameLayout)
-                    ?.stopShimmer()
+                renderCustomNative(
+                    activity = activity,
+                    container = container,
+                    ad = ad,
+                    type = type
+                )
 
-                loadingView?.visibility = View.GONE
+                stopShimmer(
+                    loadingView
+                )
 
-                renderCustomNative(activity = activity, container = container, ad = ad, type = type)
+                container.alpha = 0f
 
-                /*
-                |--------------------------------------------------------------------------
-                | Fallback visibility
-                |--------------------------------------------------------------------------
-                */
-
-                if (!imageLoaded) {
-
-                    container.alpha = 0f
-
-                    container.animate()
-                        .alpha(1f)
-                        .setDuration(250)
-                        .start()
-                }
+                container.animate()
+                    .alpha(1f)
+                    .setDuration(250)
+                    .start()
             }
 
-        }.start()
+        }, 650)
     }
+
+    private fun releaseMediaViews(
+        parent: ViewGroup
+    ) {
+
+        for (i in 0 until parent.childCount) {
+
+            val child =
+                parent.getChildAt(i)
+
+            when (child) {
+
+                is SDKMediaView -> {
+
+                    child.release()
+                }
+
+                is ViewGroup -> {
+
+                    releaseMediaViews(child)
+                }
+            }
+        }
+    }
+
+    private fun CustomAdConfig.mediaUrl(): String? =
+        mediaUrl?.takeIf {
+            it.isNotBlank()
+        }
+            ?: videoUrl?.takeIf {
+                it.isNotBlank()
+            }
+            ?: imageUrl?.takeIf {
+                it.isNotBlank()
+            }
+
+    private fun CustomAdConfig.isVideo(): Boolean = mediaType.equals(
+        "video",
+        ignoreCase = true
+    ) || (!videoUrl.isNullOrBlank() && mediaUrl == videoUrl)
+
+    private fun CustomAdConfig.primaryColor(): String? = metadata["ad_primary_color"] as? String
+        ?: (metadata["brand"] as? Map<*, *>)?.get("primary_color") as? String
+
+    private fun CustomAdConfig.brandName(): String? =
+        (
+                metadata["brand"]
+                        as? Map<*, *>
+                )?.get("name")
+                as? String
+            ?: campaignGroup
+
+    private fun CustomAdConfig.brandRating(): Float {
+        val value = metadata["brand_rating"] ?: (metadata["brand"] as? Map<*, *>)?.get("rating")
+        return when (value) {
+            is Number ->
+                value.toFloat()
+
+            is String ->
+                value.toFloatOrNull()
+
+            else ->
+                null
+        }?.coerceIn(0f, 5f)
+            ?: 4.5f
+    }
+
+    private fun CustomAdConfig.brandLogoUrl(): String? {
+        val brand = metadata["brand"] as? Map<*, *> ?: return null
+        return brand["logo_url"] as? String
+    }
+
+    private fun CustomAdConfig.adIcon(): String =
+        (metadata["ad_icon"] as? String)?.takeIf { it.isNotBlank() } ?: "AD"
+
+
+    private fun parseColorSafe(value: String?, fallback: Int): Int =
+        runCatching {
+            if (value.isNullOrBlank()) {
+                fallback
+            } else {
+                value.toColorInt()
+            }
+
+        }.getOrDefault(fallback)
 }

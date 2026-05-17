@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="true"
+    android:clipToPadding="true">
+
+    <!-- IMAGE -->
+
+    <ImageView
+        android:id="@+id/sdk_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:adjustViewBounds="true"
+        android:scaleType="fitCenter" />
+
+    <!-- VIDEO -->
+
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/sdk_video"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:use_controller="false"
+        app:resize_mode="fit" />
+
+    <ImageView
+        android:id="@+id/sdk_mute"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:background="@drawable/icon_back"
+        android:padding="4dp"
+        android:src="@drawable/no_sound"
+        app:tint="@android:color/white" />
+
+</FrameLayout>

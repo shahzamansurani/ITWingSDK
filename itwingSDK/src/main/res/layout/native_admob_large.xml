@@ -131,15 +131,16 @@
 
 
         <TextView
+            android:id="@+id/ad_ic"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginLeft="@dimen/_1sdp"
+            android:layout_marginStart="@dimen/_1sdp"
             android:layout_marginBottom="@dimen/_1sdp"
             android:background="@drawable/ads_icon"
             android:gravity="center"
             android:paddingLeft="@dimen/_5sdp"
             android:paddingRight="@dimen/_5sdp"
-            android:text="AD"
+            android:text="@string/ad"
             android:textColor="@color/white"
             android:textSize="@dimen/_12ssp" />
 

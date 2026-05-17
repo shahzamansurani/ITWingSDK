@@ -15,7 +15,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.interstitial.setOnClickListener {
             ITWingSDK.analytics.track("example_interstitial_clicked")
-            ITWingSDK.showInterstitial(this, "interstitial") {
+            ITWingSDK.showInterstitial(this, "custom_interstitial") {
                 ITWingSDK.analytics.track("example_interstitial_closed")
             }
         }

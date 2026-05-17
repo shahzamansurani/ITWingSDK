@@ -1,12 +1,102 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AndroidLayouts">
+    <shared>
+      <config />
+    </shared>
+    <layouts>
+      <layout url="file://$PROJECT_DIR$/app/src/main/res/layout/activity_main.xml">
+        <config>
+          <theme>@style/Theme.ITWingSDK</theme>
+        </config>
+      </layout>
+      <layout url="file://$PROJECT_DIR$/itwingSDK/src/main/res/drawable/ads_icon.xml">
+        <config>
+          <theme>@android:style/Theme.Material.Light</theme>
+        </config>
+      </layout>
+      <layout url="file://$PROJECT_DIR$/itwingSDK/src/main/res/drawable/banner_btn.xml">
+        <config>
+          <theme>@android:style/Theme.Material.Light</theme>
+        </config>
+      </layout>
+      <layout url="file://$PROJECT_DIR$/itwingSDK/src/main/res/drawable/start_bg.xml">
+        <config>
+          <theme>@android:style/Theme.Material.Light</theme>
+        </config>
+      </layout>
+      <layout url="file://$PROJECT_DIR$/itwingSDK/src/main/res/layout/custom_banner.xml">
+        <config>
+          <theme>@android:style/Theme.Material.Light</theme>
+        </config>
+      </layout>
+      <layout url="file://$PROJECT_DIR$/itwingSDK/src/main/res/layout/custom_interstitial.xml">
+        <config>
+          <theme>@android:style/Theme.Material.Light</theme>
+        </config>
+      </layout>
+      <layout url="file://$PROJECT_DIR$/itwingSDK/src/main/res/layout/custom_native_large.xml">
+        <config>
+          <theme>@android:style/Theme.Material.Light</theme>
+        </config>
+      </layout>
+      <layout url="file://$PROJECT_DIR$/itwingSDK/src/main/res/layout/custom_native_small.xml">
+        <config>
+          <theme>@android:style/Theme.Material.Light</theme>
+        </config>
+      </layout>
+      <layout url="file://$PROJECT_DIR$/itwingSDK/src/main/res/layout/native_admob_large.xml">
+        <config>
+          <theme>@android:style/Theme.Material.Light</theme>
+        </config>
+      </layout>
+      <layout url="file://$PROJECT_DIR$/itwingSDK/src/main/res/layout/sdk_media_view.xml">
+        <config>
+          <theme>@android:style/Theme.Material.Light</theme>
+        </config>
+      </layout>
+    </layouts>
+  </component>
   <component name="AutoImportSettings">
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e4ff65bb-1e69-4f9f-bed0-69dbe521472f" name="Changes" comment="fixes">
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" />
+    <list default="true" id="819f1546-8f84-4df0-bf1d-10108637315a" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/utils/SDKMediaView.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable/banner_btn.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable/ic_mute.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable/icon_back.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable/no_sound.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable/unmute.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/layout/custom_banner.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/layout/custom_interstitial.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/layout/sdk_media_view.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/local.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/com/itwingtech/itwingsdk/example/MainActivity.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/com/itwingtech/itwingsdk/example/MainActivity.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/com/itwingtech/itwingsdk/example/SpalashActivity.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/com/itwingtech/itwingsdk/example/SpalashActivity.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/res/layout/activity_main.xml" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/res/layout/activity_main.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/AndroidManifest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/AndroidManifest.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/BannerLoader.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/BannerLoader.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/NativeLoader.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/NativeLoader.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/ITWingConfig.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/ITWingConfig.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/ITWingSDK.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/ITWingSDK.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/NotificationRuntimeManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/NotificationRuntimeManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/data/ConfigRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/data/ConfigRepository.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable-hdpi/ic_stat_onesignal_default.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable-mdpi/ic_stat_onesignal_default.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable-xhdpi/ic_stat_onesignal_default.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable-xxhdpi/ic_stat_onesignal_default.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable-xxxhdpi/ic_stat_onesignal_default.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable/instgradient.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable/instgradient.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/layout/custom_native_large.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/layout/custom_native_large.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/layout/custom_native_small.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/layout/custom_native_small.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/layout/native_admob_large.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/layout/native_admob_large.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/values/colors.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/values/colors.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/values/strings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/values/strings.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/values/styles.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/values/styles.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -16,28 +106,20 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[]" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[PhysicalDevice::serial=4b1936f0]" />
   <component name="ExternalProjectsData">
     <projectState path="$PROJECT_DIR$">
       <ProjectState />
     </projectState>
   </component>
-  <component name="ExternalProjectsManager">
-    <system id="GRADLE">
-      <state>
-        <projects_view>
-          <tree_state>
-            <expand>
-              <path>
-                <item name="" type="6a2764b6:ExternalProjectsStructure$RootNode" />
-                <item name="ITWingSDK" type="f1a62948:ProjectNode" />
-              </path>
-            </expand>
-            <select />
-          </tree_state>
-        </projects_view>
-      </state>
-    </system>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="layoutResourceFile" />
+        <option value="Kotlin Class" />
+        <option value="resourceFile" />
+      </list>
+    </option>
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -58,31 +140,29 @@
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 6
 }</component>
-  <component name="ProjectId" id="3DlTCHfPC1sq17uOKmAsJMwI3Il" />
+  <component name="ProjectId" id="3DmJvsqJTozQOZTDnP8dhB4Plx7" />
   <component name="ProjectViewState">
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.cidr.known.project.marker": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.readMode.enableVisualFormatting": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "android.gradle.sync.needed": "true",
-    "cf.first.check.clang-format": "false",
-    "cidr.known.project.marker": "true",
-    "dart.analysis.tool.window.visible": "false",
-    "git-widget-placeholder": "master",
-    "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "D:/Important Data/Play Console Accounts/Orginization Accounts/CRECODE IT PROFESSIONALS (PRIVATE) LIMITED/Codes/ITWingSDK",
-    "settings.editor.selected.configurable": "project.propVCSSupport.DirectoryMappings",
-    "show.migrate.to.gradle.popup": "false"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Android App.app.executor&quot;: &quot;Run&quot;,
+    &quot;Gradle.Download Sources.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/Important Data/Play Console Accounts/Orginization Accounts/CRECODE IT PROFESSIONALS (PRIVATE) LIMITED/Codes/ITWingSDK&quot;,
+    &quot;show.migrate.to.gradle.popup&quot;: &quot;false&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager">
     <configuration name="app" type="AndroidRunConfigurationType" factoryName="Android App" activateToolWindowBeforeRun="false">
       <module name="ITWingSDK.app" />
@@ -152,22 +232,40 @@
       <option name="ACTIVITY_CLASS" value="" />
       <option name="SEARCH_ACTIVITY_IN_GLOBAL_SCOPE" value="false" />
       <option name="SKIP_ACTIVITY_VALIDATION" value="false" />
-      <method v="2" />
+      <method v="2">
+        <option name="Android.Gradle.BeforeRunTask" enabled="true" />
+      </method>
     </configuration>
   </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
-      <changelist id="e4ff65bb-1e69-4f9f-bed0-69dbe521472f" name="Changes" comment="" />
-      <created>1778855527517</created>
+      <changelist id="819f1546-8f84-4df0-bf1d-10108637315a" name="Changes" comment="" />
+      <created>1778881546284</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
-      <updated>1778855527517</updated>
+      <updated>1778881546284</updated>
     </task>
     <servers />
   </component>
-  <component name="VcsManagerConfiguration">
-    <ignored-roots>
-      <path value="$PROJECT_DIR$" />
-    </ignored-roots>
+  <component name="play_dynamic_filters_status">
+    <option name="appIdToCheckInfo">
+      <map>
+        <entry key="com.itwingtech.itwingsdk.example">
+          <value>
+            <CheckInfo lastCheckTimestamp="1779014547429" />
+          </value>
+        </entry>
+        <entry key="com.itwingtech.itwingsdk.example.test">
+          <value>
+            <CheckInfo lastCheckTimestamp="1779014547419" />
+          </value>
+        </entry>
+        <entry key="com.itwingtech.itwingsdk.test">
+          <value>
+            <CheckInfo lastCheckTimestamp="1779014268509" />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
 </project>

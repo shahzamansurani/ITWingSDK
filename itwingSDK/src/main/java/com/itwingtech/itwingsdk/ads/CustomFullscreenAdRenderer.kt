@@ -1,201 +1,674 @@
 package com.itwingtech.itwingsdk.ads
 
 import android.app.Activity
+import android.app.Application
 import android.app.Dialog
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.net.Uri
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.Gravity
+import android.view.KeyEvent
+import android.view.LayoutInflater
 import android.view.View
 import android.view.Window
-import android.webkit.WebView
-import android.widget.FrameLayout
-import android.widget.ImageButton
 import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.ProgressBar
+import android.widget.RatingBar
 import android.widget.TextView
-import com.google.android.material.button.MaterialButton
+import androidx.core.graphics.toColorInt
+import androidx.core.net.toUri
+import com.bumptech.glide.Glide
+import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.AdPlacementConfig
 import com.itwingtech.itwingsdk.core.CustomAdConfig
 import com.itwingtech.itwingsdk.core.ITWingSDK
-import com.itwingtech.itwingsdk.utils.safeCallback
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.net.URL
+import com.itwingtech.itwingsdk.databinding.CustomInterstitialBinding
+import com.itwingtech.itwingsdk.utils.SDKMediaView
+import java.util.concurrent.ConcurrentHashMap
 
 internal class CustomFullscreenAdRenderer {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var activeMediaView: SDKMediaView? = null
+    private var isCtaOpened = false
+    /*
+    |--------------------------------------------------------------------------
+    | Playback Restore
+    |--------------------------------------------------------------------------
+    */
+    private var lastPlaybackPosition = 0L
+    private var wasPlayingBeforePause = false
 
-    fun canRender(placement: AdPlacementConfig): Boolean = placement.customAd != null
+    /*
+    |--------------------------------------------------------------------------
+    | Can Render
+    |--------------------------------------------------------------------------
+    */
 
-    fun preload(activity: Activity, placement: AdPlacementConfig) {
-        val ad = placement.customAd ?: return
-        if (!ad.imageUrl.isNullOrBlank()) {
-            scope.launch { runCatching { downloadImage(ad.imageUrl) } }
-        }
+    fun canRender(
+        placement: AdPlacementConfig
+    ): Boolean {
+
+        return placement.customAd != null
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Preload
+    |--------------------------------------------------------------------------
+    */
+
+    fun preload(
+        activity: Activity,
+        placement: AdPlacementConfig
+    ) {
+
+        val ad =
+            placement.customAd ?: return
+
+        if (
+            CustomAdCache.fullscreenViews
+                .containsKey(placement.name)
+        ) {
+            return
+        }
+
+        val binding =
+            CustomInterstitialBinding.inflate(
+                LayoutInflater.from(activity)
+            )
+
+        Glide.with(activity)
+            .load(ad.mediaUrl())
+            .preload()
+
+        CustomAdCache.fullscreenViews[
+            placement.name
+        ] = binding.root
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Show
+    |--------------------------------------------------------------------------
+    */
 
     fun show(
         activity: Activity,
         placement: AdPlacementConfig,
         reward: (() -> Unit)? = null,
-        onComplete: () -> Unit = {},
+        onComplete: () -> Unit = {}
     ): Boolean {
-        val ad = placement.customAd ?: return false
-        val dialog = Dialog(activity, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
-        val closeDelayMs = (ad.metadata["close_delay_ms"] as? Number)?.toLong()
-            ?: (placement.metadata["close_delay_ms"] as? Number)?.toLong()
-            ?: if (placement.format.contains("rewarded")) 5_000L else 1_500L
-        var impressionTracked = false
-        var completed = false
 
-        fun complete() {
-            if (completed) return
-            completed = true
-            if (placement.format.contains("rewarded")) safeCallback { reward?.invoke() }
-            safeCallback(onComplete)
+        val ad =
+            placement.customAd ?: return false
+
+        val dialog = Dialog(
+            activity,
+            android.R.style.Theme_Black_NoTitleBar_Fullscreen
+        )
+
+        dialog.requestWindowFeature(
+            Window.FEATURE_NO_TITLE
+        )
+
+        val cached =
+            CustomAdCache.fullscreenViews
+                .remove(placement.name)
+
+        val binding =
+            if (cached != null) {
+
+                CustomInterstitialBinding
+                    .bind(cached)
+
+            } else {
+
+                CustomInterstitialBinding
+                    .inflate(
+                        LayoutInflater.from(activity)
+                    )
+            }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Views
+        |--------------------------------------------------------------------------
+        */
+
+        val advertiserView =
+            binding.root.findViewById<TextView>(
+                R.id.ad_advertiser
+            )
+
+        val iconView =
+            binding.root.findViewById<ImageView>(
+                R.id.ad_app_icon
+            )
+
+        val adTag =
+            binding.root.findViewById<TextView>(
+                R.id.ad_ic
+            )
+
+        val ratingView =
+            binding.root.findViewById<RatingBar>(
+                R.id.ad_stars
+            )
+
+        val storeView =
+            binding.root.findViewById<TextView>(
+                R.id.ad_store
+            )
+
+        /*
+        |--------------------------------------------------------------------------
+        | Loading
+        |--------------------------------------------------------------------------
+        */
+
+        binding.adLoading.visibility =
+            View.VISIBLE
+
+        /*
+        |--------------------------------------------------------------------------
+        | Media
+        |--------------------------------------------------------------------------
+        */
+
+        activeMediaView = binding.adMedia
+        binding.adMedia.hideInternalMute()
+        binding.adMedia.attachExternalMuteButton(
+            binding.fullscreenMute
+        )
+
+        binding.adMedia.render(
+            ad.mediaUrl(),
+            ad.isVideo()
+        )
+
+        binding.adMedia.play()
+
+        /*
+        |--------------------------------------------------------------------------
+        | Delay Loading Hide
+        |--------------------------------------------------------------------------
+        */
+
+        Handler(
+            Looper.getMainLooper()
+        ).postDelayed({
+
+            binding.adLoading.visibility =
+                View.GONE
+
+        }, 650)
+
+        /*
+        |--------------------------------------------------------------------------
+        | Text
+        |--------------------------------------------------------------------------
+        */
+
+        binding.adTitle.text =
+            ad.headline ?: ad.name
+
+        binding.adBody.text =
+            ad.body.orEmpty()
+
+        binding.adCta.text =
+            ad.cta ?: "Open"
+
+        advertiserView.text =
+            ad.brandName()
+                ?: "Sponsored"
+
+        ratingView.rating =
+            ad.brandRating()
+
+        storeView.text =
+            "Sponsored"
+
+        adTag.text =
+            ad.adIcon()
+
+        /*
+        |--------------------------------------------------------------------------
+        | App Icon
+        |--------------------------------------------------------------------------
+        */
+
+        loadImage(
+            ad.brandLogoUrl(),
+            iconView,
+            activity
+        )
+
+        /*
+        |--------------------------------------------------------------------------
+        | CTA Color
+        |--------------------------------------------------------------------------
+        */
+
+        val ctaDrawable =
+            binding.adCta.background
+                ?.mutate() as? GradientDrawable
+
+        ctaDrawable?.setColor(
+            parseColorSafe(
+                ad.primaryColor(),
+                Color.rgb(
+                    37,
+                    99,
+                    235
+                )
+            )
+        )
+
+        /*
+        |--------------------------------------------------------------------------
+        | Ad Badge Color
+        |--------------------------------------------------------------------------
+        */
+
+        val adTagDrawable =
+            adTag.background
+                ?.mutate() as? GradientDrawable
+
+        adTagDrawable?.setColor(
+            parseColorSafe(
+                ad.primaryColor(),
+                Color.rgb(
+                    37,
+                    99,
+                    235
+                )
+            )
+        )
+
+        /*
+        |--------------------------------------------------------------------------
+        | CTA CLICK
+        |--------------------------------------------------------------------------
+        */
+
+        binding.adCta.setOnClickListener {
+
+            ITWingSDK.trackCustomAdClick(
+                ad.id,
+                mapOf(
+                    "placement" to placement.name
+                )
+            )
+
+            activeMediaView?.let { media ->
+
+                lastPlaybackPosition =
+                    media.currentPosition()
+
+                wasPlayingBeforePause =
+                    media.isPlaying()
+
+                media.pause()
+            }
+
+            isCtaOpened = true
+
+            runCatching {
+
+                activity.startActivity(
+                    Intent(
+                        Intent.ACTION_VIEW,
+                        ad.targetUrl?.toUri()
+                    )
+                )
+            }
         }
 
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        /*
+        |--------------------------------------------------------------------------
+        | Resume On Return
+        |--------------------------------------------------------------------------
+        */
+
+        val lifecycleCallbacks =
+            object :
+                Application.ActivityLifecycleCallbacks {
+
+                override fun onActivityResumed(
+                    resumedActivity: Activity
+                ) {
+
+                    if (
+                        resumedActivity == activity &&
+                        isCtaOpened
+                    ) {
+
+                        isCtaOpened = false
+
+                        Handler(
+                            Looper.getMainLooper()
+                        ).postDelayed({
+
+                            activeMediaView?.let { media ->
+
+                                /*
+                                |--------------------------------------------------------------------------
+                                | Restore Surface
+                                |--------------------------------------------------------------------------
+                                */
+
+                                media.restorePlayer()
+
+                                /*
+                                |--------------------------------------------------------------------------
+                                | Restore Position
+                                |--------------------------------------------------------------------------
+                                */
+
+                                media.seekTo(
+                                    lastPlaybackPosition
+                                )
+
+                                /*
+                                |--------------------------------------------------------------------------
+                                | Resume Playback
+                                |--------------------------------------------------------------------------
+                                */
+
+                                if (
+                                    wasPlayingBeforePause
+                                ) {
+
+                                    media.play()
+                                }
+                            }
+
+                        }, 400)
+                    }
+                }
+
+                override fun onActivityCreated(
+                    activity: Activity,
+                    savedInstanceState: Bundle?
+                ) {
+                }
+
+                override fun onActivityStarted(
+                    activity: Activity
+                ) {
+                }
+
+                override fun onActivityPaused(
+                    activity: Activity
+                ) {
+                }
+
+                override fun onActivityStopped(
+                    activity: Activity
+                ) {
+                }
+
+                override fun onActivitySaveInstanceState(
+                    activity: Activity,
+                    outState: Bundle
+                ) {
+                }
+
+                override fun onActivityDestroyed(
+                    destroyedActivity: Activity
+                ) {
+
+                    if (
+                        destroyedActivity ==
+                        activity
+                    ) {
+
+                        runCatching {
+
+                            activity.application
+                                .unregisterActivityLifecycleCallbacks(
+                                    this
+                                )
+                        }
+                    }
+                }
+            }
+
+        activity.application
+            .registerActivityLifecycleCallbacks(
+                lifecycleCallbacks
+            )
+
+        /*
+        |--------------------------------------------------------------------------
+        | Close Delay
+        |--------------------------------------------------------------------------
+        */
+
+        binding.adClose.alpha = 0f
+
+        binding.adClose.isEnabled = false
+
+        val closeDelay = when {
+
+            placement.format.contains(
+                "rewarded",
+                true
+            ) -> 6000L
+
+            else -> 3000L
+        }
+
+        Handler(
+            Looper.getMainLooper()
+        ).postDelayed({
+
+            binding.adClose.animate().alpha(1f).setDuration(250).start()
+
+            binding.adClose.isEnabled =
+                true
+
+        }, closeDelay)
+
+        /*
+        |--------------------------------------------------------------------------
+        | Close
+        |--------------------------------------------------------------------------
+        */
+
+        binding.adClose.setOnClickListener {
+            destroy(binding.adMedia)
+            dialog.dismiss()
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Dismiss
+        |--------------------------------------------------------------------------
+        */
+
         dialog.setOnDismissListener {
-            ITWingSDK.trackCustomAdEvent(ad.id, "dismiss", eventMetadata(placement))
-            complete()
-        }
 
-        val root = FrameLayout(activity).apply { setBackgroundColor(Color.BLACK) }
-        val progress = ProgressBar(activity).apply { isIndeterminate = true }
-        root.addView(progress, FrameLayout.LayoutParams(dp(activity, 48), dp(activity, 48), Gravity.CENTER))
+            destroy(binding.adMedia)
 
-        val close = ImageButton(activity).apply {
-            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            setColorFilter(Color.WHITE)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(0x66000000)
+            runCatching {
+                activity.application.unregisterActivityLifecycleCallbacks(lifecycleCallbacks)
             }
-            alpha = 0f
-            isEnabled = false
-            setOnClickListener { dialog.dismiss() }
-        }
-        root.addView(close, FrameLayout.LayoutParams(dp(activity, 44), dp(activity, 44), Gravity.TOP or Gravity.END).apply {
-            topMargin = dp(activity, 28)
-            rightMargin = dp(activity, 18)
-        })
 
-        val content = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(activity, 22), dp(activity, 70), dp(activity, 22), dp(activity, 34))
-        }
-        root.addView(content, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            preload(
+                activity,
+                placement
+            )
 
-        fun renderCreative() {
-            progress.visibility = View.GONE
-            if (!impressionTracked) {
-                impressionTracked = true
-                ITWingSDK.trackCustomAdImpression(ad.id, eventMetadata(placement))
+            onComplete()
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Back Press
+        |--------------------------------------------------------------------------
+        */
+
+        dialog.setOnKeyListener { _,
+                                  keyCode,
+                                  event ->
+
+            if (
+                keyCode ==
+                KeyEvent.KEYCODE_BACK &&
+                event.action ==
+                KeyEvent.ACTION_UP
+            ) {
+
+                destroy(binding.adMedia)
+
+                dialog.dismiss()
+
+                true
+
+            } else {
+
+                false
             }
-            renderMedia(activity, content, ad)
-            renderCopy(activity, content, ad, placement)
-            Handler(Looper.getMainLooper()).postDelayed({
-                close.animate().alpha(1f).setDuration(180).start()
-                close.isEnabled = true
-            }, closeDelayMs.coerceAtLeast(0L))
         }
 
-        dialog.setContentView(root)
+        dialog.setContentView(
+            binding.root
+        )
+
         dialog.show()
-        scope.launch {
-            if (!ad.imageUrl.isNullOrBlank() && ad.html.isNullOrBlank()) {
-                runCatching { downloadImage(ad.imageUrl) }
-            }
-            renderCreative()
-        }
+
         return true
     }
 
-    private fun renderMedia(activity: Activity, content: LinearLayout, ad: CustomAdConfig) {
-        when {
-            !ad.html.isNullOrBlank() -> {
-                val webView = WebView(activity).apply {
-                    settings.javaScriptEnabled = false
-                    setBackgroundColor(Color.TRANSPARENT)
-                    loadDataWithBaseURL(null, ad.html, "text/html", "UTF-8", null)
-                }
-                content.addView(webView, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-            }
-            !ad.imageUrl.isNullOrBlank() -> {
-                val image = ImageView(activity).apply {
-                    adjustViewBounds = true
-                    scaleType = ImageView.ScaleType.FIT_CENTER
-                }
-                content.addView(image, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-                scope.launch {
-                    val bitmap = runCatching { downloadImage(ad.imageUrl) }.getOrNull()
-                    if (bitmap != null) image.setImageBitmap(bitmap)
-                }
-            }
-            else -> {
-                content.addView(TextView(activity).apply {
-                    text = ad.headline ?: ad.name
-                    setTextColor(Color.WHITE)
-                    textSize = 28f
-                    gravity = Gravity.CENTER
-                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-            }
+    private fun destroy(
+        mediaView: SDKMediaView?
+    ) {
+
+        runCatching {
+
+            mediaView?.release()
         }
     }
 
-    private fun renderCopy(activity: Activity, content: LinearLayout, ad: CustomAdConfig, placement: AdPlacementConfig) {
-        val panel = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(activity, 18), dp(activity, 16), dp(activity, 18), 0)
+    /*
+    |--------------------------------------------------------------------------
+    | Helpers
+    |--------------------------------------------------------------------------
+    */
+
+    private fun CustomAdConfig.mediaUrl(): String? =
+        mediaUrl
+            ?: videoUrl
+            ?: imageUrl
+
+    private fun CustomAdConfig.isVideo(): Boolean =
+        mediaType.equals(
+            "video",
+            true
+        )
+
+    private fun CustomAdConfig.primaryColor(): String? =
+        metadata["ad_primary_color"]
+                as? String
+            ?: (
+                    metadata["brand"]
+                            as? Map<*, *>
+                    )?.get("primary_color")
+                    as? String
+
+    private fun CustomAdConfig.brandName(): String? =
+        (
+                metadata["brand"]
+                        as? Map<*, *>
+                )?.get("name")
+                as? String
+            ?: campaignGroup
+
+    private fun CustomAdConfig.brandRating(): Float {
+
+        val value =
+            metadata["brand_rating"]
+                ?: (
+                        metadata["brand"]
+                                as? Map<*, *>
+                        )?.get("rating")
+
+        return when (value) {
+
+            is Number ->
+                value.toFloat()
+
+            is String ->
+                value.toFloatOrNull()
+
+            else ->
+                null
+        }?.coerceIn(0f, 5f)
+            ?: 4.5f
+    }
+
+    private fun CustomAdConfig.brandLogoUrl(): String? {
+
+        val brand =
+            metadata["brand"]
+                    as? Map<*, *>
+                ?: return null
+
+        return brand["logo_url"]
+                as? String
+    }
+
+    private fun CustomAdConfig.adIcon(): String =
+        (
+                metadata["ad_icon"]
+                        as? String
+                )?.takeIf {
+                it.isNotBlank()
+            }
+            ?: "AD"
+
+    private fun parseColorSafe(
+        value: String?,
+        fallback: Int
+    ): Int =
+
+        runCatching {
+
+            if (value.isNullOrBlank()) {
+
+                fallback
+
+            } else {
+
+                value.toColorInt()
+            }
+
+        }.getOrDefault(fallback)
+
+    object CustomAdCache {
+
+        val fullscreenViews =
+            ConcurrentHashMap<String, View>()
+    }
+
+    private fun loadImage(
+        url: String?,
+        imageView: ImageView?,
+        activity: Activity
+    ) {
+
+        if (url.isNullOrBlank()) {
+            return
         }
-        content.addView(panel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        panel.addView(TextView(activity).apply {
-            text = ad.headline ?: ad.name
-            setTextColor(Color.WHITE)
-            textSize = 22f
-            gravity = Gravity.CENTER
-        })
-        if (!ad.body.isNullOrBlank()) {
-            panel.addView(TextView(activity).apply {
-                text = ad.body
-                setTextColor(0xffd1d5db.toInt())
-                textSize = 14f
-                gravity = Gravity.CENTER
-                setPadding(0, dp(activity, 8), 0, dp(activity, 14))
-            })
-        }
-        if (!ad.cta.isNullOrBlank() && !ad.targetUrl.isNullOrBlank()) {
-            panel.addView(MaterialButton(activity).apply {
-                text = ad.cta
-                setOnClickListener {
-                    ITWingSDK.trackCustomAdClick(ad.id, eventMetadata(placement))
-                    runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ad.targetUrl))) }
+
+        activity.runOnUiThread {
+            runCatching {
+                imageView?.let {
+                    Glide.with(activity).load(url).fitCenter().into(it)
                 }
-            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+                imageView?.visibility = View.VISIBLE
+            }
         }
     }
-
-    private fun eventMetadata(placement: AdPlacementConfig): Map<String, Any?> = mapOf(
-        "placement" to placement.name,
-        "format" to placement.format,
-        "network" to "custom",
-    )
-
-    private suspend fun downloadImage(url: String) = withContext(Dispatchers.IO) {
-        URL(url).openStream().use { BitmapFactory.decodeStream(it) }
-    }
-
-    private fun dp(activity: Activity, value: Int): Int = (value * activity.resources.displayMetrics.density).toInt()
 }

@@ -75,13 +75,16 @@ dependencies {
     implementation("com.intuit.sdp:sdp-android:1.1.1")
     implementation("com.intuit.ssp:ssp-android:1.1.1")
     implementation("com.airbnb.android:lottie:6.7.1")
-    implementation("com.onesignal:OneSignal:5.9.0")
     implementation("androidx.lifecycle:lifecycle-process:2.10.0")
     implementation("com.google.android.play:app-update:2.1.0")
     implementation("com.google.android.play:app-update-ktx:2.1.0")
     implementation("com.facebook.shimmer:shimmer:0.5.0")
-    implementation("com.google.android.material:material:1.13.0")
+    implementation("com.google.android.material:material:1.14.0")
+    implementation("com.github.bumptech.glide:glide:5.0.7")
     implementation("com.android.billingclient:billing-ktx:8.3.0")
     implementation("com.android.installreferrer:installreferrer:2.2")
+
+    implementation("androidx.media3:media3-exoplayer:1.10.1")
+    implementation("androidx.media3:media3-ui:1.10.1")
 
 }

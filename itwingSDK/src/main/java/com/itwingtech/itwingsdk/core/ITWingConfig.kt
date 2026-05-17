@@ -58,6 +58,8 @@ data class CustomAdConfig(
     val targetUrl: String? = null,
     val imageUrl: String? = null,
     val videoUrl: String? = null,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null,
     val html: String? = null,
     val metadata: Map<String, Any?> = emptyMap(),
 )
@@ -85,24 +87,29 @@ data class AdUnitConfig(
 )
 
 data class NotificationConfig(
-    val provider: String = "fcm",
+    val provider: String = "itwing",
     val enabled: Boolean = false,
-    val onesignalAppId: String? = null,
-    val fcmSenderId: String? = null,
-    val fcmTopics: List<String> = emptyList(),
     val deviceRegistrationEndpoint: String = "/notifications/device",
+    val pendingEndpoint: String = "/notifications/pending",
+    val eventEndpoint: String = "/notifications/{id}/event",
+    val pollIntervalSeconds: Int = 300,
     val promptForPermission: Boolean = false,
+    val topics: List<String> = emptyList(),
     val segments: List<String> = emptyList(),
     val tags: Map<String, String> = emptyMap(),
 )
 
 data class ApiKeyConfig(
+    val id: String? = null,
     val name: String = "",
     val value: String = "",
     val provider: String? = null,
     val proxyEndpoint: String? = null,
     val baseUrl: String? = null,
-    val description: String? = null
+    val description: String? = null,
+    val dailyQuota: Int? = null,
+    val dailyUsage: Int = 0,
+    val poolSize: Int = 1,
 )
 
 data class ApiProviderConfig(

@@ -16,4 +16,6 @@
     <string name="cancel">Cancel</string>
     <string name="title">Check Your internet Connection!</string>
     <string name="banner_ad_loading">Banner Ad Loading...</string>
+    <string name="ad">AD</string>
+    <string name="install">Install</string>
 </resources>
