@@ -12,6 +12,7 @@ import android.os.Looper
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.Window
 import android.widget.ImageView
 import android.widget.RatingBar
@@ -28,14 +29,22 @@ import com.itwingtech.itwingsdk.utils.SDKMediaView
 import java.util.concurrent.ConcurrentHashMap
 
 internal class CustomFullscreenAdRenderer {
+
+    private val mainHandler =
+        Handler(Looper.getMainLooper())
+
     private var activeMediaView: SDKMediaView? = null
+
     private var isCtaOpened = false
+
     /*
     |--------------------------------------------------------------------------
     | Playback Restore
     |--------------------------------------------------------------------------
     */
+
     private var lastPlaybackPosition = 0L
+
     private var wasPlayingBeforePause = false
 
     /*
@@ -72,18 +81,36 @@ internal class CustomFullscreenAdRenderer {
             return
         }
 
-        val binding =
-            CustomInterstitialBinding.inflate(
-                LayoutInflater.from(activity)
-            )
+        runOnMain {
 
-        Glide.with(activity)
-            .load(ad.mediaUrl())
-            .preload()
+            if (!isActivityUsable(activity)) {
+                return@runOnMain
+            }
 
-        CustomAdCache.fullscreenViews[
-            placement.name
-        ] = binding.root
+            if (
+                CustomAdCache.fullscreenViews
+                    .containsKey(placement.name)
+            ) {
+                return@runOnMain
+            }
+
+            runCatching {
+
+                val binding =
+                    CustomInterstitialBinding.inflate(
+                        LayoutInflater.from(activity)
+                    )
+
+                safePreloadMedia(
+                    activity,
+                    ad.mediaUrl()
+                )
+
+                CustomAdCache.fullscreenViews[
+                    placement.name
+                ] = binding.root
+            }
+        }
     }
 
     /*
@@ -99,455 +126,571 @@ internal class CustomFullscreenAdRenderer {
         onComplete: () -> Unit = {}
     ): Boolean {
 
+        if (!isMainThread()) {
+
+            mainHandler.post {
+
+                show(
+                    activity,
+                    placement,
+                    reward,
+                    onComplete
+                )
+            }
+
+            return true
+        }
+
+        return showInternal(
+            activity,
+            placement,
+            reward,
+            onComplete
+        )
+    }
+
+    private fun showInternal(activity: Activity, placement: AdPlacementConfig, reward: (() -> Unit)? = null, onComplete: () -> Unit = {}): Boolean {
+
         val ad =
             placement.customAd ?: return false
 
-        val dialog = Dialog(
-            activity,
-            android.R.style.Theme_Black_NoTitleBar_Fullscreen
-        )
+        if (!isActivityUsable(activity)) {
+            return false
+        }
 
-        dialog.requestWindowFeature(
-            Window.FEATURE_NO_TITLE
-        )
+        var dialog: Dialog? = null
 
-        val cached =
-            CustomAdCache.fullscreenViews
-                .remove(placement.name)
+        return runCatching {
 
-        val binding =
-            if (cached != null) {
+            dialog =
+                Dialog(
+                    activity,
+                    android.R.style.Theme_Black_NoTitleBar_Fullscreen
+                )
 
-                CustomInterstitialBinding
-                    .bind(cached)
-
-            } else {
-
-                CustomInterstitialBinding
-                    .inflate(
-                        LayoutInflater.from(activity)
-                    )
-            }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Views
-        |--------------------------------------------------------------------------
-        */
-
-        val advertiserView =
-            binding.root.findViewById<TextView>(
-                R.id.ad_advertiser
+            dialog.requestWindowFeature(
+                Window.FEATURE_NO_TITLE
             )
 
-        val iconView =
-            binding.root.findViewById<ImageView>(
-                R.id.ad_app_icon
-            )
+            val cached =
+                CustomAdCache.fullscreenViews
+                    .remove(placement.name)
 
-        val adTag =
-            binding.root.findViewById<TextView>(
-                R.id.ad_ic
-            )
+            detachFromParent(cached)
 
-        val ratingView =
-            binding.root.findViewById<RatingBar>(
-                R.id.ad_stars
-            )
+            val binding =
+                if (cached != null) {
 
-        val storeView =
-            binding.root.findViewById<TextView>(
-                R.id.ad_store
-            )
+                    CustomInterstitialBinding
+                        .bind(cached)
 
-        /*
-        |--------------------------------------------------------------------------
-        | Loading
-        |--------------------------------------------------------------------------
-        */
+                } else {
 
-        binding.adLoading.visibility =
-            View.VISIBLE
+                    CustomInterstitialBinding
+                        .inflate(
+                            LayoutInflater.from(activity)
+                        )
+                }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Media
-        |--------------------------------------------------------------------------
-        */
+            /*
+            |--------------------------------------------------------------------------
+            | Views
+            |--------------------------------------------------------------------------
+            */
 
-        activeMediaView = binding.adMedia
-        binding.adMedia.hideInternalMute()
-        binding.adMedia.attachExternalMuteButton(
-            binding.fullscreenMute
-        )
+            val advertiserView =
+                binding.root.findViewById<TextView>(
+                    R.id.ad_advertiser
+                )
 
-        binding.adMedia.render(
-            ad.mediaUrl(),
-            ad.isVideo()
-        )
+            val iconView =
+                binding.root.findViewById<ImageView>(
+                    R.id.ad_app_icon
+                )
 
-        binding.adMedia.play()
+            val adTag =
+                binding.root.findViewById<TextView>(
+                    R.id.ad_ic
+                )
 
-        /*
-        |--------------------------------------------------------------------------
-        | Delay Loading Hide
-        |--------------------------------------------------------------------------
-        */
+            val ratingView =
+                binding.root.findViewById<RatingBar>(
+                    R.id.ad_stars
+                )
 
-        Handler(
-            Looper.getMainLooper()
-        ).postDelayed({
+            val storeView =
+                binding.root.findViewById<TextView>(
+                    R.id.ad_store
+                )
+
+            /*
+            |--------------------------------------------------------------------------
+            | Loading
+            |--------------------------------------------------------------------------
+            */
 
             binding.adLoading.visibility =
-                View.GONE
+                View.VISIBLE
 
-        }, 650)
+            /*
+            |--------------------------------------------------------------------------
+            | Media
+            |--------------------------------------------------------------------------
+            */
 
-        /*
-        |--------------------------------------------------------------------------
-        | Text
-        |--------------------------------------------------------------------------
-        */
+            activeMediaView =
+                binding.adMedia
 
-        binding.adTitle.text =
-            ad.headline ?: ad.name
+            binding.adMedia.hideInternalMute()
 
-        binding.adBody.text =
-            ad.body.orEmpty()
-
-        binding.adCta.text =
-            ad.cta ?: "Open"
-
-        advertiserView.text =
-            ad.brandName()
-                ?: "Sponsored"
-
-        ratingView.rating =
-            ad.brandRating()
-
-        storeView.text =
-            "Sponsored"
-
-        adTag.text =
-            ad.adIcon()
-
-        /*
-        |--------------------------------------------------------------------------
-        | App Icon
-        |--------------------------------------------------------------------------
-        */
-
-        loadImage(
-            ad.brandLogoUrl(),
-            iconView,
-            activity
-        )
-
-        /*
-        |--------------------------------------------------------------------------
-        | CTA Color
-        |--------------------------------------------------------------------------
-        */
-
-        val ctaDrawable =
-            binding.adCta.background
-                ?.mutate() as? GradientDrawable
-
-        ctaDrawable?.setColor(
-            parseColorSafe(
-                ad.primaryColor(),
-                Color.rgb(
-                    37,
-                    99,
-                    235
-                )
+            binding.adMedia.attachExternalMuteButton(
+                binding.fullscreenMute
             )
-        )
-
-        /*
-        |--------------------------------------------------------------------------
-        | Ad Badge Color
-        |--------------------------------------------------------------------------
-        */
-
-        val adTagDrawable =
-            adTag.background
-                ?.mutate() as? GradientDrawable
-
-        adTagDrawable?.setColor(
-            parseColorSafe(
-                ad.primaryColor(),
-                Color.rgb(
-                    37,
-                    99,
-                    235
-                )
-            )
-        )
-
-        /*
-        |--------------------------------------------------------------------------
-        | CTA CLICK
-        |--------------------------------------------------------------------------
-        */
-
-        binding.adCta.setOnClickListener {
-
-            ITWingSDK.trackCustomAdClick(
-                ad.id,
-                mapOf(
-                    "placement" to placement.name
-                )
-            )
-
-            activeMediaView?.let { media ->
-
-                lastPlaybackPosition =
-                    media.currentPosition()
-
-                wasPlayingBeforePause =
-                    media.isPlaying()
-
-                media.pause()
-            }
-
-            isCtaOpened = true
 
             runCatching {
 
-                activity.startActivity(
-                    Intent(
-                        Intent.ACTION_VIEW,
-                        ad.targetUrl?.toUri()
+                binding.adMedia.render(
+                    ad.mediaUrl(),
+                    ad.isVideo()
+                )
+
+                binding.adMedia.play()
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Delay Loading Hide
+            |--------------------------------------------------------------------------
+            */
+
+            mainHandler.postDelayed({
+
+                runCatching {
+
+                    binding.adLoading.visibility =
+                        View.GONE
+                }
+
+            }, 650)
+
+            /*
+            |--------------------------------------------------------------------------
+            | Text
+            |--------------------------------------------------------------------------
+            */
+
+            binding.adTitle.text =
+                ad.headline ?: ad.name
+
+            binding.adBody.text =
+                ad.body.orEmpty()
+
+            binding.adCta.text =
+                ad.cta ?: "Open"
+
+            advertiserView.text =
+                ad.brandName()
+                    ?: "Sponsored"
+
+            ratingView.rating =
+                ad.brandRating()
+
+            storeView.text =
+                "Sponsored"
+
+            adTag.text =
+                ad.adIcon()
+
+            /*
+            |--------------------------------------------------------------------------
+            | App Icon
+            |--------------------------------------------------------------------------
+            */
+
+            loadImage(
+                ad.brandLogoUrl(),
+                iconView,
+                activity
+            )
+
+            /*
+            |--------------------------------------------------------------------------
+            | CTA Color
+            |--------------------------------------------------------------------------
+            */
+
+            val ctaDrawable =
+                binding.adCta.background
+                    ?.mutate() as? GradientDrawable
+
+            ctaDrawable?.setColor(
+                parseColorSafe(
+                    ad.primaryColor(),
+                    Color.rgb(
+                        37,
+                        99,
+                        235
                     )
                 )
+            )
+
+            /*
+            |--------------------------------------------------------------------------
+            | Ad Badge Color
+            |--------------------------------------------------------------------------
+            */
+
+            val adTagDrawable =
+                adTag.background
+                    ?.mutate() as? GradientDrawable
+
+            adTagDrawable?.setColor(
+                parseColorSafe(
+                    ad.primaryColor(),
+                    Color.rgb(
+                        37,
+                        99,
+                        235
+                    )
+                )
+            )
+
+            /*
+            |--------------------------------------------------------------------------
+            | CTA CLICK
+            |--------------------------------------------------------------------------
+            */
+
+            binding.adCta.setOnClickListener {
+
+                ITWingSDK.trackCustomAdClick(
+                    ad.id,
+                    mapOf(
+                        "placement" to placement.name
+                    )
+                )
+
+                activeMediaView?.let { media ->
+
+                    lastPlaybackPosition =
+                        media.currentPosition()
+
+                    wasPlayingBeforePause =
+                        media.isPlaying()
+
+                    media.pause()
+                }
+
+                isCtaOpened =
+                    true
+
+                openTargetUrl(
+                    activity,
+                    ad.targetUrl
+                )
             }
-        }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Resume On Return
-        |--------------------------------------------------------------------------
-        */
+            /*
+            |--------------------------------------------------------------------------
+            | Resume On Return
+            |--------------------------------------------------------------------------
+            */
 
-        val lifecycleCallbacks =
-            object :
-                Application.ActivityLifecycleCallbacks {
+            val lifecycleCallbacks =
+                object :
+                    Application.ActivityLifecycleCallbacks {
 
-                override fun onActivityResumed(
-                    resumedActivity: Activity
-                ) {
-
-                    if (
-                        resumedActivity == activity &&
-                        isCtaOpened
+                    override fun onActivityResumed(
+                        resumedActivity: Activity
                     ) {
 
-                        isCtaOpened = false
+                        if (
+                            resumedActivity == activity &&
+                            isCtaOpened
+                        ) {
 
-                        Handler(
-                            Looper.getMainLooper()
-                        ).postDelayed({
+                            isCtaOpened =
+                                false
 
-                            activeMediaView?.let { media ->
+                            mainHandler.postDelayed({
 
-                                /*
-                                |--------------------------------------------------------------------------
-                                | Restore Surface
-                                |--------------------------------------------------------------------------
-                                */
+                                activeMediaView?.let { media ->
 
-                                media.restorePlayer()
+                                    runCatching {
 
-                                /*
-                                |--------------------------------------------------------------------------
-                                | Restore Position
-                                |--------------------------------------------------------------------------
-                                */
+                                        /*
+                                        |--------------------------------------------------------------------------
+                                        | Restore Surface
+                                        |--------------------------------------------------------------------------
+                                        */
 
-                                media.seekTo(
-                                    lastPlaybackPosition
-                                )
+                                        media.restorePlayer()
 
-                                /*
-                                |--------------------------------------------------------------------------
-                                | Resume Playback
-                                |--------------------------------------------------------------------------
-                                */
+                                        /*
+                                        |--------------------------------------------------------------------------
+                                        | Restore Position
+                                        |--------------------------------------------------------------------------
+                                        */
 
-                                if (
-                                    wasPlayingBeforePause
-                                ) {
+                                        media.seekTo(
+                                            lastPlaybackPosition
+                                        )
 
-                                    media.play()
+                                        /*
+                                        |--------------------------------------------------------------------------
+                                        | Resume Playback
+                                        |--------------------------------------------------------------------------
+                                        */
+
+                                        if (
+                                            wasPlayingBeforePause
+                                        ) {
+
+                                            media.play()
+                                        }
+                                    }
                                 }
-                            }
 
-                        }, 400)
+                            }, 400)
+                        }
                     }
-                }
 
-                override fun onActivityCreated(
-                    activity: Activity,
-                    savedInstanceState: Bundle?
-                ) {
-                }
+                    override fun onActivityCreated(
+                        activity: Activity,
+                        savedInstanceState: Bundle?
+                    ) {
+                    }
 
-                override fun onActivityStarted(
-                    activity: Activity
-                ) {
-                }
+                    override fun onActivityStarted(
+                        activity: Activity
+                    ) {
+                    }
 
-                override fun onActivityPaused(
-                    activity: Activity
-                ) {
-                }
+                    override fun onActivityPaused(
+                        activity: Activity
+                    ) {
+                    }
 
-                override fun onActivityStopped(
-                    activity: Activity
-                ) {
-                }
+                    override fun onActivityStopped(
+                        activity: Activity
+                    ) {
+                    }
 
-                override fun onActivitySaveInstanceState(
-                    activity: Activity,
-                    outState: Bundle
-                ) {
-                }
+                    override fun onActivitySaveInstanceState(
+                        activity: Activity,
+                        outState: Bundle
+                    ) {
+                    }
 
-                override fun onActivityDestroyed(
-                    destroyedActivity: Activity
-                ) {
-
-                    if (
-                        destroyedActivity ==
-                        activity
+                    override fun onActivityDestroyed(
+                        destroyedActivity: Activity
                     ) {
 
-                        runCatching {
+                        if (
+                            destroyedActivity ==
+                            activity
+                        ) {
 
-                            activity.application
-                                .unregisterActivityLifecycleCallbacks(
-                                    this
-                                )
+                            runCatching {
+
+                                activity.application
+                                    .unregisterActivityLifecycleCallbacks(
+                                        this
+                                    )
+                            }
                         }
                     }
                 }
-            }
-
-        activity.application
-            .registerActivityLifecycleCallbacks(
-                lifecycleCallbacks
-            )
-
-        /*
-        |--------------------------------------------------------------------------
-        | Close Delay
-        |--------------------------------------------------------------------------
-        */
-
-        binding.adClose.alpha = 0f
-
-        binding.adClose.isEnabled = false
-
-        val closeDelay = when {
-
-            placement.format.contains(
-                "rewarded",
-                true
-            ) -> 6000L
-
-            else -> 3000L
-        }
-
-        Handler(
-            Looper.getMainLooper()
-        ).postDelayed({
-
-            binding.adClose.animate().alpha(1f).setDuration(250).start()
-
-            binding.adClose.isEnabled =
-                true
-
-        }, closeDelay)
-
-        /*
-        |--------------------------------------------------------------------------
-        | Close
-        |--------------------------------------------------------------------------
-        */
-
-        binding.adClose.setOnClickListener {
-            destroy(binding.adMedia)
-            dialog.dismiss()
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Dismiss
-        |--------------------------------------------------------------------------
-        */
-
-        dialog.setOnDismissListener {
-
-            destroy(binding.adMedia)
 
             runCatching {
-                activity.application.unregisterActivityLifecycleCallbacks(lifecycleCallbacks)
+
+                activity.application
+                    .registerActivityLifecycleCallbacks(
+                        lifecycleCallbacks
+                    )
             }
 
-            preload(
-                activity,
-                placement
+            /*
+            |--------------------------------------------------------------------------
+            | Close Delay
+            |--------------------------------------------------------------------------
+            */
+
+            binding.adClose.alpha =
+                0f
+
+            binding.adClose.isEnabled =
+                false
+
+            val closeDelay =
+                when {
+
+                    placement.format.contains(
+                        "rewarded",
+                        true
+                    ) -> 6000L
+
+                    else -> 3000L
+                }
+
+            mainHandler.postDelayed({
+
+                runCatching {
+
+                    binding.adClose
+                        .animate()
+                        .alpha(1f)
+                        .setDuration(250)
+                        .start()
+
+                    binding.adClose.isEnabled =
+                        true
+                }
+
+            }, closeDelay)
+
+            /*
+            |--------------------------------------------------------------------------
+            | Close
+            |--------------------------------------------------------------------------
+            */
+
+            binding.adClose.setOnClickListener {
+
+                destroy(
+                    binding.adMedia
+                )
+
+                runCatching {
+
+                    dialog?.dismiss()
+                }
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Dismiss
+            |--------------------------------------------------------------------------
+            */
+
+            dialog?.setOnDismissListener {
+
+                destroy(
+                    binding.adMedia
+                )
+
+                runCatching {
+
+                    activity.application
+                        .unregisterActivityLifecycleCallbacks(
+                            lifecycleCallbacks
+                        )
+                }
+
+                preload(
+                    activity,
+                    placement
+                )
+
+                runCatching {
+
+                    onComplete()
+                }
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Back Press
+            |--------------------------------------------------------------------------
+            */
+
+            dialog?.setOnKeyListener { _,
+                                       keyCode,
+                                       event ->
+
+                if (
+                    keyCode ==
+                    KeyEvent.KEYCODE_BACK &&
+                    event.action ==
+                    KeyEvent.ACTION_UP
+                ) {
+
+                    destroy(
+                        binding.adMedia
+                    )
+
+                    runCatching {
+
+                        dialog.dismiss()
+                    }
+
+                    true
+
+                } else {
+
+                    false
+                }
+            }
+
+            dialog.setContentView(
+                binding.root
             )
 
-            onComplete()
-        }
+            if (isActivityUsable(activity)) {
 
-        /*
-        |--------------------------------------------------------------------------
-        | Back Press
-        |--------------------------------------------------------------------------
-        */
-
-        dialog.setOnKeyListener { _,
-                                  keyCode,
-                                  event ->
-
-            if (
-                keyCode ==
-                KeyEvent.KEYCODE_BACK &&
-                event.action ==
-                KeyEvent.ACTION_UP
-            ) {
-
-                destroy(binding.adMedia)
-
-                dialog.dismiss()
+                dialog.show()
 
                 true
 
             } else {
 
+                destroy(
+                    binding.adMedia
+                )
+
                 false
             }
+
+        }.getOrElse {
+
+            runCatching {
+
+                dialog?.dismiss()
+            }
+
+            false
         }
-
-        dialog.setContentView(
-            binding.root
-        )
-
-        dialog.show()
-
-        return true
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Destroy
+    |--------------------------------------------------------------------------
+    */
 
     private fun destroy(
         mediaView: SDKMediaView?
     ) {
 
-        runCatching {
+        if (mediaView == null) {
+            return
+        }
 
-            mediaView?.release()
+        runOnMain {
+
+            runCatching {
+
+                mediaView.release()
+
+                if (
+                    activeMediaView ==
+                    mediaView
+                ) {
+
+                    activeMediaView =
+                        null
+                }
+            }
         }
     }
 
@@ -556,6 +699,95 @@ internal class CustomFullscreenAdRenderer {
     | Helpers
     |--------------------------------------------------------------------------
     */
+
+    private fun runOnMain(
+        block: () -> Unit
+    ) {
+
+        if (isMainThread()) {
+
+            block()
+
+        } else {
+
+            mainHandler.post {
+
+                block()
+            }
+        }
+    }
+
+    private fun isMainThread(): Boolean {
+
+        return Looper.myLooper() ==
+                Looper.getMainLooper()
+    }
+
+    private fun isActivityUsable(
+        activity: Activity
+    ): Boolean {
+
+        return !activity.isFinishing &&
+                !activity.isDestroyed
+    }
+
+    private fun detachFromParent(
+        view: View?
+    ) {
+
+        val parent =
+            view?.parent as? ViewGroup
+
+        parent?.removeView(
+            view
+        )
+    }
+
+    private fun safePreloadMedia(
+        activity: Activity,
+        url: String?
+    ) {
+
+        if (
+            url.isNullOrBlank() ||
+            !isActivityUsable(activity)
+        ) {
+            return
+        }
+
+        runCatching {
+            Glide.with(activity)
+                .load(url)
+                .preload()
+        }
+    }
+
+    private fun openTargetUrl(
+        activity: Activity,
+        url: String?
+    ) {
+
+        if (
+            url.isNullOrBlank() ||
+            !isActivityUsable(activity)
+        ) {
+            return
+        }
+
+        runCatching {
+
+            activity.startActivity(
+                Intent(
+                    Intent.ACTION_VIEW,
+                    url.toUri()
+                )
+            )
+        }.onFailure {
+
+            isCtaOpened =
+                false
+        }
+    }
 
     private fun CustomAdConfig.mediaUrl(): String? =
         mediaUrl
@@ -604,8 +836,10 @@ internal class CustomFullscreenAdRenderer {
 
             else ->
                 null
-        }?.coerceIn(0f, 5f)
-            ?: 4.5f
+        }?.coerceIn(
+            0f,
+            5f
+        ) ?: 4.5f
     }
 
     private fun CustomAdConfig.brandLogoUrl(): String? {
@@ -644,7 +878,9 @@ internal class CustomFullscreenAdRenderer {
                 value.toColorInt()
             }
 
-        }.getOrDefault(fallback)
+        }.getOrDefault(
+            fallback
+        )
 
     object CustomAdCache {
 
@@ -658,17 +894,668 @@ internal class CustomFullscreenAdRenderer {
         activity: Activity
     ) {
 
-        if (url.isNullOrBlank()) {
+        if (
+            url.isNullOrBlank() ||
+            imageView == null
+        ) {
             return
         }
 
-        activity.runOnUiThread {
+        runOnMain {
+
+            if (!isActivityUsable(activity)) {
+                return@runOnMain
+            }
+
             runCatching {
-                imageView?.let {
-                    Glide.with(activity).load(url).fitCenter().into(it)
-                }
-                imageView?.visibility = View.VISIBLE
+
+                Glide.with(activity)
+                    .load(url)
+                    .fitCenter()
+                    .into(imageView)
+
+                imageView.visibility =
+                    View.VISIBLE
             }
         }
     }
 }
+
+//package com.itwingtech.itwingsdk.ads
+//
+//import android.app.Activity
+//import android.app.Application
+//import android.app.Dialog
+//import android.content.Intent
+//import android.graphics.Color
+//import android.graphics.drawable.GradientDrawable
+//import android.os.Bundle
+//import android.os.Handler
+//import android.os.Looper
+//import android.view.KeyEvent
+//import android.view.LayoutInflater
+//import android.view.View
+//import android.view.Window
+//import android.widget.ImageView
+//import android.widget.RatingBar
+//import android.widget.TextView
+//import androidx.core.graphics.toColorInt
+//import androidx.core.net.toUri
+//import com.bumptech.glide.Glide
+//import com.itwingtech.itwingsdk.R
+//import com.itwingtech.itwingsdk.core.AdPlacementConfig
+//import com.itwingtech.itwingsdk.core.CustomAdConfig
+//import com.itwingtech.itwingsdk.core.ITWingSDK
+//import com.itwingtech.itwingsdk.databinding.CustomInterstitialBinding
+//import com.itwingtech.itwingsdk.utils.SDKMediaView
+//import java.util.concurrent.ConcurrentHashMap
+//
+//internal class CustomFullscreenAdRenderer {
+//    private var activeMediaView: SDKMediaView? = null
+//    private var isCtaOpened = false
+//    /*
+//    |--------------------------------------------------------------------------
+//    | Playback Restore
+//    |--------------------------------------------------------------------------
+//    */
+//    private var lastPlaybackPosition = 0L
+//    private var wasPlayingBeforePause = false
+//
+//    /*
+//    |--------------------------------------------------------------------------
+//    | Can Render
+//    |--------------------------------------------------------------------------
+//    */
+//
+//    fun canRender(
+//        placement: AdPlacementConfig
+//    ): Boolean {
+//
+//        return placement.customAd != null
+//    }
+//
+//    /*
+//    |--------------------------------------------------------------------------
+//    | Preload
+//    |--------------------------------------------------------------------------
+//    */
+//    fun preload(activity: Activity, placement: AdPlacementConfig) {
+//        val ad = placement.customAd ?: return
+//        if (CustomAdCache.fullscreenViews.containsKey(placement.name)) {
+//            return
+//        }
+//
+//        activity.runOnUiThread { if (CustomAdCache.fullscreenViews.containsKey(placement.name)) {
+//                return@runOnUiThread
+//            }
+//
+//            val binding = CustomInterstitialBinding.inflate(LayoutInflater.from(activity))
+//
+//            Glide.with(activity).load(ad.mediaUrl()).preload()
+//
+//            CustomAdCache.fullscreenViews[placement.name] = binding.root
+//        }
+//    }
+//    /*
+//    |--------------------------------------------------------------------------
+//    | Show
+//    |--------------------------------------------------------------------------
+//    */
+//
+//    fun show(activity: Activity, placement: AdPlacementConfig, reward: (() -> Unit)? = null, onComplete: () -> Unit = {}): Boolean {
+//
+//        val ad = placement.customAd ?: return false
+//        val dialog = Dialog(activity, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+//        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+//
+//        val cached = CustomAdCache.fullscreenViews.remove(placement.name)
+//
+//        val binding =
+//            if (cached != null) { CustomInterstitialBinding.bind(cached) }
+//            else {
+//                CustomInterstitialBinding.inflate(LayoutInflater.from(activity))
+//            }
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Views
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        val advertiserView =
+//            binding.root.findViewById<TextView>(
+//                R.id.ad_advertiser
+//            )
+//
+//        val iconView =
+//            binding.root.findViewById<ImageView>(
+//                R.id.ad_app_icon
+//            )
+//
+//        val adTag =
+//            binding.root.findViewById<TextView>(
+//                R.id.ad_ic
+//            )
+//
+//        val ratingView =
+//            binding.root.findViewById<RatingBar>(
+//                R.id.ad_stars
+//            )
+//
+//        val storeView =
+//            binding.root.findViewById<TextView>(
+//                R.id.ad_store
+//            )
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Loading
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        binding.adLoading.visibility =
+//            View.VISIBLE
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Media
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        activeMediaView = binding.adMedia
+//        binding.adMedia.hideInternalMute()
+//        binding.adMedia.attachExternalMuteButton(
+//            binding.fullscreenMute
+//        )
+//
+//        binding.adMedia.render(
+//            ad.mediaUrl(),
+//            ad.isVideo()
+//        )
+//
+//        binding.adMedia.play()
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Delay Loading Hide
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        Handler(
+//            Looper.getMainLooper()
+//        ).postDelayed({
+//
+//            binding.adLoading.visibility =
+//                View.GONE
+//
+//        }, 650)
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Text
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        binding.adTitle.text =
+//            ad.headline ?: ad.name
+//
+//        binding.adBody.text =
+//            ad.body.orEmpty()
+//
+//        binding.adCta.text =
+//            ad.cta ?: "Open"
+//
+//        advertiserView.text =
+//            ad.brandName()
+//                ?: "Sponsored"
+//
+//        ratingView.rating =
+//            ad.brandRating()
+//
+//        storeView.text =
+//            "Sponsored"
+//
+//        adTag.text =
+//            ad.adIcon()
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | App Icon
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        loadImage(
+//            ad.brandLogoUrl(),
+//            iconView,
+//            activity
+//        )
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | CTA Color
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        val ctaDrawable =
+//            binding.adCta.background
+//                ?.mutate() as? GradientDrawable
+//
+//        ctaDrawable?.setColor(
+//            parseColorSafe(
+//                ad.primaryColor(),
+//                Color.rgb(
+//                    37,
+//                    99,
+//                    235
+//                )
+//            )
+//        )
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Ad Badge Color
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        val adTagDrawable =
+//            adTag.background
+//                ?.mutate() as? GradientDrawable
+//
+//        adTagDrawable?.setColor(
+//            parseColorSafe(
+//                ad.primaryColor(),
+//                Color.rgb(
+//                    37,
+//                    99,
+//                    235
+//                )
+//            )
+//        )
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | CTA CLICK
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        binding.adCta.setOnClickListener {
+//
+//            ITWingSDK.trackCustomAdClick(
+//                ad.id,
+//                mapOf(
+//                    "placement" to placement.name
+//                )
+//            )
+//
+//            activeMediaView?.let { media ->
+//
+//                lastPlaybackPosition =
+//                    media.currentPosition()
+//
+//                wasPlayingBeforePause =
+//                    media.isPlaying()
+//
+//                media.pause()
+//            }
+//
+//            isCtaOpened = true
+//
+//            runCatching {
+//
+//                activity.startActivity(
+//                    Intent(
+//                        Intent.ACTION_VIEW,
+//                        ad.targetUrl?.toUri()
+//                    )
+//                )
+//            }
+//        }
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Resume On Return
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        val lifecycleCallbacks =
+//            object :
+//                Application.ActivityLifecycleCallbacks {
+//
+//                override fun onActivityResumed(
+//                    resumedActivity: Activity
+//                ) {
+//
+//                    if (
+//                        resumedActivity == activity &&
+//                        isCtaOpened
+//                    ) {
+//
+//                        isCtaOpened = false
+//
+//                        Handler(
+//                            Looper.getMainLooper()
+//                        ).postDelayed({
+//
+//                            activeMediaView?.let { media ->
+//
+//                                /*
+//                                |--------------------------------------------------------------------------
+//                                | Restore Surface
+//                                |--------------------------------------------------------------------------
+//                                */
+//
+//                                media.restorePlayer()
+//
+//                                /*
+//                                |--------------------------------------------------------------------------
+//                                | Restore Position
+//                                |--------------------------------------------------------------------------
+//                                */
+//
+//                                media.seekTo(
+//                                    lastPlaybackPosition
+//                                )
+//
+//                                /*
+//                                |--------------------------------------------------------------------------
+//                                | Resume Playback
+//                                |--------------------------------------------------------------------------
+//                                */
+//
+//                                if (
+//                                    wasPlayingBeforePause
+//                                ) {
+//
+//                                    media.play()
+//                                }
+//                            }
+//
+//                        }, 400)
+//                    }
+//                }
+//
+//                override fun onActivityCreated(
+//                    activity: Activity,
+//                    savedInstanceState: Bundle?
+//                ) {
+//                }
+//
+//                override fun onActivityStarted(
+//                    activity: Activity
+//                ) {
+//                }
+//
+//                override fun onActivityPaused(
+//                    activity: Activity
+//                ) {
+//                }
+//
+//                override fun onActivityStopped(
+//                    activity: Activity
+//                ) {
+//                }
+//
+//                override fun onActivitySaveInstanceState(
+//                    activity: Activity,
+//                    outState: Bundle
+//                ) {
+//                }
+//
+//                override fun onActivityDestroyed(
+//                    destroyedActivity: Activity
+//                ) {
+//
+//                    if (
+//                        destroyedActivity ==
+//                        activity
+//                    ) {
+//
+//                        runCatching {
+//
+//                            activity.application
+//                                .unregisterActivityLifecycleCallbacks(
+//                                    this
+//                                )
+//                        }
+//                    }
+//                }
+//            }
+//
+//        activity.application
+//            .registerActivityLifecycleCallbacks(
+//                lifecycleCallbacks
+//            )
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Close Delay
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        binding.adClose.alpha = 0f
+//
+//        binding.adClose.isEnabled = false
+//
+//        val closeDelay = when {
+//
+//            placement.format.contains(
+//                "rewarded",
+//                true
+//            ) -> 6000L
+//
+//            else -> 3000L
+//        }
+//
+//        Handler(
+//            Looper.getMainLooper()
+//        ).postDelayed({
+//
+//            binding.adClose.animate().alpha(1f).setDuration(250).start()
+//
+//            binding.adClose.isEnabled =
+//                true
+//
+//        }, closeDelay)
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Close
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        binding.adClose.setOnClickListener {
+//            destroy(binding.adMedia)
+//            dialog.dismiss()
+//        }
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Dismiss
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        dialog.setOnDismissListener {
+//
+//            destroy(binding.adMedia)
+//
+//            runCatching {
+//                activity.application.unregisterActivityLifecycleCallbacks(lifecycleCallbacks)
+//            }
+//
+//            preload(
+//                activity,
+//                placement
+//            )
+//
+//            onComplete()
+//        }
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Back Press
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        dialog.setOnKeyListener { _,
+//                                  keyCode,
+//                                  event ->
+//
+//            if (
+//                keyCode ==
+//                KeyEvent.KEYCODE_BACK &&
+//                event.action ==
+//                KeyEvent.ACTION_UP
+//            ) {
+//
+//                destroy(binding.adMedia)
+//
+//                dialog.dismiss()
+//
+//                true
+//
+//            } else {
+//
+//                false
+//            }
+//        }
+//
+//        dialog.setContentView(
+//            binding.root
+//        )
+//
+//        dialog.show()
+//
+//        return true
+//    }
+//
+//    private fun destroy(
+//        mediaView: SDKMediaView?
+//    ) {
+//
+//        runCatching {
+//
+//            mediaView?.release()
+//        }
+//    }
+//
+//    /*
+//    |--------------------------------------------------------------------------
+//    | Helpers
+//    |--------------------------------------------------------------------------
+//    */
+//
+//    private fun CustomAdConfig.mediaUrl(): String? =
+//        mediaUrl
+//            ?: videoUrl
+//            ?: imageUrl
+//
+//    private fun CustomAdConfig.isVideo(): Boolean =
+//        mediaType.equals(
+//            "video",
+//            true
+//        )
+//
+//    private fun CustomAdConfig.primaryColor(): String? =
+//        metadata["ad_primary_color"]
+//                as? String
+//            ?: (
+//                    metadata["brand"]
+//                            as? Map<*, *>
+//                    )?.get("primary_color")
+//                    as? String
+//
+//    private fun CustomAdConfig.brandName(): String? =
+//        (
+//                metadata["brand"]
+//                        as? Map<*, *>
+//                )?.get("name")
+//                as? String
+//            ?: campaignGroup
+//
+//    private fun CustomAdConfig.brandRating(): Float {
+//
+//        val value =
+//            metadata["brand_rating"]
+//                ?: (
+//                        metadata["brand"]
+//                                as? Map<*, *>
+//                        )?.get("rating")
+//
+//        return when (value) {
+//
+//            is Number ->
+//                value.toFloat()
+//
+//            is String ->
+//                value.toFloatOrNull()
+//
+//            else ->
+//                null
+//        }?.coerceIn(0f, 5f)
+//            ?: 4.5f
+//    }
+//
+//    private fun CustomAdConfig.brandLogoUrl(): String? {
+//
+//        val brand =
+//            metadata["brand"]
+//                    as? Map<*, *>
+//                ?: return null
+//
+//        return brand["logo_url"]
+//                as? String
+//    }
+//
+//    private fun CustomAdConfig.adIcon(): String =
+//        (
+//                metadata["ad_icon"]
+//                        as? String
+//                )?.takeIf {
+//                it.isNotBlank()
+//            }
+//            ?: "AD"
+//
+//    private fun parseColorSafe(
+//        value: String?,
+//        fallback: Int
+//    ): Int =
+//
+//        runCatching {
+//
+//            if (value.isNullOrBlank()) {
+//
+//                fallback
+//
+//            } else {
+//
+//                value.toColorInt()
+//            }
+//
+//        }.getOrDefault(fallback)
+//
+//    object CustomAdCache {
+//
+//        val fullscreenViews =
+//            ConcurrentHashMap<String, View>()
+//    }
+//
+//    private fun loadImage(
+//        url: String?,
+//        imageView: ImageView?,
+//        activity: Activity
+//    ) {
+//
+//        if (url.isNullOrBlank()) {
+//            return
+//        }
+//
+//        activity.runOnUiThread {
+//            runCatching {
+//                imageView?.let {
+//                    Glide.with(activity).load(url).fitCenter().into(it)
+//                }
+//                imageView?.visibility = View.VISIBLE
+//            }
+//        }
+//    }
+//}

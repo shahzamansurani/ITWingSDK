@@ -1,183 +1,862 @@
 package com.itwingtech.itwingsdk.ads
 
-
 import android.app.Activity
+import android.os.Handler
+import android.os.Looper
 import android.view.ViewGroup
 import com.itwingtech.itwingsdk.core.ITWingConfig
 
+class AdManager(
+    private val configProvider: () -> ITWingConfig,
+    private val suppressAdsProvider: () -> Boolean = { false }
+) {
+    private val mainHandler =
+        Handler(Looper.getMainLooper())
 
-class AdManager(private val configProvider: () -> ITWingConfig, private val suppressAdsProvider: () -> Boolean = { false } ) {
-    private val frequencyController = FrequencyController()
-    private val bannerLoader by lazy { BannerLoader(configProvider) }
-    private val interstitialManager by lazy { InterstitialManager(configProvider = configProvider, frequency = frequencyController) }
-    private val rewardedManager by lazy { RewardedManager(configProvider, frequencyController) }
-    private val rewardedInterstitialManager by lazy { RewardedInterstitialManager(configProvider, frequencyController) }
-    private val appOpenManager by lazy { AppOpenManager(configProvider, frequencyController) }
-    private val nativeLoader by lazy { NativeLoader(configProvider) }
-    /**
-     * Interstitial
-     */
-    fun showInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
-        if (adsSuppressed()) {
-            clearCache()
-            onComplete()
-            return
+    private val frequencyController =
+        FrequencyController()
+
+    private val bannerLoader by lazy {
+        BannerLoader(configProvider)
+    }
+
+    private val interstitialManager by lazy {
+        InterstitialManager(
+            configProvider = configProvider,
+            frequency = frequencyController
+        )
+    }
+
+    private val rewardedManager by lazy {
+        RewardedManager(
+            configProvider,
+            frequencyController
+        )
+    }
+
+    private val rewardedInterstitialManager by lazy {
+        RewardedInterstitialManager(
+            configProvider,
+            frequencyController
+        )
+    }
+
+    private val appOpenManager by lazy {
+        AppOpenManager(
+            configProvider,
+            frequencyController
+        )
+    }
+
+    private val nativeLoader by lazy {
+        NativeLoader(configProvider)
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Interstitial
+    |--------------------------------------------------------------------------
+    */
+
+    fun showInterstitial(
+        activity: Activity,
+        placement: String,
+        onComplete: () -> Unit = {}
+    ) {
+        runOnMain {
+
+            if (!isActivityUsable(activity)) {
+                safeComplete(onComplete)
+                return@runOnMain
+            }
+
+            if (adsSuppressed()) {
+                clearCache()
+                safeComplete(onComplete)
+                return@runOnMain
+            }
+
+            runCatching {
+                interstitialManager.show(
+                    activity = activity,
+                    placementName = placement,
+                    onComplete = onComplete
+                )
+            }.onFailure {
+                safeComplete(onComplete)
+            }
         }
-        interstitialManager.show(activity = activity, placementName = placement, onComplete = onComplete,)
     }
 
-    fun preloadInterstitial(activity: Activity, placement: String) {
-        if (adsSuppressed()) return
-        interstitialManager.preload(activity = activity, placementName = placement)
-    }
+    fun preloadInterstitial(
+        activity: Activity,
+        placement: String
+    ) {
+        runOnMain {
 
-    fun isInterstitialLoaded(placement: String): Boolean {
-        return interstitialManager.isLoaded(placement)
-    }
+            if (
+                adsSuppressed() ||
+                !isActivityUsable(activity)
+            ) {
+                return@runOnMain
+            }
 
-    /**
-     * Rewarded
-     */
-    fun showRewarded(activity: Activity, placement: String, onReward: () -> Unit, onComplete: () -> Unit = {}) {
-        if (adsSuppressed()) {
-            clearCache()
-            onComplete()
-            return
+            runCatching {
+                interstitialManager.preload(
+                    activity = activity,
+                    placementName = placement
+                )
+            }
         }
-        rewardedManager.show(activity, placement, onReward, onComplete)
     }
 
-    fun showRewarded(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
-        if (adsSuppressed()) {
-            clearCache()
-            onComplete()
-            return
+    fun isInterstitialLoaded(
+        placement: String
+    ): Boolean {
+        return runCatching {
+            interstitialManager.isLoaded(
+                placement
+            )
+        }.getOrDefault(false)
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rewarded
+    |--------------------------------------------------------------------------
+    */
+
+    fun showRewarded(
+        activity: Activity,
+        placement: String,
+        onReward: () -> Unit,
+        onComplete: () -> Unit = {}
+    ) {
+        runOnMain {
+
+            if (!isActivityUsable(activity)) {
+                safeComplete(onComplete)
+                return@runOnMain
+            }
+
+            if (adsSuppressed()) {
+                clearCache()
+                safeComplete(onComplete)
+                return@runOnMain
+            }
+
+            runCatching {
+                rewardedManager.show(
+                    activity,
+                    placement,
+                    onReward,
+                    onComplete
+                )
+            }.onFailure {
+                safeComplete(onComplete)
+            }
         }
-        rewardedManager.show(activity, placement, onComplete)
     }
 
-    /**
-     * Rewarded Interstitial
-     */
-    fun showRewardedInterstitial(activity: Activity, placement: String, onReward: () -> Unit={}, onComplete: () -> Unit = {}) {
-        if (adsSuppressed()) {
-            clearCache()
-            onComplete()
-            return
+    fun showRewarded(
+        activity: Activity,
+        placement: String,
+        onComplete: () -> Unit = {}
+    ) {
+        runOnMain {
+
+            if (!isActivityUsable(activity)) {
+                safeComplete(onComplete)
+                return@runOnMain
+            }
+
+            if (adsSuppressed()) {
+                clearCache()
+                safeComplete(onComplete)
+                return@runOnMain
+            }
+
+            runCatching {
+                rewardedManager.show(
+                    activity,
+                    placement,
+                    onComplete
+                )
+            }.onFailure {
+                safeComplete(onComplete)
+            }
         }
-        rewardedInterstitialManager.show(activity, placement, onReward, onComplete)
     }
 
-    fun showRewardedInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
-        if (adsSuppressed()) {
-            clearCache()
-            onComplete()
-            return
+    fun preloadRewarded(
+        activity: Activity,
+        placement: String
+    ) {
+        runOnMain {
+
+            if (
+                adsSuppressed() ||
+                !isActivityUsable(activity)
+            ) {
+                return@runOnMain
+            }
+
+            runCatching {
+                rewardedManager.preload(
+                    activity,
+                    placement
+                )
+            }
         }
-        rewardedInterstitialManager.show(activity, placement, onComplete)
     }
 
-    fun preloadRewarded(activity: Activity, placement: String) {
-        if (adsSuppressed()) return
-        rewardedManager.preload(activity, placement)
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | Rewarded Interstitial
+    |--------------------------------------------------------------------------
+    */
 
-    fun preloadRewardedInterstitial(activity: Activity, placement: String) {
-        if (adsSuppressed()) return
-        rewardedInterstitialManager.preload(activity, placement)
-    }
+    fun showRewardedInterstitial(
+        activity: Activity,
+        placement: String,
+        onReward: () -> Unit = {},
+        onComplete: () -> Unit = {}
+    ) {
+        runOnMain {
 
-    fun showAppOpen(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
-        if (adsSuppressed()) {
-            clearCache()
-            onComplete()
-            return
+            if (!isActivityUsable(activity)) {
+                safeComplete(onComplete)
+                return@runOnMain
+            }
+
+            if (adsSuppressed()) {
+                clearCache()
+                safeComplete(onComplete)
+                return@runOnMain
+            }
+
+            runCatching {
+                rewardedInterstitialManager.show(
+                    activity,
+                    placement,
+                    onReward,
+                    onComplete
+                )
+            }.onFailure {
+                safeComplete(onComplete)
+            }
         }
-        appOpenManager.show(activity, placement, onComplete)
     }
 
-    fun preloadAppOpen(activity: Activity, placement: String) {
-        if (adsSuppressed()) return
-        appOpenManager.preload(activity, placement)
-    }
+    fun showRewardedInterstitial(
+        activity: Activity,
+        placement: String,
+        onComplete: () -> Unit = {}
+    ) {
+        runOnMain {
 
-    fun startAutomaticAppOpen(activity: Activity) {
-        if (adsSuppressed()) {
-            clearCache()
-            return
+            if (!isActivityUsable(activity)) {
+                safeComplete(onComplete)
+                return@runOnMain
+            }
+
+            if (adsSuppressed()) {
+                clearCache()
+                safeComplete(onComplete)
+                return@runOnMain
+            }
+
+            runCatching {
+                rewardedInterstitialManager.show(
+                    activity,
+                    placement,
+                    onComplete
+                )
+            }.onFailure {
+                safeComplete(onComplete)
+            }
         }
-        appOpenManager.startAutomatic(activity)
     }
 
-    /**
-     * Banner
-     */
-    fun loadBanner(activity: Activity, container: ViewGroup, placement: String, bannerType: BannerType? = null) {
-        if (adsSuppressed()) {
-            destroyBanner(container)
-            return
+    fun preloadRewardedInterstitial(
+        activity: Activity,
+        placement: String
+    ) {
+        runOnMain {
+
+            if (
+                adsSuppressed() ||
+                !isActivityUsable(activity)
+            ) {
+                return@runOnMain
+            }
+
+            runCatching {
+                rewardedInterstitialManager.preload(
+                    activity,
+                    placement
+                )
+            }
         }
-        bannerLoader.load(activity = activity, container = container, placementName = placement, bannerType = bannerType)
     }
 
-    fun destroyBanner(container: ViewGroup) {
-        bannerLoader.destroy(container)
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | App Open
+    |--------------------------------------------------------------------------
+    */
 
-    /**
-     * Native
-     */
-    fun loadNative(activity: Activity, container: ViewGroup, placement: String, nativeType: NativeType? = null) {
-        if (adsSuppressed()) {
-            destroyNative(container)
-            return
+    fun showAppOpen(
+        activity: Activity,
+        placement: String,
+        onComplete: () -> Unit = {}
+    ) {
+        runOnMain {
+
+            if (!isActivityUsable(activity)) {
+                safeComplete(onComplete)
+                return@runOnMain
+            }
+
+            if (adsSuppressed()) {
+                clearCache()
+                safeComplete(onComplete)
+                return@runOnMain
+            }
+
+            runCatching {
+                appOpenManager.show(
+                    activity,
+                    placement,
+                    onComplete
+                )
+            }.onFailure {
+                safeComplete(onComplete)
+            }
         }
-        nativeLoader.load(activity = activity, container = container, placementName = placement, nativeTypeOverride = nativeType)
     }
 
-    fun destroyNative(container: ViewGroup) {
-        nativeLoader.destroy(container)
+    fun preloadAppOpen(
+        activity: Activity,
+        placement: String
+    ) {
+        runOnMain {
+
+            if (
+                adsSuppressed() ||
+                !isActivityUsable(activity)
+            ) {
+                return@runOnMain
+            }
+
+            runCatching {
+                appOpenManager.preload(
+                    activity,
+                    placement
+                )
+            }
+        }
     }
 
-    /**
-     * SDK Cleanup
-     */
+    fun startAutomaticAppOpen(
+        activity: Activity
+    ) {
+        runOnMain {
+
+            if (
+                adsSuppressed() ||
+                !isActivityUsable(activity)
+            ) {
+                clearCache()
+                return@runOnMain
+            }
+
+            runCatching {
+                appOpenManager.startAutomatic(
+                    activity
+                )
+            }
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Banner
+    |--------------------------------------------------------------------------
+    */
+
+    fun loadBanner(
+        activity: Activity,
+        container: ViewGroup,
+        placement: String,
+        bannerType: BannerType? = null
+    ) {
+        runOnMain {
+
+            if (
+                !isActivityUsable(activity) ||
+                !isContainerUsable(container)
+            ) {
+                return@runOnMain
+            }
+
+            if (adsSuppressed()) {
+                destroyBanner(container)
+                return@runOnMain
+            }
+
+            runCatching {
+                bannerLoader.load(
+                    activity = activity,
+                    container = container,
+                    placementName = placement,
+                    bannerType = bannerType
+                )
+            }
+        }
+    }
+
+    fun destroyBanner(
+        container: ViewGroup
+    ) {
+        runOnMain {
+
+            if (!isContainerUsable(container)) {
+                return@runOnMain
+            }
+
+            runCatching {
+                bannerLoader.destroy(
+                    container
+                )
+            }
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Native
+    |--------------------------------------------------------------------------
+    */
+
+    fun loadNative(
+        activity: Activity,
+        container: ViewGroup,
+        placement: String,
+        nativeType: NativeType? = null
+    ) {
+        runOnMain {
+
+            if (
+                !isActivityUsable(activity) ||
+                !isContainerUsable(container)
+            ) {
+                return@runOnMain
+            }
+
+            if (adsSuppressed()) {
+                destroyNative(container)
+                return@runOnMain
+            }
+
+            runCatching {
+                nativeLoader.load(
+                    activity = activity,
+                    container = container,
+                    placementName = placement,
+                    nativeTypeOverride = nativeType
+                )
+            }
+        }
+    }
+
+    fun destroyNative(
+        container: ViewGroup
+    ) {
+        runOnMain {
+
+            if (!isContainerUsable(container)) {
+                return@runOnMain
+            }
+
+            runCatching {
+                nativeLoader.destroy(
+                    container
+                )
+            }
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SDK Cleanup
+    |--------------------------------------------------------------------------
+    */
+
     fun clearCache() {
-        interstitialManager.clearAll()
-        rewardedManager.clearAll()
-        rewardedInterstitialManager.clearAll()
-        appOpenManager.clear()
+        runOnMain {
+
+            runCatching {
+                interstitialManager.clearAll()
+            }
+
+            runCatching {
+                rewardedManager.clearAll()
+            }
+
+            runCatching {
+                rewardedInterstitialManager.clearAll()
+            }
+
+            runCatching {
+                appOpenManager.clear()
+            }
+        }
     }
 
-    fun preloadAll(activity: Activity){
-        preloadInterstitials(activity)
-        preloadRewardedAds(activity)
-        preloadRewardedInterstitials(activity)
-        preloadAppOpen(activity)
+    /*
+    |--------------------------------------------------------------------------
+    | Preload All
+    |--------------------------------------------------------------------------
+    */
+
+    fun preloadAll(
+        activity: Activity
+    ) {
+        runOnMain {
+
+            if (
+                adsSuppressed() ||
+                !isActivityUsable(activity)
+            ) {
+                return@runOnMain
+            }
+
+            preloadInterstitials(activity)
+            preloadRewardedAds(activity)
+            preloadRewardedInterstitials(activity)
+            preloadAppOpen(activity)
+        }
     }
 
-    fun preloadInterstitials(activity: Activity) {
-        if (adsSuppressed()) return
-        interstitialManager.preloadAll(activity)
+    fun preloadInterstitials(
+        activity: Activity
+    ) {
+        runOnMain {
+
+            if (
+                adsSuppressed() ||
+                !isActivityUsable(activity)
+            ) {
+                return@runOnMain
+            }
+
+            runCatching {
+                interstitialManager.preloadAll(
+                    activity
+                )
+            }
+        }
     }
 
-    fun preloadRewardedAds(activity: Activity) {
-        if (adsSuppressed()) return
-        rewardedManager.preloadAll(activity)
+    fun preloadRewardedAds(
+        activity: Activity
+    ) {
+        runOnMain {
+
+            if (
+                adsSuppressed() ||
+                !isActivityUsable(activity)
+            ) {
+                return@runOnMain
+            }
+
+            runCatching {
+                rewardedManager.preloadAll(
+                    activity
+                )
+            }
+        }
     }
 
-    fun preloadRewardedInterstitials(activity: Activity) {
-        if (adsSuppressed()) return
-        rewardedInterstitialManager.preloadAll(activity)
+    fun preloadRewardedInterstitials(
+        activity: Activity
+    ) {
+        runOnMain {
+
+            if (
+                adsSuppressed() ||
+                !isActivityUsable(activity)
+            ) {
+                return@runOnMain
+            }
+
+            runCatching {
+                rewardedInterstitialManager.preloadAll(
+                    activity
+                )
+            }
+        }
     }
 
-    fun preloadAppOpen(activity: Activity) {
-        if (adsSuppressed()) return
-        appOpenManager.preloadAll(activity)
+    fun preloadAppOpen(
+        activity: Activity
+    ) {
+        runOnMain {
+
+            if (
+                adsSuppressed() ||
+                !isActivityUsable(activity)
+            ) {
+                return@runOnMain
+            }
+
+            runCatching {
+                appOpenManager.preloadAll(
+                    activity
+                )
+            }
+        }
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Helpers
+    |--------------------------------------------------------------------------
+    */
 
     private fun adsSuppressed(): Boolean {
-        val ads = configProvider().ads
-        return suppressAdsProvider() || !ads.globalEnabled || ads.blockedReason == "active_subscription"
+
+        val ads =
+            runCatching {
+                configProvider().ads
+            }.getOrNull() ?: return true
+
+        return suppressAdsProvider() ||
+                !ads.globalEnabled ||
+                ads.blockedReason == "active_subscription"
+    }
+
+    private fun runOnMain(
+        block: () -> Unit
+    ) {
+        if (
+            Looper.myLooper() ==
+            Looper.getMainLooper()
+        ) {
+
+            block()
+
+        } else {
+
+            mainHandler.post {
+                block()
+            }
+        }
+    }
+
+    private fun isActivityUsable(
+        activity: Activity
+    ): Boolean {
+        return !activity.isFinishing &&
+                !activity.isDestroyed
+    }
+
+    private fun isContainerUsable(
+        container: ViewGroup
+    ): Boolean {
+        return container.context != null
+    }
+
+    private fun safeComplete(
+        onComplete: () -> Unit
+    ) {
+        runCatching {
+            onComplete()
+        }
     }
 }
+
+//package com.itwingtech.itwingsdk.ads
+//
+//
+//import android.app.Activity
+//import android.view.ViewGroup
+//import com.itwingtech.itwingsdk.core.ITWingConfig
+//
+//
+//class AdManager(private val configProvider: () -> ITWingConfig, private val suppressAdsProvider: () -> Boolean = { false } ) {
+//    private val frequencyController = FrequencyController()
+//    private val bannerLoader by lazy { BannerLoader(configProvider) }
+//    private val interstitialManager by lazy { InterstitialManager(configProvider = configProvider, frequency = frequencyController) }
+//    private val rewardedManager by lazy { RewardedManager(configProvider, frequencyController) }
+//    private val rewardedInterstitialManager by lazy { RewardedInterstitialManager(configProvider, frequencyController) }
+//    private val appOpenManager by lazy { AppOpenManager(configProvider, frequencyController) }
+//    private val nativeLoader by lazy { NativeLoader(configProvider) }
+//    /**
+//     * Interstitial
+//     */
+//    fun showInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
+//        if (adsSuppressed()) {
+//            clearCache()
+//            onComplete()
+//            return
+//        }
+//        interstitialManager.show(activity = activity, placementName = placement, onComplete = onComplete,)
+//    }
+//
+//    fun preloadInterstitial(activity: Activity, placement: String) {
+//        if (adsSuppressed()) return
+//        interstitialManager.preload(activity = activity, placementName = placement)
+//    }
+//
+//    fun isInterstitialLoaded(placement: String): Boolean {
+//        return interstitialManager.isLoaded(placement)
+//    }
+//
+//    /**
+//     * Rewarded
+//     */
+//    fun showRewarded(activity: Activity, placement: String, onReward: () -> Unit, onComplete: () -> Unit = {}) {
+//        if (adsSuppressed()) {
+//            clearCache()
+//            onComplete()
+//            return
+//        }
+//        rewardedManager.show(activity, placement, onReward, onComplete)
+//    }
+//
+//    fun showRewarded(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
+//        if (adsSuppressed()) {
+//            clearCache()
+//            onComplete()
+//            return
+//        }
+//        rewardedManager.show(activity, placement, onComplete)
+//    }
+//
+//    /**
+//     * Rewarded Interstitial
+//     */
+//    fun showRewardedInterstitial(activity: Activity, placement: String, onReward: () -> Unit={}, onComplete: () -> Unit = {}) {
+//        if (adsSuppressed()) {
+//            clearCache()
+//            onComplete()
+//            return
+//        }
+//        rewardedInterstitialManager.show(activity, placement, onReward, onComplete)
+//    }
+//
+//    fun showRewardedInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
+//        if (adsSuppressed()) {
+//            clearCache()
+//            onComplete()
+//            return
+//        }
+//        rewardedInterstitialManager.show(activity, placement, onComplete)
+//    }
+//
+//    fun preloadRewarded(activity: Activity, placement: String) {
+//        if (adsSuppressed()) return
+//        rewardedManager.preload(activity, placement)
+//    }
+//
+//    fun preloadRewardedInterstitial(activity: Activity, placement: String) {
+//        if (adsSuppressed()) return
+//        rewardedInterstitialManager.preload(activity, placement)
+//    }
+//
+//    fun showAppOpen(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
+//        if (adsSuppressed()) {
+//            clearCache()
+//            onComplete()
+//            return
+//        }
+//        appOpenManager.show(activity, placement, onComplete)
+//    }
+//
+//    fun preloadAppOpen(activity: Activity, placement: String) {
+//        if (adsSuppressed()) return
+//        appOpenManager.preload(activity, placement)
+//    }
+//
+//    fun startAutomaticAppOpen(activity: Activity) {
+//        if (adsSuppressed()) {
+//            clearCache()
+//            return
+//        }
+//        appOpenManager.startAutomatic(activity)
+//    }
+//
+//    /**
+//     * Banner
+//     */
+//    fun loadBanner(activity: Activity, container: ViewGroup, placement: String, bannerType: BannerType? = null) {
+//        if (adsSuppressed()) {
+//            destroyBanner(container)
+//            return
+//        }
+//        bannerLoader.load(activity = activity, container = container, placementName = placement, bannerType = bannerType)
+//    }
+//
+//    fun destroyBanner(container: ViewGroup) {
+//        bannerLoader.destroy(container)
+//    }
+//
+//    /**
+//     * Native
+//     */
+//    fun loadNative(activity: Activity, container: ViewGroup, placement: String, nativeType: NativeType? = null) {
+//        if (adsSuppressed()) {
+//            destroyNative(container)
+//            return
+//        }
+//        nativeLoader.load(activity = activity, container = container, placementName = placement, nativeTypeOverride = nativeType)
+//    }
+//
+//    fun destroyNative(container: ViewGroup) {
+//        nativeLoader.destroy(container)
+//    }
+//
+//    /**
+//     * SDK Cleanup
+//     */
+//    fun clearCache() {
+//        interstitialManager.clearAll()
+//        rewardedManager.clearAll()
+//        rewardedInterstitialManager.clearAll()
+//        appOpenManager.clear()
+//    }
+//
+//    fun preloadAll(activity: Activity){
+//        preloadInterstitials(activity)
+//        preloadRewardedAds(activity)
+//        preloadRewardedInterstitials(activity)
+//        preloadAppOpen(activity)
+//    }
+//
+//    fun preloadInterstitials(activity: Activity) {
+//        if (adsSuppressed()) return
+//        interstitialManager.preloadAll(activity)
+//    }
+//
+//    fun preloadRewardedAds(activity: Activity) {
+//        if (adsSuppressed()) return
+//        rewardedManager.preloadAll(activity)
+//    }
+//
+//    fun preloadRewardedInterstitials(activity: Activity) {
+//        if (adsSuppressed()) return
+//        rewardedInterstitialManager.preloadAll(activity)
+//    }
+//
+//    fun preloadAppOpen(activity: Activity) {
+//        if (adsSuppressed()) return
+//        appOpenManager.preloadAll(activity)
+//    }
+//
+//    private fun adsSuppressed(): Boolean {
+//        val ads = configProvider().ads
+//        return suppressAdsProvider() || !ads.globalEnabled || ads.blockedReason == "active_subscription"
+//    }
+//}

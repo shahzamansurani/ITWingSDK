@@ -62,7 +62,18 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="819f1546-8f84-4df0-bf1d-10108637315a" name="Changes" comment="Fixes on 17 May">
-      <change beforePath="$PROJECT_DIR$/app/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/app/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AdLoadingDialog.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AdLoadingDialog.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AdManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AdManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AppOpenManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AppOpenManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/BannerLoader.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/BannerLoader.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/ITWingBannerView.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/ITWingBannerView.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/ITWingNativeAdView.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/ITWingNativeAdView.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/InterstitialManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/InterstitialManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/NativeLoader.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/NativeLoader.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedInterstitialManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedInterstitialManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedIntroDialog.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedIntroDialog.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -72,7 +83,7 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[PhysicalDevice::serial=4b1936f0]" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[LocalEmulator::path=C:\Users\IT WING TECHNOLOGIES\.android\avd\Pixel_8.avd]" />
   <component name="ExternalProjectsData">
     <projectState path="$PROJECT_DIR$">
       <ProjectState />
@@ -219,7 +230,23 @@
       <option name="project" value="LOCAL" />
       <updated>1779029956768</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="Fixes on 17 May">
+      <option name="closed" value="true" />
+      <created>1779030305469</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1779030305469</updated>
+    </task>
+    <task id="LOCAL-00003" summary="Fixes on 17 May">
+      <option name="closed" value="true" />
+      <created>1779192762241</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1779192762241</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -241,7 +268,7 @@
         </entry>
         <entry key="com.itwingtech.itwingsdk.test">
           <value>
-            <CheckInfo lastCheckTimestamp="1779014268509" />
+            <CheckInfo lastCheckTimestamp="1779193371159" />
           </value>
         </entry>
       </map>
