@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "218814690657",
+    "project_id": "itwingsdk",
+    "storage_bucket": "itwingsdk.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:218814690657:android:ca2cedab7680413f5c4120",
+        "android_client_info": {
+          "package_name": "com.itwingtech.itwingsdk.example"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCiqwU3gTcvZQY2Q0-sks7ns9oIJsjwWO0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

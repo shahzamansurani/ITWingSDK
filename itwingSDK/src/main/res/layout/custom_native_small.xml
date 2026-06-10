@@ -126,7 +126,7 @@
                         android:id="@+id/ad_advertiser"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginLeft="@dimen/_2sdp"
+                        android:layout_marginStart="@dimen/_2sdp"
                         android:textColor="@color/black"
                         android:textSize="12sp" />
 
@@ -148,7 +148,7 @@
                 android:layout_height="match_parent"
                 android:layout_weight="4">
 
-                <ImageView
+                <com.itwingtech.itwingsdk.utils.SDKMediaView
                     android:id="@+id/ad_media"
                     android:layout_width="match_parent"
                     android:layout_height="130dp"

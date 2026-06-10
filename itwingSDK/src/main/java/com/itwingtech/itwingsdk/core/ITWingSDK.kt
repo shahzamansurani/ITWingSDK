@@ -9,6 +9,7 @@ import com.google.android.libraries.ads.mobile.sdk.initialization.Initialization
 import com.itwingtech.itwingsdk.ads.AdManager
 import com.itwingtech.itwingsdk.analytics.AnalyticsClient
 import com.itwingtech.itwingsdk.analytics.InstallReferrerReporter
+import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.billing.SubscriptionManager
 import com.itwingtech.itwingsdk.data.ConfigRepository
 import com.itwingtech.itwingsdk.updates.InAppUpdateManager
@@ -24,6 +25,8 @@ import java.lang.ref.WeakReference
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import androidx.core.net.toUri
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 
 object ITWingSDK {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -48,6 +51,10 @@ object ITWingSDK {
     private var connectionState: String = "not_initialized"
     @Volatile
     private var lifecycleTrackingRegistered = false
+    @Volatile
+    private var foregroundActivityCount = 0
+    @Volatile
+    private var foregroundStartedAtMs = 0L
     private val readyCallbacks = CopyOnWriteArrayList<(Boolean) -> Unit>()
     private val initListeners = CopyOnWriteArrayList<SDKInitListener>()
 
@@ -81,14 +88,31 @@ object ITWingSDK {
         connectionState = "bootstrap_in_progress"
         lastError = "bootstrap_in_progress"
         analytics = AnalyticsClient(repository!!)
+        SDKTelemetry.configure(
+            context = activity.applicationContext,
+            analyticsProvider = { analyticsOrNull() },
+            repositoryProvider = { repository },
+        )
         notifyListeners { it.onAnalyticsReady() }
         registerLifecycleAutomation(activity.application)
+        analytics.track(
+            "sdk_initialize_requested",
+            mapOf(
+                "activity" to activity.javaClass.simpleName,
+                "endpoint" to options.endpoint,
+            ),
+        )
         if (repository!!.consumeFirstOpen()) {
             analytics.track("first_open")
+            analytics.track("install")
             InstallReferrerReporter(activity.applicationContext, repository!!).collect()
+        }
+        repository!!.consumeAppUpdate()?.let { (previous, current) ->
+            analytics.track("app_update", mapOf("previous_version" to previous, "current_version" to current))
         }
         analytics.track("app_open")
         analytics.track("session_start")
+        NotificationRuntimeManager.registerFcmDevice(activity.applicationContext, repository!!)
         updates = InAppUpdateManager { config }
         subscriptions = SubscriptionManager({ config }, { repository })
         scope.launch {
@@ -100,6 +124,7 @@ object ITWingSDK {
             if (config.configVersion > 0) {
                 connectionState = "cached_config_loaded"
                 lastError = null
+                analytics.track("sdk_cached_config_loaded", mapOf("config_version" to config.configVersion))
                 notifyListeners { it.onConfigLoaded(config) }
                 notifyListeners { it.onOfflineMode("Loaded cached SDK config; refreshing remote config in background.") }
             }
@@ -112,7 +137,17 @@ object ITWingSDK {
                 initializeMobileAds(activity) {
                     ads.startAutomaticAppOpen(activity)
                 }
-                NotificationRuntimeManager.configure(activity.applicationContext, config, repository)
+                FirebaseRuntimeManager.configure(activity.applicationContext, config.firebase)
+                SDKTelemetry.track(
+                    "firebase_configured",
+                    mapOf(
+                        "enabled" to config.firebase.enabled,
+                        "analytics_enabled" to config.firebase.analyticsEnabled,
+                        "crashlytics_enabled" to config.firebase.crashlyticsEnabled,
+                        "auth_enabled" to config.firebase.authEnabled,
+                    ),
+                )
+                NotificationRuntimeManager.configure(activity, config, repository)
                 notifyListeners { it.onNotificationsReady() }
                 updates.check(activity)
                 subscriptions.connect(activity)
@@ -129,6 +164,17 @@ object ITWingSDK {
                 connectionState = "ready"
                 bootstrapFinished = true
                 bootstrapInFlight = false
+                analytics.track(
+                    "sdk_bootstrap_succeeded",
+                    mapOf(
+                        "config_version" to remote.configVersion,
+                        "placements" to remote.ads.placements.size,
+                        "custom_ads" to remote.ads.customAds.size,
+                        "subscriptions" to remote.subscriptions.products.size,
+                        "notifications_enabled" to remote.notifications.enabled,
+                        "firebase_enabled" to remote.firebase.enabled,
+                    ),
+                )
                 notifyReady(true)
                 notifyListeners { it.onConfigLoaded(remote) }
                 initializeMobileAds(activity) {
@@ -136,7 +182,17 @@ object ITWingSDK {
                     ads.startAutomaticAppOpen(activity)
                     notifyListeners { it.onAdsReady() }
                 }
-                NotificationRuntimeManager.configure(activity.applicationContext, config, repository)
+                FirebaseRuntimeManager.configure(activity.applicationContext, config.firebase)
+                SDKTelemetry.track(
+                    "firebase_configured",
+                    mapOf(
+                        "enabled" to config.firebase.enabled,
+                        "analytics_enabled" to config.firebase.analyticsEnabled,
+                        "crashlytics_enabled" to config.firebase.crashlyticsEnabled,
+                        "auth_enabled" to config.firebase.authEnabled,
+                    ),
+                )
+                NotificationRuntimeManager.configure(activity, config, repository)
                 notifyListeners { it.onNotificationsReady() }
                 updates.check(activity)
                 subscriptions.connect(activity)
@@ -157,7 +213,8 @@ object ITWingSDK {
                 bootstrapFinished = true
                 bootstrapInFlight = false
                 notifyReady(cachedConfigAvailable)
-                analytics.track("sdk_bootstrap_failed", mapOf("message" to message, "network_failure" to networkFailure))
+                SDKTelemetry.track("sdk_bootstrap_failed", mapOf("message" to message, "network_failure" to networkFailure))
+                SDKTelemetry.recordNonFatal(it, mapOf("state" to connectionState))
                 if (cachedConfigAvailable) {
                     notifyListeners { listener -> listener.onOfflineMode(message) }
                 } else {
@@ -210,6 +267,7 @@ object ITWingSDK {
 
     @JvmStatic
     fun refreshConfig(onComplete: ((Boolean) -> Unit)? = null) {
+        SDKTelemetry.track("config_refresh_requested", mapOf("current_version" to config.configVersion))
         scope.launch {
             val updated = runCatching {
                 repository?.syncConfig(config.configVersion)?.let {
@@ -217,7 +275,13 @@ object ITWingSDK {
                     notifyListeners { listener -> listener.onConfigLoaded(config) }
                     true
                 } ?: false
+            }.onFailure {
+                SDKTelemetry.recordNonFatal(it, mapOf("operation" to "config_refresh"))
             }.getOrDefault(false)
+            SDKTelemetry.track(
+                if (updated) "config_refresh_succeeded" else "config_refresh_no_update",
+                mapOf("config_version" to config.configVersion),
+            )
             onComplete?.invoke(updated)
         }
     }
@@ -275,6 +339,26 @@ object ITWingSDK {
     }
 
     @JvmStatic
+    fun getDouble(key: String, defaultValue: Double = 0.0): Double {
+        return when (val value = config.remoteConfig[key]) {
+            is Number -> value.toDouble()
+            is String -> value.toDoubleOrNull() ?: defaultValue
+            else -> defaultValue
+        }
+    }
+
+    @JvmStatic
+    fun getRemoteConfig(key: String): Map<String, Any?> {
+        return config.remoteConfig[key] as? Map<String, Any?> ?: emptyMap()
+    }
+
+    @JvmStatic
+    fun getRemoteModule(name: String): Map<String, Any?> {
+        val modules = config.remoteConfig["modules"] as? Map<*, *> ?: return emptyMap()
+        return modules[name] as? Map<String, Any?> ?: emptyMap()
+    }
+
+    @JvmStatic
     fun getApiConfig(key: String): ApiKeyConfig? {
         config.apiKeys[key]?.let { return it.sanitizedApiKeyConfig() }
         return config.apiProviders[key]?.let {
@@ -290,7 +374,10 @@ object ITWingSDK {
 
     @JvmStatic
     fun getApiKey(key: String, defaultValue: String = ""): String {
-        return config.apiKeys[key]?.value.cleanConfigString() ?: defaultValue
+        val apiConfig = config.apiKeys[key] ?: return defaultValue
+        val value = apiConfig.value.cleanConfigString() ?: return defaultValue
+        reportApiKeyUsage(key, apiConfig)
+        return value
     }
 
     @JvmStatic
@@ -309,6 +396,32 @@ object ITWingSDK {
     }
 
     @JvmStatic
+    fun getApiProxyBaseUrl(key: String, defaultValue: String = ""): String {
+        val endpoint = repository?.endpointBaseUrl().cleanConfigString() ?: return defaultValue
+        val proxy = getApiProxyEndpoint(key).cleanConfigString() ?: return defaultValue
+        return (endpoint.trimEnd('/') + "/" + proxy.trim('/')).normalizeBaseUrl()
+            ?: defaultValue.normalizeBaseUrl()
+            ?: defaultValue
+    }
+
+    @JvmStatic
+    fun getApiProxyUrl(key: String, path: String = "", defaultValue: String = ""): String {
+        val base = getApiProxyBaseUrl(key, defaultValue).normalizeBaseUrl() ?: return defaultValue
+        val cleanPath = path.trim('/')
+        return if (cleanPath.isBlank()) base else base + cleanPath
+    }
+
+    @JvmStatic
+    fun apiProxyInterceptor(): Interceptor? = repository?.sdkSigningInterceptor()
+
+    @JvmStatic
+    fun createApiProxyOkHttpClient(baseClient: OkHttpClient? = null): OkHttpClient {
+        val builder = baseClient?.newBuilder() ?: OkHttpClient.Builder()
+        repository?.sdkSigningInterceptor()?.let { builder.addInterceptor(it) }
+        return builder.build()
+    }
+
+    @JvmStatic
     fun isAdFree(): Boolean {
         return ::subscriptions.isInitialized && subscriptions.isAdFree()
     }
@@ -323,7 +436,8 @@ object ITWingSDK {
     }
 
     @JvmStatic
-    fun syncNotificationToken(token: String, provider: String = "fcm") {
+    fun syncNotificationToken(token: String, provider: String = "itwing") {
+        SDKTelemetry.track("notification_token_sync_requested", mapOf("provider" to provider))
         NotificationRuntimeManager.registerDeviceToken(token, provider, repository)
     }
 
@@ -412,23 +526,33 @@ object ITWingSDK {
 
     @JvmStatic
     fun showInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) =
-        ads.showInterstitial(activity, placement, onComplete)
+        runSdkCall("show_interstitial", mapOf("placement" to placement)) {
+            ads.showInterstitial(activity, placement, onComplete)
+        }
 
     @JvmStatic
     fun showRewarded(activity: Activity, placement: String, onReward: () -> Unit, onComplete: () -> Unit = {}) =
-        ads.showRewarded(activity, placement, onReward, onComplete)
+        runSdkCall("show_rewarded", mapOf("placement" to placement)) {
+            ads.showRewarded(activity, placement, onReward, onComplete)
+        }
 
     @JvmStatic
     fun showRewarded(activity: Activity, placement: String, onComplete: () -> Unit = {}) =
-        ads.showRewarded(activity, placement, onComplete)
+        runSdkCall("show_rewarded", mapOf("placement" to placement)) {
+            ads.showRewarded(activity, placement, onComplete)
+        }
 
     @JvmStatic
     fun showRewardedInterstitial(activity: Activity, placement: String, onReward: () -> Unit = {}, onComplete: () -> Unit = {}) =
-        ads.showRewardedInterstitial(activity, placement, onReward, onComplete)
+        runSdkCall("show_rewarded_interstitial", mapOf("placement" to placement)) {
+            ads.showRewardedInterstitial(activity, placement, onReward, onComplete)
+        }
 
     @JvmStatic
     fun showAppOpen(activity: Activity, placement: String, onComplete: () -> Unit = {}) =
-        ads.showAppOpen(activity, placement, onComplete)
+        runSdkCall("show_app_open", mapOf("placement" to placement)) {
+            ads.showAppOpen(activity, placement, onComplete)
+        }
 
     @JvmStatic
     fun getCustomAds(format: String? = null): List<CustomAdConfig> {
@@ -474,6 +598,23 @@ object ITWingSDK {
     @JvmStatic
     fun launchSubscriptionPurchase(activity: Activity, productId: String) =
         subscriptions.launchPurchase(activity, productId)
+
+    @JvmStatic
+    fun showPurchaseDialog(activity: Activity, onResult: ((com.android.billingclient.api.BillingResult) -> Unit)? = null) {
+        if (::subscriptions.isInitialized) {
+            subscriptions.showPurchaseDialog(activity) { result -> onResult?.invoke(result) }
+        } else {
+            onResult?.invoke(
+                com.android.billingclient.api.BillingResult.newBuilder()
+                    .setResponseCode(com.android.billingclient.api.BillingClient.BillingResponseCode.SERVICE_DISCONNECTED)
+                    .setDebugMessage("Billing is not initialized yet.")
+                    .build()
+            )
+        }
+    }
+
+    @JvmStatic
+    fun firebaseAuth(): com.google.firebase.auth.FirebaseAuth? = FirebaseRuntimeManager.auth()
 
     private fun notifyReady(success: Boolean) {
         val callbacks = readyCallbacks.toList()
@@ -529,6 +670,8 @@ object ITWingSDK {
                      */
 
                     activeActivity = WeakReference(activity)
+                    NotificationRuntimeManager.reportOpened(activity.intent?.getStringExtra("itwing_notification_id"))
+                    NotificationRuntimeManager.syncNow()
 
                     /*
                      |--------------------------------------------------------------------------
@@ -556,6 +699,14 @@ object ITWingSDK {
                 override fun onActivityStarted(
                     activity: Activity
                 ) {
+                    foregroundActivityCount += 1
+                    if (foregroundActivityCount == 1) {
+                        foregroundStartedAtMs = System.currentTimeMillis()
+                        SDKTelemetry.track(
+                            "app_foreground",
+                            mapOf("activity" to activity.javaClass.simpleName),
+                        )
+                    }
                 }
 
                 override fun onActivityPaused(
@@ -566,6 +717,22 @@ object ITWingSDK {
                 override fun onActivityStopped(
                     activity: Activity
                 ) {
+                    foregroundActivityCount = (foregroundActivityCount - 1).coerceAtLeast(0)
+                    if (foregroundActivityCount == 0) {
+                        val durationMs = if (foregroundStartedAtMs > 0L) {
+                            System.currentTimeMillis() - foregroundStartedAtMs
+                        } else {
+                            0L
+                        }
+                        SDKTelemetry.track(
+                            "app_background",
+                            mapOf(
+                                "activity" to activity.javaClass.simpleName,
+                                "session_duration_ms" to durationMs,
+                            ),
+                        )
+                        analyticsOrNull()?.flush()
+                    }
                 }
 
                 override fun onActivitySaveInstanceState(
@@ -636,6 +803,14 @@ object ITWingSDK {
 
     private fun analyticsOrNull(): AnalyticsClient? = if (::analytics.isInitialized) analytics else null
 
+    private fun runSdkCall(operation: String, properties: Map<String, Any?> = emptyMap(), block: () -> Unit) {
+        SDKTelemetry.track("sdk_call_requested", mapOf("operation" to operation) + properties)
+        runCatching { block() }.onFailure {
+            SDKTelemetry.recordNonFatal(it, mapOf("operation" to operation) + properties)
+            SDKTelemetry.track("sdk_call_failed", mapOf("operation" to operation, "message" to (it.message ?: "unknown")) + properties)
+        }
+    }
+
     private fun readyListener(onReady: () -> Unit): SDKInitListener {
         return object : SDKInitListener {
             override fun onReady() = onReady()
@@ -644,6 +819,7 @@ object ITWingSDK {
 
     private fun ApiKeyConfig.sanitizedApiKeyConfig(): ApiKeyConfig {
         return copy(
+            id = id.cleanConfigString(),
             value = value.cleanConfigString().orEmpty(),
             provider = provider.cleanConfigString(),
             proxyEndpoint = proxyEndpoint.cleanConfigString(),
@@ -652,12 +828,26 @@ object ITWingSDK {
         )
     }
 
+    private fun reportApiKeyUsage(key: String, apiConfig: ApiKeyConfig) {
+        scope.launch(Dispatchers.IO) {
+            val response = runCatching {
+                repository?.reportApiKeyUsage(key, apiConfig.id)
+            }.getOrNull()
+            val shouldRotate = response
+                ?.optJSONObject("data")
+                ?.optBoolean("rotate", false) == true
+            if (shouldRotate) {
+                refreshConfig()
+            }
+        }
+    }
+
     private fun String?.cleanConfigString(): String? {
         val value = this?.trim() ?: return null
         return value.takeUnless {
             it.isBlank() ||
-                    it.equals("null", ignoreCase = true) ||
-                    it.equals("undefined", ignoreCase = true)
+                it.equals("null", ignoreCase = true) ||
+                it.equals("undefined", ignoreCase = true)
         }
     }
 
@@ -671,9 +861,9 @@ object ITWingSDK {
 
     private fun Throwable.isNetworkFailure(): Boolean {
         return this is UnknownHostException ||
-                this is SocketTimeoutException ||
-                message?.contains("network_dns_unavailable", ignoreCase = true) == true ||
-                cause?.isNetworkFailure() == true
+            this is SocketTimeoutException ||
+            message?.contains("network_dns_unavailable", ignoreCase = true) == true ||
+            cause?.isNetworkFailure() == true
     }
 
     private fun Throwable.toSdkErrorMessage(): String {

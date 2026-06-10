@@ -82,13 +82,18 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         }
 
         if (!frequency.canShow(placement, countTrigger = true)) {
+            AdEventTracker.log("ad_frequency_capped", placement)
             safeCallback(onComplete)
             return
         }
 
+        AdEventTracker.log("ad_requested", placement)
         if (customRenderer.canRender(placement)) {
             frequency.markShown(placement)
+            AdEventTracker.log("ad_impression", placement)
             customRenderer.show(activity, placement, onComplete = {
+                AdEventTracker.log("ad_dismissed", placement)
+                InlineAdSafetyGate.arm("interstitial", placement.name)
                 preload(activity, placementName)
                 safeCallback(onComplete)
             })
@@ -116,10 +121,13 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         ad.adEventCallback = object : InterstitialAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
+                AdEventTracker.log("ad_impression", placement)
             }
 
             override fun onAdDismissedFullScreenContent() {
                 loadedAds.remove(placementName)
+                AdEventTracker.log("ad_dismissed", placement)
+                InlineAdSafetyGate.arm("interstitial", placement.name)
                 preload(activity, placementName)
                    safeCallback(onComplete)
             }
@@ -128,13 +136,18 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 fullScreenContentError: FullScreenContentError,
             ) {
                 loadedAds.remove(placementName)
+                AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                 preload(activity, placementName)
                 safeCallback(onComplete)
             }
 
-            override fun onAdClicked() {}
+            override fun onAdClicked() {
+                AdEventTracker.log("ad_click", placement)
+            }
 
-            override fun onAdImpression() {}
+            override fun onAdImpression() {
+                AdEventTracker.log("ad_impression_recorded", placement)
+            }
         }
 
         runOnMain {
@@ -142,6 +155,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 ad.show(activity)
                 preload(activity, placementName)
             }.onFailure {
+                AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
                 preload(activity, placementName)
                 safeCallback(onComplete)
             }
@@ -186,7 +200,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     private fun waitForAdAndShow(activity: Activity, placementName: String, onComplete: () -> Unit) {
         val loadingDialog = AdLoadingDialog(activity)
         val app = configProvider().app
-        val timeoutMs = (app["loading_ad_timeout_ms"] as? Number)?.toLong() ?: 2500L
+        val timeoutMs = (app["loading_ad_timeout_ms"] as? Number)?.toLong() ?: 7000L
         val lottieUrl = app["loading_lottie_url"] as? String
         val startedAt = System.currentTimeMillis()
         loadingDialog.show(lottieUrl)

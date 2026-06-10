@@ -69,14 +69,22 @@ class RewardedInterstitialManager(
         }
 
         if (placement == null || !frequency.canShow(placement, countTrigger = true)) {
+            placement?.let { AdEventTracker.log("ad_frequency_capped", it) }
             safeCallback(onComplete)
             return
         }
 
+        AdEventTracker.log("ad_requested", placement)
         if (customRenderer.canRender(placement)) {
-            RewardedIntroDialog.show(activity, placement, onSkip = onComplete) {
+            RewardedIntroDialog.show(activity, placement, onSkip = { safeCallback(onComplete) }) {
                 frequency.markShown(placement)
-                customRenderer.show(activity, placement, reward = onReward, onComplete = {
+                AdEventTracker.log("ad_impression", placement)
+                customRenderer.show(activity, placement, reward = {
+                    AdEventTracker.log("ad_reward_earned", placement)
+                    safeCallback(onReward)
+                }, onComplete = {
+                    AdEventTracker.log("ad_dismissed", placement)
+                    InlineAdSafetyGate.arm("rewarded_interstitial", placement.name)
                     preload(activity, placementName)
                     safeCallback(onComplete)
                 })
@@ -84,7 +92,7 @@ class RewardedInterstitialManager(
             return
         }
 
-        RewardedIntroDialog.show(activity, placement, onSkip = onComplete) {
+        RewardedIntroDialog.show(activity, placement, onSkip = { safeCallback(onComplete) }) {
             val ad = pollPreloadedAd(placementName)
             if (ad == null) {
                 load(activity, placementName)
@@ -112,9 +120,12 @@ class RewardedInterstitialManager(
         ad.adEventCallback = object : RewardedInterstitialAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
+                AdEventTracker.log("ad_impression", placement)
             }
 
             override fun onAdDismissedFullScreenContent() {
+                AdEventTracker.log("ad_dismissed", placement)
+                InlineAdSafetyGate.arm("rewarded_interstitial", placement.name)
                 preload(activity, placementName)
                 safeCallback(onComplete)
             }
@@ -122,6 +133,7 @@ class RewardedInterstitialManager(
             override fun onAdFailedToShowFullScreenContent(
                 fullScreenContentError: FullScreenContentError,
             ) {
+                AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                 preload(activity, placementName)
                 safeCallback(onComplete)
             }
@@ -130,10 +142,12 @@ class RewardedInterstitialManager(
         runOnMain {
             runCatching {
                 ad.show(activity) {
+                    AdEventTracker.log("ad_reward_earned", placement)
                     safeCallback(onReward)
                 }
                 preload(activity, placementName)
             }.onFailure {
+                AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
                 preload(activity, placementName)
                 safeCallback(onComplete)
             }
@@ -166,7 +180,7 @@ class RewardedInterstitialManager(
     ) {
         val loadingDialog = AdLoadingDialog(activity)
         val app = configProvider().app
-        val timeoutMs = (app["loading_ad_timeout_ms"] as? Number)?.toLong() ?: 2500L
+        val timeoutMs = (app["loading_ad_timeout_ms"] as? Number)?.toLong() ?: 7000L
         val lottieUrl = app["loading_lottie_url"] as? String
         val startedAt = System.currentTimeMillis()
         loadingDialog.show(lottieUrl)

@@ -100,7 +100,7 @@
                 android:textColor="@color/black"
                 android:textSize="@dimen/_10ssp" />
 
-            <ImageView
+            <com.itwingtech.itwingsdk.utils.SDKMediaView
                 android:id="@+id/ad_media"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/_110sdp"
@@ -121,6 +121,7 @@
         </LinearLayout>
 
         <TextView
+            android:id="@+id/ad_ic"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginLeft="@dimen/_1sdp"

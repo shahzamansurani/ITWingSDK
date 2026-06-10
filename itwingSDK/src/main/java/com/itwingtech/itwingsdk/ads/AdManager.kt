@@ -3,7 +3,9 @@ package com.itwingtech.itwingsdk.ads
 
 import android.app.Activity
 import android.view.ViewGroup
+import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingConfig
+import java.lang.ref.WeakReference
 
 
 class AdManager(private val configProvider: () -> ITWingConfig, private val suppressAdsProvider: () -> Boolean = { false } ) {
@@ -19,6 +21,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
      */
     fun showInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
         if (adsSuppressed()) {
+            trackSuppressed("interstitial", placement)
             clearCache()
             onComplete()
             return
@@ -40,6 +43,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
      */
     fun showRewarded(activity: Activity, placement: String, onReward: () -> Unit, onComplete: () -> Unit = {}) {
         if (adsSuppressed()) {
+            trackSuppressed("rewarded", placement)
             clearCache()
             onComplete()
             return
@@ -49,6 +53,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
 
     fun showRewarded(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
         if (adsSuppressed()) {
+            trackSuppressed("rewarded", placement)
             clearCache()
             onComplete()
             return
@@ -61,6 +66,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
      */
     fun showRewardedInterstitial(activity: Activity, placement: String, onReward: () -> Unit={}, onComplete: () -> Unit = {}) {
         if (adsSuppressed()) {
+            trackSuppressed("rewarded_interstitial", placement)
             clearCache()
             onComplete()
             return
@@ -70,6 +76,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
 
     fun showRewardedInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
         if (adsSuppressed()) {
+            trackSuppressed("rewarded_interstitial", placement)
             clearCache()
             onComplete()
             return
@@ -89,6 +96,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
 
     fun showAppOpen(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
         if (adsSuppressed()) {
+            trackSuppressed("app_open", placement)
             clearCache()
             onComplete()
             return
@@ -103,6 +111,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
 
     fun startAutomaticAppOpen(activity: Activity) {
         if (adsSuppressed()) {
+            trackSuppressed("app_open_automatic", "automatic")
             clearCache()
             return
         }
@@ -114,6 +123,31 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
      */
     fun loadBanner(activity: Activity, container: ViewGroup, placement: String, bannerType: BannerType? = null) {
         if (adsSuppressed()) {
+            trackSuppressed("banner", placement)
+            destroyBanner(container)
+            return
+        }
+        val activityRef = WeakReference(activity)
+        val containerRef = WeakReference(container)
+        if (InlineAdSafetyGate.suppressInlineAd(
+                activity = activity,
+                inlineFormat = "banner",
+                placement = placement,
+                reloadAfterInteraction = {
+                    val resumedActivity = activityRef.get()
+                    val resumedContainer = containerRef.get()
+                    if (
+                        resumedActivity != null &&
+                        resumedContainer != null &&
+                        !resumedActivity.isFinishing &&
+                        !resumedActivity.isDestroyed &&
+                        resumedContainer.isAttachedToWindow
+                    ) {
+                        loadBanner(resumedActivity, resumedContainer, placement, bannerType)
+                    }
+                },
+            )
+        ) {
             destroyBanner(container)
             return
         }
@@ -129,6 +163,31 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
      */
     fun loadNative(activity: Activity, container: ViewGroup, placement: String, nativeType: NativeType? = null) {
         if (adsSuppressed()) {
+            trackSuppressed("native", placement)
+            destroyNative(container)
+            return
+        }
+        val activityRef = WeakReference(activity)
+        val containerRef = WeakReference(container)
+        if (InlineAdSafetyGate.suppressInlineAd(
+                activity = activity,
+                inlineFormat = "native",
+                placement = placement,
+                reloadAfterInteraction = {
+                    val resumedActivity = activityRef.get()
+                    val resumedContainer = containerRef.get()
+                    if (
+                        resumedActivity != null &&
+                        resumedContainer != null &&
+                        !resumedActivity.isFinishing &&
+                        !resumedActivity.isDestroyed &&
+                        resumedContainer.isAttachedToWindow
+                    ) {
+                        loadNative(resumedActivity, resumedContainer, placement, nativeType)
+                    }
+                },
+            )
+        ) {
             destroyNative(container)
             return
         }
@@ -179,5 +238,18 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
     private fun adsSuppressed(): Boolean {
         val ads = configProvider().ads
         return suppressAdsProvider() || !ads.globalEnabled || ads.blockedReason == "active_subscription"
+    }
+
+    private fun trackSuppressed(format: String, placement: String) {
+        val ads = configProvider().ads
+        SDKTelemetry.track(
+            "ad_suppressed",
+            mapOf(
+                "format" to format,
+                "placement" to placement,
+                "global_enabled" to ads.globalEnabled,
+                "blocked_reason" to (ads.blockedReason ?: if (suppressAdsProvider()) "subscription" else "unknown"),
+            ),
+        )
     }
 }

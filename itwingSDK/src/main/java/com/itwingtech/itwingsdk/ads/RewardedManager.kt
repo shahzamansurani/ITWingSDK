@@ -69,13 +69,21 @@ class RewardedManager(
         }
 
         if (placement == null || !frequency.canShow(placement)) {
+            placement?.let { AdEventTracker.log("ad_frequency_capped", it) }
             safeCallback(onComplete)
             return
         }
 
+        AdEventTracker.log("ad_requested", placement)
         if (customRenderer.canRender(placement)) {
             frequency.markShown(placement)
-            customRenderer.show(activity, placement, reward = onReward, onComplete = {
+            AdEventTracker.log("ad_impression", placement)
+            customRenderer.show(activity, placement, reward = {
+                AdEventTracker.log("ad_reward_earned", placement)
+                safeCallback(onReward)
+            }, onComplete = {
+                AdEventTracker.log("ad_dismissed", placement)
+                InlineAdSafetyGate.arm("rewarded", placement.name)
                 preload(activity, placementName)
                 safeCallback(onComplete)
             })
@@ -108,9 +116,12 @@ class RewardedManager(
         ad.adEventCallback = object : RewardedAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
+                AdEventTracker.log("ad_impression", placement)
             }
 
             override fun onAdDismissedFullScreenContent() {
+                AdEventTracker.log("ad_dismissed", placement)
+                InlineAdSafetyGate.arm("rewarded", placement.name)
                 preload(activity, placementName)
                 safeCallback(onComplete)
             }
@@ -118,6 +129,7 @@ class RewardedManager(
             override fun onAdFailedToShowFullScreenContent(
                 fullScreenContentError: FullScreenContentError,
             ) {
+                AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                 preload(activity, placementName)
                 safeCallback(onComplete)
             }
@@ -126,10 +138,12 @@ class RewardedManager(
         runOnMain {
             runCatching {
                 ad.show(activity) {
+                    AdEventTracker.log("ad_reward_earned", placement)
                     safeCallback(onReward)
                 }
                 preload(activity, placementName)
             }.onFailure {
+                AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
                 preload(activity, placementName)
                 safeCallback(onComplete)
             }
@@ -162,7 +176,7 @@ class RewardedManager(
     ) {
         val loadingDialog = AdLoadingDialog(activity)
         val app = configProvider().app
-        val timeoutMs = (app["loading_ad_timeout_ms"] as? Number)?.toLong() ?: 2500L
+        val timeoutMs = (app["loading_ad_timeout_ms"] as? Number)?.toLong() ?: 7000L
         val lottieUrl = app["loading_lottie_url"] as? String
         val startedAt = System.currentTimeMillis()
         loadingDialog.show(lottieUrl)

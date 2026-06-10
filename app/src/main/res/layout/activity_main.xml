@@ -1,77 +1,300 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
+    android:fillViewport="true"
     tools:context=".MainActivity">
 
-    <!--        <com.itwingtech.itwingsdk.ads.ITWingBannerView-->
-    <!--            android:id="@+id/top"-->
-    <!--            android:layout_width="match_parent"-->
-    <!--            android:layout_height="wrap_content"-->
-    <!--            android:layout_alignParentTop="true"-->
-    <!--            app:ITWingBannerPlacement="top_collapsible"/>-->
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_margin="@dimen/_5sdp"
-            android:orientation="vertical">
-
-            <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                app:ITWingNativeAdViewPlacement="native_small" />
-
-            <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                app:ITWingNativeAdViewPlacement="native_large" />
-
-            <com.itwingtech.itwingsdk.ads.ITWingBannerView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                app:ITWingBannerPlacement="custom_banner" />
-
-            <Button
-                android:id="@+id/interstitial"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Show Interstitial" />
-
-            <Button
-                android:id="@+id/rewarded"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Show Rewarded" />
-
-            <Button
-                android:id="@+id/rewardedInterstitial"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Show Rewarded Interstitial" />
-
-            <Button
-                android:id="@+id/appOpen"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Show App Open" />
-
-
-        </LinearLayout>
-    </ScrollView>
-
-    <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        app:ITWingNativeAdViewPlacement="custom_native" />
+        android:orientation="vertical"
+        android:padding="12dp">
 
-</RelativeLayout>
+        <TextView
+            android:id="@+id/titleText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/black"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            tools:text="ITWing SDK Example" />
+
+        <TextView
+            android:id="@+id/diagnosticsText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="#424242"
+            android:textSize="13sp"
+            tools:text="Diagnostics" />
+
+        <TextView
+            android:id="@+id/apiText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="#424242"
+            android:textSize="13sp"
+            tools:text="API helpers" />
+
+        <TextView
+            android:id="@+id/firebaseText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="#424242"
+            android:textSize="13sp"
+            tools:text="Firebase status" />
+
+        <TextView
+            android:id="@+id/notificationText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="#424242"
+            android:textSize="13sp"
+            tools:text="Notification and billing status" />
+
+        <Button
+            android:id="@+id/refreshConfig"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Refresh Remote Config" />
+
+        <Button
+            android:id="@+id/trackEvent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Track Analytics Event" />
+
+        <Button
+            android:id="@+id/preloadAds"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Preload Fullscreen Ads" />
+
+        <Button
+            android:id="@+id/showPurchaseDialog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show Purchase Dialog" />
+
+        <Button
+            android:id="@+id/restorePurchases"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Restore Purchases" />
+
+        <Button
+            android:id="@+id/directSubscription"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Launch Subscription: premium_monthly" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Real AdMob Banners"
+            android:textColor="@android:color/black"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <com.itwingtech.itwingsdk.ads.ITWingBannerView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:ITWingBannerPlacement="home_banner"
+            app:ITWingBannerType="adaptive" />
+
+        <com.itwingtech.itwingsdk.ads.ITWingBannerView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:ITWingBannerPlacement="bottom_collapsible"
+            app:ITWingBannerType="collapsible_bottom" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Custom Banners"
+            android:textColor="@android:color/black"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <com.itwingtech.itwingsdk.ads.ITWingBannerView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:ITWingBannerPlacement="custom_banner"
+            app:ITWingBannerType="adaptive" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Real Native Ads"
+            android:textColor="@android:color/black"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:ITWingNativeAdViewPlacement="native_small"
+            app:ITWingNativeAdViewType="small" />
+
+        <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:ITWingNativeAdViewPlacement="native_large"
+            app:ITWingNativeAdViewType="large" />
+
+
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Custom Native Ads"
+            android:textColor="@android:color/black"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:ITWingNativeAdViewPlacement="custom_native_small" />
+
+        <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:ITWingNativeAdViewPlacement="custom_native_large" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Interstitials"
+            android:textColor="@android:color/black"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/realInterstitial"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show Interstitial" />
+
+        <Button
+            android:id="@+id/splashInterstitial"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show Splash Interstitial" />
+
+        <Button
+            android:id="@+id/customInterstitial"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show Custom Interstitial" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Rewarded"
+            android:textColor="@android:color/black"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/rewardedVideo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show Rewarded Video" />
+
+        <Button
+            android:id="@+id/rewardedImage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show Rewarded Again" />
+
+        <Button
+            android:id="@+id/customRewarded"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show Custom Rewarded" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Rewarded Interstitials"
+            android:textColor="@android:color/black"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/realRewardedInterstitial"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show Rewarded Interstitial" />
+
+        <Button
+            android:id="@+id/customRewardedInterstitial"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show Custom Rewarded With Callback Navigation" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="App Open Ads"
+            android:textColor="@android:color/black"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/appOpenResume"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show App Open: app_open_auto" />
+
+        <Button
+            android:id="@+id/appOpenSplash"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show App Open Again" />
+
+        <Button
+            android:id="@+id/appOpenButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show App Open By Button" />
+
+        <Button
+            android:id="@+id/customAppOpen"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show Custom Interstitial As App-Open Style" />
+
+        <Button
+            android:id="@+id/syncNotification"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Sync Fallback Notification Token" />
+
+    </LinearLayout>
+</ScrollView>

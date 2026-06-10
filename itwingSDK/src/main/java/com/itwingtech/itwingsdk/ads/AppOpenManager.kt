@@ -1,6 +1,8 @@
 package com.itwingtech.itwingsdk.ads
 
 import android.app.Activity
+import android.os.Handler
+import android.os.Looper
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -19,6 +21,7 @@ class AppOpenManager(
     private val configProvider: () -> ITWingConfig,
     private val frequency: FrequencyController
 ) {
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val loading = AtomicBoolean(false)
     private val automaticStarted = AtomicBoolean(false)
     private var loadedPlacement: String? = null
@@ -38,9 +41,11 @@ class AppOpenManager(
                 .addObserver(
                     object : DefaultLifecycleObserver {
                         override fun onStart(owner: LifecycleOwner) {
-                            val currentActivity = foregroundActivity ?: return
-                            val placement = automaticPlacementName() ?: return
-                            show(currentActivity, placement)
+                            runCatching {
+                                val currentActivity = foregroundActivity ?: return
+                                val placement = automaticPlacementName() ?: return
+                                show(currentActivity, placement, waitForLoad = false)
+                            }
                         }
                     },
                 )
@@ -101,6 +106,7 @@ class AppOpenManager(
         activity: Activity,
         placementName: String = loadedPlacement ?: "app_open",
         onComplete: () -> Unit = {},
+        waitForLoad: Boolean = true,
     ) {
         foregroundActivity = activity
         val config = configProvider()
@@ -113,13 +119,18 @@ class AppOpenManager(
             }
 
         if (placement == null || !frequency.canShow(placement)) {
+            placement?.let { AdEventTracker.log("ad_frequency_capped", it) }
             safeCallback(onComplete)
             return
         }
 
+        AdEventTracker.log("ad_requested", placement)
         if (customRenderer.canRender(placement)) {
             frequency.markShown(placement)
+            AdEventTracker.log("ad_impression", placement)
             customRenderer.show(activity, placement, onComplete = {
+                AdEventTracker.log("ad_dismissed", placement)
+                InlineAdSafetyGate.arm("app_open", placement.name)
                 preload(activity, placementName)
                 safeCallback(onComplete)
             })
@@ -129,34 +140,15 @@ class AppOpenManager(
         val ad = appOpenAd
         if (ad == null) {
             preload(activity, placementName)
-            safeCallback(onComplete)
+            if (waitForLoad) {
+                waitForAdAndShow(activity, placementName, onComplete)
+            } else {
+                safeCallback(onComplete)
+            }
             return
         }
 
-        appOpenAd = null
-        loadedPlacement = null
-        ad.adEventCallback =
-            object : AppOpenAdEventCallback {
-                override fun onAdShowedFullScreenContent() {
-                    frequency.markShown(
-                        placement,
-                    )
-                }
-
-                override fun onAdDismissedFullScreenContent() {
-                    preload(activity, placementName)
-                    safeCallback(onComplete)
-                }
-
-                override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
-                    preload(activity, placementName)
-                    safeCallback(onComplete)
-                }
-            }
-
-        runOnMain {
-            ad.show(activity)
-        }
+        presentAd(activity, placementName, placement, ad, onComplete)
     }
 
     fun clear() {
@@ -169,33 +161,141 @@ class AppOpenManager(
         return automaticPlacement()?.name
     }
 
-    private fun automaticPlacement() =
-        configProvider().ads.placements.firstOrNull {
-            configProvider().ads.globalEnabled &&
-                    it.enabled &&
-                    it.format == "app_open" &&
-                    it.metadata["splash"].isDisabledByDefault() &&
-                    it.metadata["usage"] != "splash" &&
-                    it.metadata["show_automatically"].isEnabledByDefault()
+    private fun automaticPlacement(): com.itwingtech.itwingsdk.core.AdPlacementConfig? {
+        val config = runCatching { configProvider() }.getOrNull() ?: return null
+        if (!config.ads.globalEnabled) return null
+
+        return config.ads.placements.firstOrNull { placement ->
+            runCatching {
+                placement.enabled &&
+                    placement.format == "app_open" &&
+                    placement.metadata["splash"].isDisabledByDefault() &&
+                    !placement.metadata["usage"].safeString().equals("splash", ignoreCase = true) &&
+                    placement.metadata["show_automatically"].isEnabledByDefault()
+            }.getOrDefault(false)
+        }
+    }
+
+    private fun presentAd(
+        activity: Activity,
+        placementName: String,
+        placement: com.itwingtech.itwingsdk.core.AdPlacementConfig,
+        ad: AppOpenAd,
+        onComplete: () -> Unit,
+    ) {
+        appOpenAd = null
+        loadedPlacement = null
+        ad.adEventCallback =
+            object : AppOpenAdEventCallback {
+                override fun onAdShowedFullScreenContent() {
+                    frequency.markShown(placement)
+                    AdEventTracker.log("ad_impression", placement)
+                }
+
+                override fun onAdDismissedFullScreenContent() {
+                    AdEventTracker.log("ad_dismissed", placement)
+                    InlineAdSafetyGate.arm("app_open", placement.name)
+                    preload(activity, placementName)
+                    safeCallback(onComplete)
+                }
+
+                override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
+                    AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
+                    preload(activity, placementName)
+                    safeCallback(onComplete)
+                }
+            }
+
+        runOnMain {
+            runCatching {
+                ad.show(activity)
+            }.onFailure {
+                AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
+                preload(activity, placementName)
+                safeCallback(onComplete)
+            }
+        }
+    }
+
+    private fun waitForAdAndShow(activity: Activity, placementName: String, onComplete: () -> Unit) {
+        val loadingDialog = AdLoadingDialog(activity)
+        val app = configProvider().app
+        val timeoutMs = (app["loading_ad_timeout_ms"] as? Number)?.toLong() ?: 7000L
+        val lottieUrl = app["loading_lottie_url"] as? String
+        val startedAt = System.currentTimeMillis()
+        loadingDialog.show(lottieUrl)
+
+        fun poll() {
+            val ad = appOpenAd
+            if (ad != null) {
+                loadingDialog.dismiss()
+                val placement = configProvider().ads.placements.firstOrNull {
+                    it.name == placementName && it.enabled && it.format == "app_open"
+                }
+                if (placement == null) {
+                    safeCallback(onComplete)
+                } else {
+                    presentAd(activity, placementName, placement, ad, onComplete)
+                }
+                return
+            }
+
+            if (System.currentTimeMillis() - startedAt >= timeoutMs) {
+                loadingDialog.dismiss()
+                safeCallback(onComplete)
+                return
+            }
+
+            mainHandler.postDelayed({ poll() }, 150L)
         }
 
+        mainHandler.postDelayed({ poll() }, 150L)
+    }
+
     private fun Any?.isEnabledByDefault(): Boolean {
-        return when (this) {
+        return when (val value = normalizedValue()) {
             null -> true
-            is Boolean -> this
-            is String -> !equals("false", ignoreCase = true) && this != "0"
-            is Number -> toInt() != 0
+            is Boolean -> value
+            is String -> !value.equals("false", ignoreCase = true) &&
+                value != "0" &&
+                !value.equals("no", ignoreCase = true) &&
+                !value.equals("off", ignoreCase = true)
+            is Number -> value.toInt() != 0
             else -> true
         }
     }
 
     private fun Any?.isDisabledByDefault(): Boolean {
-        return when (this) {
+        return when (val value = normalizedValue()) {
             null -> true
-            is Boolean -> !this
-            is String -> equals("false", ignoreCase = true) || this == "0"
-            is Number -> toInt() == 0
+            is Boolean -> !value
+            is String -> value.equals("false", ignoreCase = true) ||
+                value == "0" ||
+                value.equals("no", ignoreCase = true) ||
+                value.equals("off", ignoreCase = true)
+            is Number -> value.toInt() == 0
             else -> true
         }
+    }
+
+    private fun Any?.safeString(): String? = normalizedValue()?.toString()?.trim()?.takeIf { it.isNotBlank() }
+
+    private fun Any?.normalizedValue(): Any? {
+        return runCatching {
+            when (this) {
+                null -> null
+                is Boolean, is Number -> this
+                is String -> trim().takeUnless {
+                    it.isBlank() ||
+                        it.equals("null", ignoreCase = true) ||
+                        it.equals("undefined", ignoreCase = true)
+                }
+                else -> toString().trim().takeUnless {
+                    it.isBlank() ||
+                        it.equals("null", ignoreCase = true) ||
+                        it.equals("undefined", ignoreCase = true)
+                }
+            }
+        }.getOrNull()
     }
 }

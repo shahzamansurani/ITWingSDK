@@ -14,9 +14,12 @@ internal class AppRuntimeManager(
     private val mainHandler = Handler(Looper.getMainLooper())
 
     fun showSplash(activity: Activity, onComplete: () -> Unit) {
-        val config = configProvider()
-        val status = config.app["status"] as? String ?: "active"
-        val maintenance = config.app["maintenance"] as? Boolean ?: false
+        val config = runCatching { configProvider() }.getOrNull() ?: run {
+            safeCallback(onComplete)
+            return
+        }
+        val status = config.app["status"].safeString() ?: "active"
+        val maintenance = config.app["maintenance"].safeBoolean(false)
 
         if (maintenance || status != "active") {
             showStateDialog(activity, status, onComplete)
@@ -25,7 +28,8 @@ internal class AppRuntimeManager(
 
         val delayMs = splashDelayMs(config)
         mainHandler.postDelayed({
-            showSplashAd(activity, config, onComplete)
+            runCatching { showSplashAd(activity, config, onComplete) }
+                .onFailure { safeCallback(onComplete) }
         }, delayMs)
     }
 
@@ -37,8 +41,18 @@ internal class AppRuntimeManager(
         }
 
         val format = splashFormat(config)
+        if (format == "none" || format == "no_ad" || format == "disabled") {
+            safeCallback(onComplete)
+            return
+        }
+
         val placement = config.ads.placements.firstOrNull {
-            it.enabled && it.format == format && (it.metadata["splash"].isTruthy() || it.metadata["usage"] == "splash")
+            runCatching {
+                it.enabled &&
+                    it.format == format &&
+                    (it.metadata["splash"].safeBoolean(false) ||
+                        it.metadata["usage"].safeString().equals("splash", ignoreCase = true))
+            }.getOrDefault(false)
         } ?: config.ads.placements.firstOrNull {
             it.enabled && it.format == format && it.name.contains("splash", ignoreCase = true)
         } ?: config.ads.placements.firstOrNull {
@@ -65,7 +79,8 @@ internal class AppRuntimeManager(
             return
         }
 
-        val title = configProvider().app["title"] as? String ?: configProvider().app["name"] as? String ?: "App"
+        val appConfig = runCatching { configProvider().app }.getOrNull().orEmpty()
+        val title = appConfig["title"].safeString() ?: appConfig["name"].safeString() ?: "App"
         val message = when (status) {
             "maintenance" -> "This app is currently under maintenance. Please try again later."
             "disabled" -> "This app is currently disabled by the administrator."
@@ -91,23 +106,62 @@ internal class AppRuntimeManager(
     }
 
     private fun splashDelayMs(config: ITWingConfig): Long {
-        val splash = config.app["splash"] as? Map<*, *>
-        val seconds = splash?.get("seconds") as? Number
-        return ((seconds?.toLong() ?: 2L).coerceIn(0L, 10L)) * 1000L
+        val splash = config.app["splash"].safeMap()
+        val seconds = splash["seconds"].safeLong(2L)
+        return seconds.coerceIn(0L, 10L) * 1000L
     }
 
     private fun splashFormat(config: ITWingConfig): String {
-        val splash = config.app["splash"] as? Map<*, *>
-        return splash?.get("ad_format") as? String ?: "app_open"
+        val splash = config.app["splash"].safeMap()
+        return splash["ad_format"].safeString() ?: "app_open"
     }
 
-    private fun Any?.isTruthy(): Boolean {
-        return when (this) {
-            null -> false
-            is Boolean -> this
-            is String -> equals("true", ignoreCase = true) || this == "1"
-            is Number -> toInt() != 0
-            else -> false
+    private fun Any?.safeBoolean(defaultValue: Boolean): Boolean {
+        return when (val value = normalizedValue()) {
+            null -> defaultValue
+            is Boolean -> value
+            is Number -> value.toInt() != 0
+            is String -> value.equals("true", ignoreCase = true) ||
+                value == "1" ||
+                value.equals("yes", ignoreCase = true) ||
+                value.equals("on", ignoreCase = true)
+            else -> defaultValue
         }
+    }
+
+    private fun Any?.safeLong(defaultValue: Long): Long {
+        return when (val value = normalizedValue()) {
+            is Number -> value.toLong()
+            is String -> value.toLongOrNull() ?: value.toDoubleOrNull()?.toLong() ?: defaultValue
+            else -> defaultValue
+        }
+    }
+
+    private fun Any?.safeString(): String? = normalizedValue()?.toString()?.trim()?.takeIf { it.isNotBlank() }
+
+    private fun Any?.safeMap(): Map<*, *> {
+        return when (this) {
+            is Map<*, *> -> this
+            else -> emptyMap<Any?, Any?>()
+        }
+    }
+
+    private fun Any?.normalizedValue(): Any? {
+        return runCatching {
+            when (this) {
+                null -> null
+                is Boolean, is Number -> this
+                is String -> trim().takeUnless {
+                    it.isBlank() ||
+                        it.equals("null", ignoreCase = true) ||
+                        it.equals("undefined", ignoreCase = true)
+                }
+                else -> toString().trim().takeUnless {
+                    it.isBlank() ||
+                        it.equals("null", ignoreCase = true) ||
+                        it.equals("undefined", ignoreCase = true)
+                }
+            }
+        }.getOrNull()
     }
 }

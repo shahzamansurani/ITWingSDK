@@ -66,6 +66,12 @@ class EncryptedConfigStore(context: Context) {
         return true
     }
 
+    fun lastAppVersionName(): String? = prefs.getString("last_app_version_name", null)
+
+    fun saveLastAppVersionName(versionName: String?) {
+        prefs.edit { putString("last_app_version_name", versionName) }
+    }
+
     fun appendAnalyticsEvent(event: JSONObject, maxQueueSize: Int = 500) {
         val current = analyticsEvents().toMutableList()
         current.add(event)

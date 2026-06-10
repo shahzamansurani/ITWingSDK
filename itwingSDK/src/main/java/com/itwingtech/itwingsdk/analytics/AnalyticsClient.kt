@@ -1,5 +1,6 @@
 package com.itwingtech.itwingsdk.analytics
 
+import com.itwingtech.itwingsdk.core.FirebaseRuntimeManager
 import com.itwingtech.itwingsdk.data.ConfigRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,12 +17,14 @@ class AnalyticsClient(private val repository: ConfigRepository) {
     private var flushing = false
 
     fun track(name: String, properties: Map<String, Any?> = emptyMap()) {
+        val safeProperties = properties.mapValues { (_, value) -> safeJsonValue(value) }
         val event = JSONObject()
-            .put("name", name)
+            .put("name", name.take(80))
             .put("event_at", Instant.now().toString())
-            .put("properties", JSONObject(properties))
+            .put("properties", JSONObject(safeProperties))
 
-        repository.enqueueAnalyticsEvent(event)
+        runCatching { repository.enqueueAnalyticsEvent(event) }
+        runCatching { FirebaseRuntimeManager.logEvent(name, safeProperties) }
         scheduleFlush()
     }
 
@@ -36,6 +39,17 @@ class AnalyticsClient(private val repository: ConfigRepository) {
             if (!immediate) delay(1_000)
             runCatching { repository.flushAnalytics() }
             flushing = false
+        }
+    }
+
+    private fun safeJsonValue(value: Any?): Any {
+        return when (value) {
+            null -> JSONObject.NULL
+            is Boolean, is Number, is String -> value
+            is Iterable<*> -> value.joinToString(",") { it?.toString().orEmpty() }.take(500)
+            is Array<*> -> value.joinToString(",") { it?.toString().orEmpty() }.take(500)
+            is Map<*, *> -> JSONObject(value.mapKeys { it.key?.toString().orEmpty() }.mapValues { safeJsonValue(it.value) })
+            else -> value.toString().take(500)
         }
     }
 }

@@ -11,6 +11,7 @@ data class ITWingConfig(
     val analytics: Map<String, Any?> = emptyMap(),
     val notifications: NotificationConfig = NotificationConfig(),
     val subscriptions: SubscriptionConfig = SubscriptionConfig(),
+    val firebase: FirebaseConfig = FirebaseConfig(),
     val apiProviders: Map<String, ApiProviderConfig> = emptyMap(),
     val apiKeys: Map<String, ApiKeyConfig> = emptyMap(),
 )
@@ -58,6 +59,8 @@ data class CustomAdConfig(
     val targetUrl: String? = null,
     val imageUrl: String? = null,
     val videoUrl: String? = null,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null,
     val html: String? = null,
     val metadata: Map<String, Any?> = emptyMap(),
 )
@@ -85,24 +88,29 @@ data class AdUnitConfig(
 )
 
 data class NotificationConfig(
-    val provider: String = "fcm",
+    val provider: String = "itwing",
     val enabled: Boolean = false,
-    val onesignalAppId: String? = null,
-    val fcmSenderId: String? = null,
-    val fcmTopics: List<String> = emptyList(),
     val deviceRegistrationEndpoint: String = "/notifications/device",
+    val pendingEndpoint: String = "/notifications/pending",
+    val eventEndpoint: String = "/notifications/{id}/event",
+    val pollIntervalSeconds: Int = 300,
     val promptForPermission: Boolean = false,
+    val topics: List<String> = emptyList(),
     val segments: List<String> = emptyList(),
     val tags: Map<String, String> = emptyMap(),
 )
 
 data class ApiKeyConfig(
+    val id: String? = null,
     val name: String = "",
     val value: String = "",
     val provider: String? = null,
     val proxyEndpoint: String? = null,
     val baseUrl: String? = null,
-    val description: String? = null
+    val description: String? = null,
+    val dailyQuota: Int? = null,
+    val dailyUsage: Int = 0,
+    val poolSize: Int = 1,
 )
 
 data class ApiProviderConfig(
@@ -124,6 +132,7 @@ data class SubscriptionProductConfig(
     val id: String = "",
     val name: String = "",
     val store: String = "google_play",
+    val productType: String = "subscription",
     val productId: String = "",
     val basePlanId: String? = null,
     val offerId: String? = null,
@@ -132,6 +141,20 @@ data class SubscriptionProductConfig(
     val currency: String? = null,
     val removesAds: Boolean = true,
     val entitlements: Map<String, Any?> = emptyMap(),
+    val metadata: Map<String, Any?> = emptyMap(),
+)
+
+data class FirebaseConfig(
+    val enabled: Boolean = false,
+    val analyticsEnabled: Boolean = false,
+    val crashlyticsEnabled: Boolean = false,
+    val authEnabled: Boolean = false,
+    val roiCampaignsEnabled: Boolean = false,
+    val projectId: String? = null,
+    val googleAppId: String? = null,
+    val apiKey: String? = null,
+    val gcmSenderId: String? = null,
+    val storageBucket: String? = null,
     val metadata: Map<String, Any?> = emptyMap(),
 )
 

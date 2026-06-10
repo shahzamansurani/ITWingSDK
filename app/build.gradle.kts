@@ -1,7 +1,23 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.google.services)
+}
+
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use(::load)
+    }
+}
+
+fun configuredValue(name: String, fallback: String): String {
+    return (project.findProperty(name) as String?)
+        ?: System.getenv(name)
+        ?: localProps.getProperty(name)
+        ?: fallback
 }
 
 android {
@@ -18,15 +34,16 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        val sdkKey = (project.findProperty("ITWING_SDK_KEY") as String?)
-            ?: System.getenv("ITWING_SDK_KEY")
-            ?: "itw_test_example_android_sdk_key_change_me_1234567890"
-        val sdkEndpoint = (project.findProperty("ITWING_SDK_ENDPOINT") as String?)
-            ?: System.getenv("ITWING_SDK_ENDPOINT")
-            ?: "https://itwing.hsgasmart.com/api/sdk/v1"
-        buildConfigField("String", "ITWING_SDK_KEY", "\"$sdkKey\"")
-        buildConfigField("String", "ITWING_SDK_ENDPOINT", "\"$sdkEndpoint\"")
+        buildConfigField(
+            "String",
+            "ITWING_SDK_KEY",
+            "\"${configuredValue("ITWING_SDK_KEY", "itw_test_example_android_sdk_key_change_me_1234567890")}\"",
+        )
+        buildConfigField(
+            "String",
+            "ITWING_SDK_ENDPOINT",
+            "\"${configuredValue("ITWING_SDK_ENDPOINT", "https://sdk.itwingtech.com/api/sdk/v1")}\"",
+        )
     }
 
     buildTypes {
