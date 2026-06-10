@@ -183,6 +183,7 @@ class AppOpenManager(
         ad: AppOpenAd,
         onComplete: () -> Unit,
     ) {
+        val completion = FullscreenCompletion(onComplete)
         appOpenAd = null
         loadedPlacement = null
         ad.adEventCallback =
@@ -196,13 +197,13 @@ class AppOpenManager(
                     AdEventTracker.log("ad_dismissed", placement)
                     InlineAdSafetyGate.arm("app_open", placement.name)
                     preload(activity, placementName)
-                    safeCallback(onComplete)
+                    completion.complete()
                 }
 
                 override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
                     AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                     preload(activity, placementName)
-                    safeCallback(onComplete)
+                    completion.complete()
                 }
             }
 
@@ -212,7 +213,7 @@ class AppOpenManager(
             }.onFailure {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
                 preload(activity, placementName)
-                safeCallback(onComplete)
+                completion.complete()
             }
         }
     }

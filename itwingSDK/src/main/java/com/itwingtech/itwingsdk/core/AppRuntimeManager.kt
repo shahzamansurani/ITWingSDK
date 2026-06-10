@@ -67,7 +67,7 @@ internal class AppRuntimeManager(
         when (format) {
             "app_open" -> ads.showAppOpen(activity, placement.name, onComplete)
             "interstitial" -> ads.showInterstitial(activity, placement.name, onComplete)
-            "rewarded" -> ads.showRewarded(activity, placement.name, onComplete = onComplete)
+            "rewarded" -> safeCallback(onComplete)
             "rewarded_interstitial" -> ads.showRewardedInterstitial(activity, placement.name, onComplete = onComplete)
             else -> safeCallback(onComplete)
         }

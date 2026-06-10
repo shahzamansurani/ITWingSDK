@@ -14,6 +14,7 @@ import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.utils.runOnMain
 import com.itwingtech.itwingsdk.utils.safeCallback
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 class RewardedManager(
     private val configProvider: () -> ITWingConfig,
@@ -60,7 +61,6 @@ class RewardedManager(
     ) {
         val config = configProvider()
         if (!config.ads.globalEnabled) {
-            safeCallback(onComplete)
             return
         }
 
@@ -70,34 +70,37 @@ class RewardedManager(
 
         if (placement == null || !frequency.canShow(placement)) {
             placement?.let { AdEventTracker.log("ad_frequency_capped", it) }
-            safeCallback(onComplete)
             return
         }
 
         AdEventTracker.log("ad_requested", placement)
-        if (customRenderer.canRender(placement)) {
-            frequency.markShown(placement)
-            AdEventTracker.log("ad_impression", placement)
-            customRenderer.show(activity, placement, reward = {
-                AdEventTracker.log("ad_reward_earned", placement)
-                safeCallback(onReward)
-            }, onComplete = {
-                AdEventTracker.log("ad_dismissed", placement)
-                InlineAdSafetyGate.arm("rewarded", placement.name)
-                preload(activity, placementName)
-                safeCallback(onComplete)
-            })
-            return
-        }
+        RewardedIntroDialog.show(activity, placement, onSkip = {
+            AdEventTracker.log("ad_opt_out", placement)
+        }) {
+            if (customRenderer.canRender(placement)) {
+                frequency.markShown(placement)
+                AdEventTracker.log("ad_impression", placement)
+                customRenderer.show(activity, placement, reward = {
+                    AdEventTracker.log("ad_reward_earned", placement)
+                    safeCallback(onReward)
+                }, onComplete = {
+                    AdEventTracker.log("ad_dismissed", placement)
+                    InlineAdSafetyGate.arm("rewarded", placement.name)
+                    preload(activity, placementName)
+                    safeCallback(onComplete)
+                })
+                return@show
+            }
 
-        val ad = pollPreloadedAd(placementName)
-        if (ad == null) {
-            load(activity, placementName)
-            waitForAdAndShow(activity, placementName, onReward, onComplete)
-            return
-        }
+            val ad = pollPreloadedAd(placementName)
+            if (ad == null) {
+                load(activity, placementName)
+                waitForAdAndShow(activity, placementName, onReward, onComplete)
+                return@show
+            }
 
-        presentAd(activity, placementName, placement, ad, onReward, onComplete)
+            presentAd(activity, placementName, placement, ad, onReward, onComplete)
+        }
     }
 
     fun clearAll() {
@@ -113,6 +116,8 @@ class RewardedManager(
         onReward: () -> Unit,
         onComplete: () -> Unit,
     ) {
+        val completion = FullscreenCompletion(onComplete)
+        val rewardEarned = AtomicBoolean(false)
         ad.adEventCallback = object : RewardedAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
@@ -123,7 +128,9 @@ class RewardedManager(
                 AdEventTracker.log("ad_dismissed", placement)
                 InlineAdSafetyGate.arm("rewarded", placement.name)
                 preload(activity, placementName)
-                safeCallback(onComplete)
+                if (rewardEarned.get()) {
+                    completion.complete()
+                }
             }
 
             override fun onAdFailedToShowFullScreenContent(
@@ -131,7 +138,6 @@ class RewardedManager(
             ) {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                 preload(activity, placementName)
-                safeCallback(onComplete)
             }
         }
 
@@ -139,13 +145,13 @@ class RewardedManager(
             runCatching {
                 ad.show(activity) {
                     AdEventTracker.log("ad_reward_earned", placement)
+                    rewardEarned.set(true)
                     safeCallback(onReward)
                 }
                 preload(activity, placementName)
             }.onFailure {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
                 preload(activity, placementName)
-                safeCallback(onComplete)
             }
         }
     }
@@ -189,7 +195,7 @@ class RewardedManager(
                     it.name == placementName && it.enabled && it.format == "rewarded"
                 }
                 if (placement == null) {
-                    safeCallback(onComplete)
+                    return
                 } else {
                     presentAd(activity, placementName, placement, ad, onReward, onComplete)
                 }
@@ -198,7 +204,6 @@ class RewardedManager(
 
             if (System.currentTimeMillis() - startedAt >= timeoutMs) {
                 loadingDialog.dismiss()
-                safeCallback(onComplete)
                 return
             }
 

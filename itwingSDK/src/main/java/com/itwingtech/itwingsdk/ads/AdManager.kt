@@ -58,7 +58,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
             onComplete()
             return
         }
-        rewardedManager.show(activity, placement, onComplete)
+        rewardedManager.show(activity, placement, onReward = {}, onComplete = onComplete)
     }
 
     /**
@@ -81,7 +81,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
             onComplete()
             return
         }
-        rewardedInterstitialManager.show(activity, placement, onComplete)
+        rewardedInterstitialManager.show(activity, placement, onReward = {}, onComplete = onComplete)
     }
 
     fun preloadRewarded(activity: Activity, placement: String) {

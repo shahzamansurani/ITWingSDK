@@ -17,10 +17,14 @@ import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.SubscriptionProductConfig
 import com.itwingtech.itwingsdk.data.ConfigRepository
+import android.os.Handler
+import android.os.Looper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.CopyOnWriteArrayList
 
 class SubscriptionManager(
     private val configProvider: () -> ITWingConfig,
@@ -28,15 +32,22 @@ class SubscriptionManager(
 ) {
     private var billingClient: BillingClient? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val productDetails = mutableMapOf<String, ProductDetails>()
+    private val readyCallbacks = CopyOnWriteArrayList<() -> Unit>()
     @Volatile
     private var lastBillingMessage: String? = null
+    @Volatile
+    private var connecting = false
 
     fun connect(activity: Activity, onReady: (() -> Unit)? = null) {
         if (billingClient?.isReady == true) {
             onReady?.invoke()
             return
         }
+        onReady?.let { readyCallbacks.add(it) }
+        if (connecting) return
+        connecting = true
 
         billingClient = BillingClient.newBuilder(activity.applicationContext)
             .enablePendingPurchases(
@@ -61,18 +72,22 @@ class SubscriptionManager(
 
         billingClient?.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(result: BillingResult) {
+                connecting = false
                 if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                     SDKTelemetry.track("billing_ready")
-                    queryProducts()
+                    queryProducts {
+                        drainReadyCallbacks()
+                    }
                     restorePurchases()
-                    onReady?.invoke()
                 } else {
                     lastBillingMessage = result.debugMessage
                     SDKTelemetry.track("billing_setup_failed", mapOf("message" to result.debugMessage))
+                    readyCallbacks.clear()
                 }
             }
 
             override fun onBillingServiceDisconnected() {
+                connecting = false
                 lastBillingMessage = "Billing service disconnected"
                 SDKTelemetry.track("billing_disconnected")
             }
@@ -136,21 +151,59 @@ class SubscriptionManager(
         return result
     }
 
+    fun launchPurchaseWhenReady(activity: Activity, productId: String, onResult: (BillingResult) -> Unit) {
+        if (activity.isFinishing || activity.isDestroyed) {
+            onResult(failedResult(BillingClient.BillingResponseCode.ERROR, "Activity is not available."))
+            return
+        }
+
+        val completed = AtomicBoolean(false)
+        fun complete(result: BillingResult) {
+            if (completed.compareAndSet(false, true)) {
+                onResult(result)
+            }
+        }
+
+        mainHandler.postDelayed({
+            complete(
+                failedResult(
+                    BillingClient.BillingResponseCode.SERVICE_TIMEOUT,
+                    "Google Play Billing did not become ready in time. Check Play Store availability and try again.",
+                ),
+            )
+        }, 10_000L)
+
+        connect(activity) {
+            ensureProductDetailsLoaded(productId) {
+                val firstResult = launchPurchase(activity, productId)
+                if (firstResult.shouldRetryAfterProductRefresh()) {
+                    queryProducts {
+                        complete(launchPurchase(activity, productId))
+                    }
+                } else {
+                    complete(firstResult)
+                }
+            }
+        }
+    }
+
     fun products(): List<SubscriptionProductConfig> = configProvider().subscriptions.products
 
     fun showPurchaseDialog(activity: Activity, onResult: (BillingResult) -> Unit = {}) {
         val products = products()
             .filter { it.store == "google_play" && it.productId.isNotBlank() }
         SDKTelemetry.track("purchase_dialog_shown", mapOf("product_count" to products.size))
-        PurchaseDialog.show(
-            activity = activity,
-            products = products,
-            detailsProvider = { productId, productType ->
-                productDetails[productKey(productId, productType)] ?: productDetails[productId]
-            },
-            launcher = { productId -> launchPurchase(activity, productId) },
-            onResult = onResult,
-        )
+        connect(activity) {
+            PurchaseDialog.show(
+                activity = activity,
+                products = products,
+                detailsProvider = { productId, productType ->
+                    productDetails[productKey(productId, productType)] ?: productDetails[productId]
+                },
+                launcher = { productId, result -> launchPurchaseWhenReady(activity, productId, result) },
+                onResult = onResult,
+            )
+        }
     }
 
     fun isAdFree(): Boolean = repositoryProvider()?.isAdFreeEntitled() == true
@@ -196,14 +249,25 @@ class SubscriptionManager(
         }
     }
 
-    private fun queryProducts() {
+    private fun queryProducts(onComplete: (() -> Unit)? = null) {
         val client = billingClient ?: return
         val products = configProvider().subscriptions.products
             .filter { it.store == "google_play" && it.productId.isNotBlank() }
             .groupBy { it.billingProductType() }
 
-        if (products.isEmpty()) return
+        if (products.isEmpty()) {
+            onComplete?.invoke()
+            return
+        }
         productDetails.clear()
+        var pendingQueries = products.size
+
+        fun finishQuery() {
+            pendingQueries -= 1
+            if (pendingQueries <= 0) {
+                onComplete?.invoke()
+            }
+        }
 
         products.forEach { (productType, adminProducts) ->
             val requestProducts = adminProducts
@@ -215,7 +279,10 @@ class SubscriptionManager(
                         .build()
                 }
 
-            if (requestProducts.isEmpty()) return@forEach
+            if (requestProducts.isEmpty()) {
+                finishQuery()
+                return@forEach
+            }
 
             client.queryProductDetailsAsync(
                 QueryProductDetailsParams.newBuilder().setProductList(requestProducts).build(),
@@ -228,8 +295,19 @@ class SubscriptionManager(
                 } else {
                     lastBillingMessage = result.debugMessage
                 }
+                finishQuery()
             }
         }
+    }
+
+    private fun ensureProductDetailsLoaded(productId: String, onComplete: () -> Unit) {
+        val adminProduct = configProvider().subscriptions.products.firstOrNull { it.productId == productId }
+        val productType = adminProduct?.billingProductType()
+        if (productType != null && (productDetails[productKey(productId, productType)] ?: productDetails[productId]) != null) {
+            onComplete()
+            return
+        }
+        queryProducts(onComplete)
     }
 
     private fun verifyPurchase(purchase: Purchase) {
@@ -244,6 +322,19 @@ class SubscriptionManager(
         }
         val adminProduct = configProvider().subscriptions.products.firstOrNull { it.productId == productId }
         val productType = adminProduct?.billingProductType() ?: ProductType.SUBS
+        val signatureVerified = GooglePlaySignatureValidator.verify(
+            googlePlayLicenseKey(),
+            purchase.originalJson,
+            purchase.signature,
+        )
+        if (signatureVerified == false) {
+            lastBillingMessage = "Google Play purchase signature verification failed."
+            SDKTelemetry.track(
+                "purchase_signature_invalid",
+                mapOf("product_id" to productId, "product_type" to if (productType == ProductType.INAPP) "inapp" else "subscription"),
+            )
+            return
+        }
         scope.launch(Dispatchers.IO) {
             val result = runCatching {
                 repositoryProvider()?.verifySubscriptionPurchase(
@@ -359,6 +450,12 @@ class SubscriptionManager(
             .build()
     }
 
+    private fun BillingResult.shouldRetryAfterProductRefresh(): Boolean {
+        return responseCode == BillingClient.BillingResponseCode.ERROR ||
+            responseCode == BillingClient.BillingResponseCode.ITEM_UNAVAILABLE ||
+            responseCode == BillingClient.BillingResponseCode.SERVICE_DISCONNECTED
+    }
+
     private fun productKey(productId: String, productType: String): String = "$productType:$productId"
 
     private fun SubscriptionProductConfig.billingProductType(): String {
@@ -401,5 +498,24 @@ class SubscriptionManager(
                 }.getOrNull()
             }
         }.getOrNull()
+    }
+
+    private fun googlePlayLicenseKey(): String? {
+        val app = configProvider().app
+        return listOf(
+            app["google_play_license_key"],
+            app["play_license_key"],
+            app["googlePlayLicenseKey"],
+        ).firstNotNullOfOrNull { value ->
+            value?.toString()?.replace("\\s".toRegex(), "")?.takeIf { it.isNotBlank() }
+        }
+    }
+
+    private fun drainReadyCallbacks() {
+        val callbacks = readyCallbacks.toList()
+        readyCallbacks.clear()
+        callbacks.forEach { callback ->
+            runCatching { callback() }
+        }
     }
 }

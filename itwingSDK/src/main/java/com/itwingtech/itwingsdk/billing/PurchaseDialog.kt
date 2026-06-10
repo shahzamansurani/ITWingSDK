@@ -21,7 +21,7 @@ internal object PurchaseDialog {
         activity: Activity,
         products: List<SubscriptionProductConfig>,
         detailsProvider: (String, String) -> ProductDetails?,
-        launcher: (String) -> BillingResult,
+        launcher: (String, (BillingResult) -> Unit) -> Unit,
         onResult: (BillingResult) -> Unit,
     ) {
         if (activity.isFinishing || activity.isDestroyed) {
@@ -92,13 +92,16 @@ internal object PurchaseDialog {
                 setOnClickListener {
                     isEnabled = false
                     text = "Opening Google Play..."
-                    val result = launcher(product.productId)
-                    onResult(result)
-                    if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                        dialog?.dismiss()
-                    } else {
-                        isEnabled = true
-                        text = "Continue"
+                    launcher(product.productId) { result ->
+                        activity.runOnUiThread {
+                            onResult(result)
+                            if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                                dialog?.dismiss()
+                            } else {
+                                isEnabled = true
+                                text = "Continue"
+                            }
+                        }
                     }
                 }
             }

@@ -1,12 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AndroidLayouts">
+    <shared>
+      <config />
+    </shared>
+  </component>
   <component name="AutoImportSettings">
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="103c2e10-a110-46f4-a3a7-93103cc3809e" name="Changes" comment="">
+    <list default="true" id="103c2e10-a110-46f4-a3a7-93103cc3809e" name="Changes" comment="Add Firebase messaging service">
+      <change beforePath="$PROJECT_DIR$/.idea/gradle.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/gradle.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/local.properties" beforeDir="false" afterPath="$PROJECT_DIR$/local.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AdManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AdManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AppOpenManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AppOpenManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/InterstitialManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/InterstitialManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedInterstitialManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedInterstitialManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/PurchaseDialog.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/PurchaseDialog.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/SubscriptionManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/SubscriptionManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/AppRuntimeManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/AppRuntimeManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/values/strings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/values/strings.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -16,7 +33,7 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[LocalEmulator::path=C:\Users\IT WING TECHNOLOGIES\.android\avd\Pixel_8.avd]" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[PhysicalDevice::serial=4b1936f0]" />
   <component name="ExternalProjectsData">
     <projectState path="$PROJECT_DIR$">
       <ProjectState />
@@ -25,10 +42,22 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="GradleScriptDefinitionsStorage" workingDir="$PROJECT_DIR$" gradleHome="C:\Users\IT WING TECHNOLOGIES\.gradle\wrapper\dists\gradle-9.5.1-bin\iq79hdu3mqx29lgffhp8bfmx\gradle-9.5.1" javaHome="C:\Program Files\Android\Android Studio\jbr" gradleVersion="9.5.1" />
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 4
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "shahzamansurani"
+  }
 }]]></component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/shahzamansurani/ITWingSDK.git",
+    "accountId": "e445bc73-9c56-4846-951c-bc93aa8e20b2"
+  }
+}]]></component>
+  <component name="GradleScriptDefinitionsStorage" workingDir="$PROJECT_DIR$" gradleHome="C:\Users\IT WING TECHNOLOGIES\.gradle\wrapper\dists\gradle-9.5.1-bin\iq79hdu3mqx29lgffhp8bfmx\gradle-9.5.1" javaHome="C:\Program Files\Android\Android Studio\jbr" gradleVersion="9.5.1" />
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 4
+}</component>
   <component name="ProjectId" id="3Ex55FnxncTnOFcg6iSxiOMSN5I" />
   <component name="ProjectViewState">
     <option name="showLibraryContents" value="true" />
@@ -36,6 +65,7 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "Android App.app.executor": "Run",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
@@ -49,6 +79,7 @@
     "git-widget-placeholder": "master",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "D:/ITWingAdsPlatform/android-sdk",
+    "settings.editor.selected.configurable": "org.jetbrains.plugins.github.ui.GithubSettingsConfigurable",
     "show.migrate.to.gradle.popup": "false"
   }
 }]]></component>
@@ -134,6 +165,35 @@
       <option name="presentableId" value="Default" />
       <updated>1781107194639</updated>
     </task>
+    <task id="LOCAL-00001" summary="Add Firebase messaging service">
+      <option name="closed" value="true" />
+      <created>1781108600487</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1781108600487</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Add Firebase messaging service" />
+    <option name="LAST_COMMIT_MESSAGE" value="Add Firebase messaging service" />
+  </component>
+  <component name="play_dynamic_filters_status">
+    <option name="appIdToCheckInfo">
+      <map>
+        <entry key="com.itwingtech.itwingsdk.example">
+          <value>
+            <CheckInfo lastCheckTimestamp="1781108484642" />
+          </value>
+        </entry>
+        <entry key="com.itwingtech.itwingsdk.example.test">
+          <value>
+            <CheckInfo lastCheckTimestamp="1781108484665" />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
 </project>

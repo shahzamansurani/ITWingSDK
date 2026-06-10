@@ -118,6 +118,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         ad: InterstitialAd,
         onComplete: () -> Unit,
     ) {
+        val completion = FullscreenCompletion(onComplete)
         ad.adEventCallback = object : InterstitialAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
@@ -129,7 +130,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 AdEventTracker.log("ad_dismissed", placement)
                 InlineAdSafetyGate.arm("interstitial", placement.name)
                 preload(activity, placementName)
-                   safeCallback(onComplete)
+                completion.complete()
             }
 
             override fun onAdFailedToShowFullScreenContent(
@@ -138,7 +139,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 loadedAds.remove(placementName)
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                 preload(activity, placementName)
-                safeCallback(onComplete)
+                completion.complete()
             }
 
             override fun onAdClicked() {
@@ -157,7 +158,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             }.onFailure {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
                 preload(activity, placementName)
-                safeCallback(onComplete)
+                completion.complete()
             }
         }
     }

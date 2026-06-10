@@ -6,9 +6,9 @@
     <string name="native_small_text">Native Ad Area..</string>
     <string name="native_large_text">Large Native Ad Area..</string>
     <string name="collapsable_banner_text">Collapsable Banner Ad Area..</string>
-    <string name="watch_ad">Watch Ad</string>
-    <string name="skip">Skip</string>
-    <string name="watch_video_ad_to_proceed">Please Watch AD to download this certificate, Now Watch Video for 1 Credit.</string>
+    <string name="watch_ad">Watch ad</string>
+    <string name="skip">No thanks</string>
+    <string name="watch_video_ad_to_proceed">Watch a rewarded ad to continue and earn this reward.</string>
     <string name="loading_ad">Loading Ad...</string>
     <string name="confim_delete_action">Title</string>
     <string name="description">Desctiption</string>

@@ -25,6 +25,7 @@ import com.itwingtech.itwingsdk.core.CustomAdConfig
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.databinding.CustomInterstitialBinding
 import com.itwingtech.itwingsdk.utils.SDKMediaView
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal class CustomFullscreenAdRenderer {
     private var activeMediaView: SDKMediaView? = null
@@ -90,6 +91,9 @@ internal class CustomFullscreenAdRenderer {
 
         val ad =
             placement.customAd ?: return false
+        val completion = FullscreenCompletion(onComplete)
+        val isRewardedPlacement = placement.format.contains("rewarded", ignoreCase = true)
+        val rewardEarned = AtomicBoolean(false)
 
         val dialog = Dialog(
             activity,
@@ -440,6 +444,10 @@ internal class CustomFullscreenAdRenderer {
             Looper.getMainLooper()
         ).postDelayed({
 
+            if (isRewardedPlacement && rewardEarned.compareAndSet(false, true)) {
+                reward?.invoke()
+            }
+
             binding.adClose.animate().alpha(1f).setDuration(250).start()
 
             binding.adClose.isEnabled =
@@ -477,7 +485,9 @@ internal class CustomFullscreenAdRenderer {
                 placement
             )
 
-            onComplete()
+            if (!isRewardedPlacement || rewardEarned.get()) {
+                completion.complete()
+            }
         }
 
         /*
