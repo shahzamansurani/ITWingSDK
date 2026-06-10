@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    tools:context=".ResultActivity">
+
+    <TextView
+        android:id="@+id/resultTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@android:color/black"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        tools:text="Callback navigation" />
+
+    <TextView
+        android:id="@+id/resultMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:textColor="#424242"
+        android:textSize="15sp"
+        tools:text="Opened after interstitial callback" />
+
+    <TextView
+        android:id="@+id/resultDiagnostics"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:textColor="#616161"
+        android:textSize="12sp"
+        tools:text="Diagnostics" />
+
+    <TextView
+        android:id="@+id/inlineSuppressionHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Inline banner/native below are intentionally suppressed when this screen opens from a fullscreen ad callback. Touch this screen to allow them again."
+        android:textColor="#424242"
+        android:textSize="13sp" />
+
+    <com.itwingtech.itwingsdk.ads.ITWingBannerView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        app:ITWingBannerPlacement="home_banner"
+        app:ITWingBannerType="adaptive" />
+
+    <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        app:ITWingNativeAdViewPlacement="native_small"
+        app:ITWingNativeAdViewType="small" />
+
+    <Button
+        android:id="@+id/backButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="Back" />
+
+</LinearLayout>
