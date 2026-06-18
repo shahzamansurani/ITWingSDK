@@ -57,7 +57,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.github.shahzamansurani"
                 artifactId = "ITWingSDK"
-                version = "v1.0"
+                version = "v1.0.1"
             }
         }
     }
