@@ -80,7 +80,7 @@ class RewardedManager(
             if (customRenderer.canRender(placement)) {
                 frequency.markShown(placement)
                 AdEventTracker.log("ad_impression", placement)
-                customRenderer.show(activity, placement, reward = {
+                val shown = customRenderer.show(activity, placement, reward = {
                     AdEventTracker.log("ad_reward_earned", placement)
                     safeCallback(onReward)
                 }, onComplete = {
@@ -89,6 +89,9 @@ class RewardedManager(
                     preload(activity, placementName)
                     safeCallback(onComplete)
                 })
+                if (!shown) {
+                    AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
+                }
                 return@show
             }
 
@@ -118,6 +121,11 @@ class RewardedManager(
     ) {
         val completion = FullscreenCompletion(onComplete)
         val rewardEarned = AtomicBoolean(false)
+        val fullscreenOwner = FullscreenAdState.tryBegin("rewarded", placement.name)
+        if (fullscreenOwner == null) {
+            AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
+            return
+        }
         ad.adEventCallback = object : RewardedAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
@@ -128,6 +136,7 @@ class RewardedManager(
                 AdEventTracker.log("ad_dismissed", placement)
                 InlineAdSafetyGate.arm("rewarded", placement.name)
                 preload(activity, placementName)
+                FullscreenAdState.end(fullscreenOwner)
                 if (rewardEarned.get()) {
                     completion.complete()
                 }
@@ -138,6 +147,7 @@ class RewardedManager(
             ) {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                 preload(activity, placementName)
+                FullscreenAdState.end(fullscreenOwner)
             }
         }
 
@@ -148,10 +158,10 @@ class RewardedManager(
                     rewardEarned.set(true)
                     safeCallback(onReward)
                 }
-                preload(activity, placementName)
             }.onFailure {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
                 preload(activity, placementName)
+                FullscreenAdState.end(fullscreenOwner)
             }
         }
     }

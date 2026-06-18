@@ -91,6 +91,12 @@
             android:text="Restore Purchases" />
 
         <Button
+            android:id="@+id/checkForUpdates"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Check For In-App Updates" />
+
+        <Button
             android:id="@+id/directSubscription"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

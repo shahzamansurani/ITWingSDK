@@ -57,7 +57,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.github.shahzamansurani"
                 artifactId = "ITWingSDK"
-                version = "v1.5"
+                version = "v1.0"
             }
         }
     }
@@ -88,7 +88,7 @@ dependencies {
     api("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-messaging")
 
-    implementation("androidx.media3:media3-exoplayer:1.10.1")
-    implementation("androidx.media3:media3-ui:1.10.1")
+    api("androidx.media3:media3-exoplayer:1.10.1")
+    api("androidx.media3:media3-ui:1.10.1")
 
 }

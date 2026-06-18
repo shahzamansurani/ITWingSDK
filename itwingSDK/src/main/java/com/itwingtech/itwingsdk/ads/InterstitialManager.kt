@@ -91,12 +91,16 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         if (customRenderer.canRender(placement)) {
             frequency.markShown(placement)
             AdEventTracker.log("ad_impression", placement)
-            customRenderer.show(activity, placement, onComplete = {
+            val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
                 InlineAdSafetyGate.arm("interstitial", placement.name)
                 preload(activity, placementName)
                 safeCallback(onComplete)
             })
+            if (!shown) {
+                AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
+                safeCallback(onComplete)
+            }
             return
         }
 
@@ -119,6 +123,12 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         onComplete: () -> Unit,
     ) {
         val completion = FullscreenCompletion(onComplete)
+        val fullscreenOwner = FullscreenAdState.tryBegin("interstitial", placement.name)
+        if (fullscreenOwner == null) {
+            AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
+            completion.complete()
+            return
+        }
         ad.adEventCallback = object : InterstitialAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
@@ -130,6 +140,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 AdEventTracker.log("ad_dismissed", placement)
                 InlineAdSafetyGate.arm("interstitial", placement.name)
                 preload(activity, placementName)
+                FullscreenAdState.end(fullscreenOwner)
                 completion.complete()
             }
 
@@ -139,6 +150,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 loadedAds.remove(placementName)
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                 preload(activity, placementName)
+                FullscreenAdState.end(fullscreenOwner)
                 completion.complete()
             }
 
@@ -154,10 +166,10 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         runOnMain {
             runCatching {
                 ad.show(activity)
-                preload(activity, placementName)
             }.onFailure {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
                 preload(activity, placementName)
+                FullscreenAdState.end(fullscreenOwner)
                 completion.complete()
             }
         }

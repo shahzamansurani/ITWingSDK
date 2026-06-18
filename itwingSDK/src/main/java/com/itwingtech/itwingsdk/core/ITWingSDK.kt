@@ -600,6 +600,24 @@ object ITWingSDK {
         subscriptions.launchPurchase(activity, productId)
 
     @JvmStatic
+    fun launchSubscriptionPurchase(
+        activity: Activity,
+        productId: String,
+        onResult: ((com.android.billingclient.api.BillingResult) -> Unit)?,
+    ) {
+        if (::subscriptions.isInitialized) {
+            subscriptions.launchPurchaseWhenReady(activity, productId) { result -> onResult?.invoke(result) }
+        } else {
+            onResult?.invoke(
+                com.android.billingclient.api.BillingResult.newBuilder()
+                    .setResponseCode(com.android.billingclient.api.BillingClient.BillingResponseCode.SERVICE_DISCONNECTED)
+                    .setDebugMessage("Billing is not initialized yet.")
+                    .build()
+            )
+        }
+    }
+
+    @JvmStatic
     fun showPurchaseDialog(activity: Activity, onResult: ((com.android.billingclient.api.BillingResult) -> Unit)? = null) {
         if (::subscriptions.isInitialized) {
             subscriptions.showPurchaseDialog(activity) { result -> onResult?.invoke(result) }
@@ -610,6 +628,14 @@ object ITWingSDK {
                     .setDebugMessage("Billing is not initialized yet.")
                     .build()
             )
+        }
+    }
+
+    @JvmStatic
+    @JvmOverloads
+    fun checkForUpdates(activity: Activity, force: Boolean = true) {
+        if (::updates.isInitialized) {
+            updates.check(activity, force)
         }
     }
 
@@ -672,6 +698,9 @@ object ITWingSDK {
                     activeActivity = WeakReference(activity)
                     NotificationRuntimeManager.reportOpened(activity.intent?.getStringExtra("itwing_notification_id"))
                     NotificationRuntimeManager.syncNow()
+                    if (::updates.isInitialized) {
+                        updates.onResume(activity)
+                    }
 
                     /*
                      |--------------------------------------------------------------------------

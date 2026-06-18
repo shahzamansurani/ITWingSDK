@@ -1,6 +1,7 @@
 package com.itwingtech.itwingsdk.billing
 
 import android.app.Activity
+import android.graphics.Color
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClient.ProductType
 import com.android.billingclient.api.BillingClientStateListener
@@ -42,7 +43,9 @@ class SubscriptionManager(
 
     fun connect(activity: Activity, onReady: (() -> Unit)? = null) {
         if (billingClient?.isReady == true) {
-            onReady?.invoke()
+            if (onReady != null) {
+                queryProducts { onReady.invoke() }
+            }
             return
         }
         onReady?.let { readyCallbacks.add(it) }
@@ -66,7 +69,25 @@ class SubscriptionManager(
                         "purchase_count" to (purchases?.size ?: 0),
                     ),
                 )
-                purchases?.forEach { purchase -> verifyPurchase(purchase) }
+                when (result.responseCode) {
+                    BillingClient.BillingResponseCode.OK -> {
+                        purchases?.forEach { purchase -> verifyPurchase(purchase) }
+                    }
+
+                    BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> {
+                        SDKTelemetry.track("purchase_already_owned_restore_requested")
+                        restorePurchases()
+                    }
+
+                    BillingClient.BillingResponseCode.USER_CANCELED -> {
+                        lastBillingMessage = "Purchase was canceled by the user."
+                    }
+
+                    else -> {
+                        lastBillingMessage = result.debugMessage
+                        purchases?.forEach { purchase -> verifyPurchase(purchase) }
+                    }
+                }
             }
             .build()
 
@@ -107,17 +128,20 @@ class SubscriptionManager(
             )
         }
 
-        val adminProduct = configProvider().subscriptions.products.firstOrNull { it.productId == productId }
+        val requestedProductId = productId.trim()
+        val adminProduct = configProvider().subscriptions.products.firstOrNull {
+            it.productId.trim() == requestedProductId
+        }
             ?: return failedResult(
                 BillingClient.BillingResponseCode.ITEM_UNAVAILABLE,
                 "Product is not configured in ITWing admin: $productId",
             )
         val productType = adminProduct.billingProductType()
-        val details = productDetails[productKey(productId, productType)]
-            ?: productDetails[productId]
+        val details = productDetails[productKey(requestedProductId, productType)]
+            ?: productDetails[requestedProductId]
             ?: return failedResult(
                 BillingClient.BillingResponseCode.ITEM_UNAVAILABLE,
-                "Product details are not loaded from Google Play yet: $productId",
+                "Google Play did not return product details for $requestedProductId. Confirm package name, signed Play build, tester account, active product, and Play Console product ID.",
             )
 
         val offerToken = offerToken(details, adminProduct)
@@ -139,10 +163,28 @@ class SubscriptionManager(
             activity,
             BillingFlowParams.newBuilder().setProductDetailsParamsList(listOf(productParams)).build(),
         )
+        if (result.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
+            restorePurchases()
+        }
+        if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+            lastBillingMessage = billingLaunchFailureMessage(result, adminProduct, details)
+            SDKTelemetry.track(
+                "purchase_flow_failed",
+                mapOf(
+                    "product_id" to requestedProductId,
+                    "response_code" to result.responseCode,
+                    "message" to lastBillingMessage,
+                ),
+            )
+            return BillingResult.newBuilder()
+                .setResponseCode(result.responseCode)
+                .setDebugMessage(lastBillingMessage.orEmpty())
+                .build()
+        }
         SDKTelemetry.track(
             "purchase_flow_launched",
             mapOf(
-                "product_id" to productId,
+                "product_id" to requestedProductId,
                 "product_type" to if (productType == ProductType.INAPP) "inapp" else "subscription",
                 "response_code" to result.responseCode,
                 "message" to result.debugMessage,
@@ -191,18 +233,22 @@ class SubscriptionManager(
 
     fun showPurchaseDialog(activity: Activity, onResult: (BillingResult) -> Unit = {}) {
         val products = products()
-            .filter { it.store == "google_play" && it.productId.isNotBlank() }
+            .filter { it.isGooglePlayStore() && it.productId.isNotBlank() }
         SDKTelemetry.track("purchase_dialog_shown", mapOf("product_count" to products.size))
         connect(activity) {
-            PurchaseDialog.show(
-                activity = activity,
-                products = products,
-                detailsProvider = { productId, productType ->
-                    productDetails[productKey(productId, productType)] ?: productDetails[productId]
-                },
-                launcher = { productId, result -> launchPurchaseWhenReady(activity, productId, result) },
-                onResult = onResult,
-            )
+            queryProducts {
+                PurchaseDialog.show(
+                    activity = activity,
+                    products = products,
+                    primaryColor = purchasePrimaryColor(),
+                    detailsProvider = { productId, productType ->
+                        productDetails[productKey(productId, productType)] ?: productDetails[productId]
+                    },
+                    launcher = { productId, result -> launchPurchaseWhenReady(activity, productId.trim(), result) },
+                    restore = { callback -> restorePurchases(callback) },
+                    onResult = onResult,
+                )
+            }
         }
     }
 
@@ -250,9 +296,16 @@ class SubscriptionManager(
     }
 
     private fun queryProducts(onComplete: (() -> Unit)? = null) {
-        val client = billingClient ?: return
+        val client = billingClient ?: run {
+            onComplete?.invoke()
+            return
+        }
+        if (!client.isReady) {
+            onComplete?.invoke()
+            return
+        }
         val products = configProvider().subscriptions.products
-            .filter { it.store == "google_play" && it.productId.isNotBlank() }
+            .filter { it.isGooglePlayStore() && it.productId.isNotBlank() }
             .groupBy { it.billingProductType() }
 
         if (products.isEmpty()) {
@@ -274,7 +327,7 @@ class SubscriptionManager(
                 .distinctBy { productKey(it.productId, productType) }
                 .map {
                     QueryProductDetailsParams.Product.newBuilder()
-                        .setProductId(it.productId)
+                        .setProductId(it.productId.trim())
                         .setProductType(productType)
                         .build()
                 }
@@ -295,15 +348,17 @@ class SubscriptionManager(
                 } else {
                     lastBillingMessage = result.debugMessage
                 }
+                logUnfetchedProducts(detailsResult)
                 finishQuery()
             }
         }
     }
 
     private fun ensureProductDetailsLoaded(productId: String, onComplete: () -> Unit) {
-        val adminProduct = configProvider().subscriptions.products.firstOrNull { it.productId == productId }
+        val requestedProductId = productId.trim()
+        val adminProduct = configProvider().subscriptions.products.firstOrNull { it.productId.trim() == requestedProductId }
         val productType = adminProduct?.billingProductType()
-        if (productType != null && (productDetails[productKey(productId, productType)] ?: productDetails[productId]) != null) {
+        if (productType != null && (productDetails[productKey(requestedProductId, productType)] ?: productDetails[requestedProductId]) != null) {
             onComplete()
             return
         }
@@ -320,7 +375,7 @@ class SubscriptionManager(
             )
             return
         }
-        val adminProduct = configProvider().subscriptions.products.firstOrNull { it.productId == productId }
+        val adminProduct = configProvider().subscriptions.products.firstOrNull { it.productId.trim() == productId.trim() }
         val productType = adminProduct?.billingProductType() ?: ProductType.SUBS
         val signatureVerified = GooglePlaySignatureValidator.verify(
             googlePlayLicenseKey(),
@@ -338,14 +393,14 @@ class SubscriptionManager(
         scope.launch(Dispatchers.IO) {
             val result = runCatching {
                 repositoryProvider()?.verifySubscriptionPurchase(
-                productId = productId,
-                purchaseToken = purchase.purchaseToken,
-                productType = if (productType == ProductType.INAPP) "inapp" else "subscription",
-                basePlanId = adminProduct?.basePlanId,
-                offerId = adminProduct?.offerId,
-                orderId = purchase.orderId,
-                purchaseSignature = purchase.signature,
-                purchaseOriginalJson = purchase.originalJson,
+                    productId = productId,
+                    purchaseToken = purchase.purchaseToken,
+                    productType = if (productType == ProductType.INAPP) "inapp" else "subscription",
+                    basePlanId = adminProduct?.basePlanId,
+                    offerId = adminProduct?.offerId,
+                    orderId = purchase.orderId,
+                    purchaseSignature = purchase.signature,
+                    purchaseOriginalJson = purchase.originalJson,
                 )
             }
             result.onSuccess {
@@ -418,14 +473,19 @@ class SubscriptionManager(
         }
 
         val offers = details.subscriptionOfferDetails ?: return null
-        if (adminProduct?.basePlanId.isNullOrBlank() && adminProduct?.offerId.isNullOrBlank()) {
+        val desiredBasePlanId = adminProduct?.basePlanId?.trim().takeUnless { it.isNullOrBlank() }
+        val desiredOfferId = adminProduct?.offerId?.trim().takeUnless { it.isNullOrBlank() }
+
+        if (desiredBasePlanId == null && desiredOfferId == null) {
             return offers.firstOrNull()?.offerToken
         }
 
         return offers.firstOrNull { offer ->
-            (adminProduct?.basePlanId.isNullOrBlank() || offer.basePlanId == adminProduct?.basePlanId)
-                && (adminProduct?.offerId.isNullOrBlank() || offer.offerId == adminProduct?.offerId)
-        }?.offerToken
+            (desiredBasePlanId == null || offer.basePlanId.equals(desiredBasePlanId, ignoreCase = true))
+                && (desiredOfferId == null || offer.offerId.equals(desiredOfferId, ignoreCase = true))
+        }?.offerToken ?: offers.firstOrNull { offer ->
+            desiredBasePlanId != null && offer.basePlanId.equals(desiredBasePlanId, ignoreCase = true)
+        }?.offerToken ?: offers.firstOrNull()?.offerToken
     }
 
     private fun queryPurchases(client: BillingClient, productType: String, onComplete: (List<Purchase>) -> Unit) {
@@ -458,10 +518,17 @@ class SubscriptionManager(
 
     private fun productKey(productId: String, productType: String): String = "$productType:$productId"
 
+    private fun SubscriptionProductConfig.isGooglePlayStore(): Boolean {
+        return when (store.trim().lowercase()) {
+            "google_play", "google-play", "google play", "play", "play_store", "google" -> true
+            else -> false
+        }
+    }
+
     private fun SubscriptionProductConfig.billingProductType(): String {
         val configured = productType.ifBlank {
             metadata["product_type"]?.toString().orEmpty()
-        }.lowercase()
+        }.trim().lowercase()
 
         return when (configured) {
             "inapp", "in_app", "one_time", "one-time", "one_time_product", "iap", "consumable", "non_consumable" -> ProductType.INAPP
@@ -500,6 +567,50 @@ class SubscriptionManager(
         }.getOrNull()
     }
 
+    private fun billingLaunchFailureMessage(
+        result: BillingResult,
+        adminProduct: SubscriptionProductConfig,
+        details: ProductDetails,
+    ): String {
+        val offers = details.subscriptionOfferDetails.orEmpty()
+        val availableBasePlans = offers.mapNotNull { it.basePlanId.takeIf(String::isNotBlank) }.distinct()
+        val availableOffers = offers.mapNotNull { it.offerId?.takeIf(String::isNotBlank) }.distinct()
+        val googleMessage = result.debugMessage.takeIf { it.isNotBlank() }
+        return googleMessage ?: buildString {
+            append("Google Play Billing could not launch purchase for ")
+            append(adminProduct.productId.trim())
+            append(". Response code ")
+            append(result.responseCode)
+            append(". Admin base plan: ")
+            append(adminProduct.basePlanId ?: "-")
+            append(", offer: ")
+            append(adminProduct.offerId ?: "-")
+            append(". Play base plans returned: ")
+            append(availableBasePlans.joinToString().ifBlank { "-" })
+            append(". Play offers returned: ")
+            append(availableOffers.joinToString().ifBlank { "-" })
+            append(". Confirm app is installed from Play/internal testing with the same package and signing key.")
+        }
+    }
+
+    private fun logUnfetchedProducts(detailsResult: Any) {
+        runCatching {
+            val method = detailsResult.javaClass.methods.firstOrNull { it.name == "getUnfetchedProductList" }
+                ?: return
+            val unfetched = method.invoke(detailsResult) as? Iterable<*> ?: return
+            val messages = unfetched.mapNotNull { item ->
+                val productId = item?.javaClass?.methods?.firstOrNull { it.name == "getProductId" }?.invoke(item) as? String
+                val statusCode = item?.javaClass?.methods?.firstOrNull { it.name == "getStatusCode" }?.invoke(item)
+                val debugMessage = item?.javaClass?.methods?.firstOrNull { it.name == "getDebugMessage" }?.invoke(item) as? String
+                productId?.let { "$it: $statusCode ${debugMessage.orEmpty()}".trim() }
+            }
+            if (messages.isNotEmpty()) {
+                lastBillingMessage = "Unfetched Google Play products: ${messages.joinToString("; ")}"
+                SDKTelemetry.track("billing_products_unfetched", mapOf("message" to lastBillingMessage.orEmpty()))
+            }
+        }
+    }
+
     private fun googlePlayLicenseKey(): String? {
         val app = configProvider().app
         return listOf(
@@ -509,6 +620,18 @@ class SubscriptionManager(
         ).firstNotNullOfOrNull { value ->
             value?.toString()?.replace("\\s".toRegex(), "")?.takeIf { it.isNotBlank() }
         }
+    }
+
+    private fun purchasePrimaryColor(): Int {
+        val app = configProvider().app
+        val colors = app["colors"] as? Map<*, *>
+        val colorValue = listOf(
+            colors?.get("primary"),
+            colors?.get("primary_color"),
+            app["primary_color"],
+            app["primaryColor"],
+        ).firstNotNullOfOrNull { it?.toString()?.takeIf(String::isNotBlank) }
+        return runCatching { Color.parseColor(colorValue ?: "#2563EB") }.getOrDefault(Color.rgb(37, 99, 235))
     }
 
     private fun drainReadyCallbacks() {
