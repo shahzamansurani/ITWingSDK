@@ -103,7 +103,7 @@ class SubscriptionManager(
                 } else {
                     lastBillingMessage = result.debugMessage
                     SDKTelemetry.track("billing_setup_failed", mapOf("message" to result.debugMessage))
-                    readyCallbacks.clear()
+                    drainReadyCallbacks()
                 }
             }
 
@@ -235,8 +235,39 @@ class SubscriptionManager(
         val products = products()
             .filter { it.isGooglePlayStore() && it.productId.isNotBlank() }
         SDKTelemetry.track("purchase_dialog_shown", mapOf("product_count" to products.size))
-        connect(activity) {
-            queryProducts {
+
+        if (activity.isFinishing || activity.isDestroyed) {
+            onResult(
+                failedResult(
+                    BillingClient.BillingResponseCode.ERROR,
+                    "Activity is not available.",
+                ),
+            )
+            return
+        }
+
+        if (products.isEmpty()) {
+            onResult(
+                failedResult(
+                    BillingClient.BillingResponseCode.ITEM_UNAVAILABLE,
+                    "No enabled Google Play subscription or in-app products are configured in ITWing admin.",
+                ),
+            )
+            return
+        }
+
+        mainHandler.post {
+            if (activity.isFinishing || activity.isDestroyed) {
+                onResult(
+                    failedResult(
+                        BillingClient.BillingResponseCode.ERROR,
+                        "Activity is not available.",
+                    ),
+                )
+                return@post
+            }
+
+            runCatching {
                 PurchaseDialog.show(
                     activity = activity,
                     products = products,
@@ -248,7 +279,19 @@ class SubscriptionManager(
                     restore = { callback -> restorePurchases(callback) },
                     onResult = onResult,
                 )
+            }.onFailure { error ->
+                onResult(
+                    failedResult(
+                        BillingClient.BillingResponseCode.ERROR,
+                        error.message ?: "Could not open purchase options.",
+                    ),
+                )
             }
+        }
+
+        connect(activity) {
+            queryProducts()
+            restorePurchases()
         }
     }
 
