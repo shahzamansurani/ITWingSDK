@@ -257,9 +257,7 @@ class SDKMediaView @JvmOverloads constructor(
     */
 
     fun onHostResume() {
-
         runCatching {
-
             player?.play()
         }
     }
@@ -271,9 +269,7 @@ class SDKMediaView @JvmOverloads constructor(
     */
 
     fun restorePlayer() {
-
         runCatching {
-
             playerView.player = null
 
             playerView.player = player
