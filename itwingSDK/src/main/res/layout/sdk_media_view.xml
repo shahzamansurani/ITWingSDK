@@ -21,9 +21,7 @@
     <androidx.media3.ui.PlayerView
         android:id="@+id/sdk_video"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:resize_mode="fit"
-        app:use_controller="false" />
+        android:layout_height="match_parent" />
 
     <ImageView
         android:id="@+id/sdk_mute"
