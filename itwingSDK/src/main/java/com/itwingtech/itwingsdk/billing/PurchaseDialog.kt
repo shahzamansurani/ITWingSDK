@@ -41,6 +41,7 @@ internal object PurchaseDialog {
         val list = content.findViewById<LinearLayout>(R.id.itwing_purchase_products)
         val title = content.findViewById<TextView>(R.id.itwing_purchase_title)
         val subtitle = content.findViewById<TextView>(R.id.itwing_purchase_subtitle)
+        val status = content.findViewById<TextView>(R.id.itwing_purchase_status)
         val restoreButton = content.findViewById<MaterialButton>(R.id.itwing_purchase_restore)
         val cancelButton = content.findViewById<MaterialButton>(R.id.itwing_purchase_cancel)
 
@@ -90,14 +91,21 @@ internal object PurchaseDialog {
                     }
                     isEnabled = false
                     text = "Opening Google Play..."
+                    status.visibility = View.VISIBLE
+                    status.text = "Connecting to Google Play Billing for ${product.productId.trim()}..."
                     launcher(product.productId.trim()) { result ->
                         activity.runOnUiThread {
                             onResult(result)
                             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                                status.text = "Google Play checkout opened."
                                 dialog?.dismiss()
                             } else {
                                 isEnabled = true
                                 text = "Continue"
+                                status.visibility = View.VISIBLE
+                                status.text = result.debugMessage
+                                    .takeIf { it.isNotBlank() }
+                                    ?: "Google Play Billing could not open this purchase. Confirm the app is installed from Play/internal testing and the product is active for this package."
                             }
                         }
                     }
