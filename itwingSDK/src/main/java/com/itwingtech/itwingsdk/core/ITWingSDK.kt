@@ -596,8 +596,20 @@ object ITWingSDK {
     }
 
     @JvmStatic
-    fun launchSubscriptionPurchase(activity: Activity, productId: String) =
-        subscriptions.launchPurchase(activity, productId)
+    fun launchSubscriptionPurchase(activity: Activity, productId: String): com.android.billingclient.api.BillingResult {
+        if (::subscriptions.isInitialized) {
+            subscriptions.launchPurchaseWhenReady(activity, productId) { }
+            return com.android.billingclient.api.BillingResult.newBuilder()
+                .setResponseCode(com.android.billingclient.api.BillingClient.BillingResponseCode.OK)
+                .setDebugMessage("Purchase flow requested. Google Play Billing will open when ready.")
+                .build()
+        }
+
+        return com.android.billingclient.api.BillingResult.newBuilder()
+            .setResponseCode(com.android.billingclient.api.BillingClient.BillingResponseCode.SERVICE_DISCONNECTED)
+            .setDebugMessage("Billing is not initialized yet.")
+            .build()
+    }
 
     @JvmStatic
     fun launchSubscriptionPurchase(

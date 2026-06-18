@@ -232,8 +232,7 @@ class SubscriptionManager(
     fun products(): List<SubscriptionProductConfig> = configProvider().subscriptions.products
 
     fun showPurchaseDialog(activity: Activity, onResult: (BillingResult) -> Unit = {}) {
-        val products = products()
-            .filter { it.isGooglePlayStore() && it.productId.isNotBlank() }
+        val products = products().filter { it.isGooglePlayStore() && it.productId.isNotBlank() }
         SDKTelemetry.track("purchase_dialog_shown", mapOf("product_count" to products.size))
 
         if (activity.isFinishing || activity.isDestroyed) {
@@ -562,6 +561,10 @@ class SubscriptionManager(
     private fun productKey(productId: String, productType: String): String = "$productType:$productId"
 
     private fun SubscriptionProductConfig.isGooglePlayStore(): Boolean {
+        val normalizedStore = store.trim().lowercase()
+        if (normalizedStore.isBlank()) {
+            return true
+        }
         return when (store.trim().lowercase()) {
             "google_play", "google-play", "google play", "play", "play_store", "google" -> true
             else -> false
