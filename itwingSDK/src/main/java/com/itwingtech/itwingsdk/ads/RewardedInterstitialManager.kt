@@ -80,7 +80,7 @@ class RewardedInterstitialManager(
             }) {
                 frequency.markShown(placement)
                 AdEventTracker.log("ad_impression", placement)
-                customRenderer.show(activity, placement, reward = {
+                val shown = customRenderer.show(activity, placement, reward = {
                     AdEventTracker.log("ad_reward_earned", placement)
                     safeCallback(onReward)
                 }, onComplete = {
@@ -89,6 +89,9 @@ class RewardedInterstitialManager(
                     preload(activity, placementName)
                     safeCallback(onComplete)
                 })
+                if (!shown) {
+                    AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
+                }
             }
             return
         }
@@ -122,6 +125,11 @@ class RewardedInterstitialManager(
     ) {
         val completion = FullscreenCompletion(onComplete)
         val rewardEarned = AtomicBoolean(false)
+        val fullscreenOwner = FullscreenAdState.tryBegin("rewarded_interstitial", placement.name)
+        if (fullscreenOwner == null) {
+            AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
+            return
+        }
         ad.adEventCallback = object : RewardedInterstitialAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
@@ -132,6 +140,7 @@ class RewardedInterstitialManager(
                 AdEventTracker.log("ad_dismissed", placement)
                 InlineAdSafetyGate.arm("rewarded_interstitial", placement.name)
                 preload(activity, placementName)
+                FullscreenAdState.end(fullscreenOwner)
                 if (rewardEarned.get()) {
                     completion.complete()
                 }
@@ -142,6 +151,7 @@ class RewardedInterstitialManager(
             ) {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                 preload(activity, placementName)
+                FullscreenAdState.end(fullscreenOwner)
             }
         }
 
@@ -152,10 +162,10 @@ class RewardedInterstitialManager(
                     rewardEarned.set(true)
                     safeCallback(onReward)
                 }
-                preload(activity, placementName)
             }.onFailure {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
                 preload(activity, placementName)
+                FullscreenAdState.end(fullscreenOwner)
             }
         }
     }

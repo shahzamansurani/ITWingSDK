@@ -94,6 +94,8 @@ internal class CustomFullscreenAdRenderer {
         val completion = FullscreenCompletion(onComplete)
         val isRewardedPlacement = placement.format.contains("rewarded", ignoreCase = true)
         val rewardEarned = AtomicBoolean(false)
+        val fullscreenOwner = FullscreenAdState.tryBegin("custom_${placement.format}", placement.name)
+            ?: return false
 
         val dialog = Dialog(
             activity,
@@ -475,6 +477,7 @@ internal class CustomFullscreenAdRenderer {
         dialog.setOnDismissListener {
 
             destroy(binding.adMedia)
+            FullscreenAdState.end(fullscreenOwner)
 
             runCatching {
                 activity.application.unregisterActivityLifecycleCallbacks(lifecycleCallbacks)

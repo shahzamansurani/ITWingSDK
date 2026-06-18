@@ -22,7 +22,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-
         requestNotificationPermissionIfNeeded()
         bindSdkExamples()
         renderSdkState()
@@ -52,7 +51,7 @@ class MainActivity : AppCompatActivity() {
         binding.showPurchaseDialog.setOnClickListener {
             ITWingSDK.showPurchaseDialog(this) { result ->
                 renderSdkState()
-                toast("Purchase result: ${result.responseCode}")
+                toast("Purchase result: ${result.responseCode} ${result.debugMessage}")
             }
         }
 
@@ -61,6 +60,11 @@ class MainActivity : AppCompatActivity() {
                 renderSdkState()
                 toast("Restored. Ad free: $adFree")
             }
+        }
+
+        binding.checkForUpdates.setOnClickListener {
+            ITWingSDK.checkForUpdates(this, force = true)
+            toast("Update check requested")
         }
 
         binding.directSubscription.setOnClickListener {

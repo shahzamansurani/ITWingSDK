@@ -12,6 +12,7 @@ import com.google.android.libraries.ads.mobile.sdk.common.AdLoadCallback
 import com.google.android.libraries.ads.mobile.sdk.common.AdRequest
 import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
 import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
+import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.utils.runOnMain
 import com.itwingtech.itwingsdk.utils.safeCallback
@@ -43,6 +44,18 @@ class AppOpenManager(
                         override fun onStart(owner: LifecycleOwner) {
                             runCatching {
                                 val currentActivity = foregroundActivity ?: return
+                                if (FullscreenAdState.isActive()) {
+                                    SDKTelemetry.track(
+                                        "ad_suppressed",
+                                        mapOf(
+                                            "format" to "app_open",
+                                            "placement" to "automatic",
+                                            "reason" to "fullscreen_ad_active",
+                                            "active_owner" to (FullscreenAdState.activeOwner() ?: "unknown"),
+                                        ),
+                                    )
+                                    return
+                                }
                                 val placement = automaticPlacementName() ?: return
                                 show(currentActivity, placement, waitForLoad = false)
                             }
@@ -124,6 +137,12 @@ class AppOpenManager(
             return
         }
 
+        if (FullscreenAdState.isActive()) {
+            AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
+            safeCallback(onComplete)
+            return
+        }
+
         AdEventTracker.log("ad_requested", placement)
         if (customRenderer.canRender(placement)) {
             frequency.markShown(placement)
@@ -184,6 +203,12 @@ class AppOpenManager(
         onComplete: () -> Unit,
     ) {
         val completion = FullscreenCompletion(onComplete)
+        val fullscreenOwner = FullscreenAdState.tryBegin("app_open", placement.name)
+        if (fullscreenOwner == null) {
+            AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
+            completion.complete()
+            return
+        }
         appOpenAd = null
         loadedPlacement = null
         ad.adEventCallback =
@@ -197,12 +222,14 @@ class AppOpenManager(
                     AdEventTracker.log("ad_dismissed", placement)
                     InlineAdSafetyGate.arm("app_open", placement.name)
                     preload(activity, placementName)
+                    FullscreenAdState.end(fullscreenOwner)
                     completion.complete()
                 }
 
                 override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
                     AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                     preload(activity, placementName)
+                    FullscreenAdState.end(fullscreenOwner)
                     completion.complete()
                 }
             }
@@ -213,6 +240,7 @@ class AppOpenManager(
             }.onFailure {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
                 preload(activity, placementName)
+                FullscreenAdState.end(fullscreenOwner)
                 completion.complete()
             }
         }

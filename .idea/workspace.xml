@@ -4,26 +4,30 @@
     <shared>
       <config />
     </shared>
+    <layouts>
+      <layout url="file://$PROJECT_DIR$/itwingSDK/src/main/res/layout/dialog_purchase.xml">
+        <config>
+          <theme>@android:style/Theme.Material.Light</theme>
+        </config>
+      </layout>
+      <layout url="file://$PROJECT_DIR$/itwingSDK/src/main/res/layout/item_purchase_product.xml">
+        <config>
+          <theme>@android:style/Theme.Material.Light</theme>
+        </config>
+      </layout>
+    </layouts>
   </component>
   <component name="AutoImportSettings">
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="103c2e10-a110-46f4-a3a7-93103cc3809e" name="Changes" comment="Add Firebase messaging service">
+    <list default="true" id="428cc25e-4128-4c05-8ced-81690820a79c" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/caches/deviceStreaming.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/caches/deviceStreaming.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/gradle.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/gradle.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AdManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AdManager.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AppOpenManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AppOpenManager.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/InterstitialManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/InterstitialManager.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedInterstitialManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedInterstitialManager.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedManager.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/PurchaseDialog.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/PurchaseDialog.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/SubscriptionManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/SubscriptionManager.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/AppRuntimeManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/AppRuntimeManager.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/values/strings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/values/strings.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/local.properties" beforeDir="false" afterPath="$PROJECT_DIR$/local.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -55,16 +59,15 @@
   }
 }]]></component>
   <component name="GradleScriptDefinitionsStorage" workingDir="$PROJECT_DIR$" gradleHome="C:\Users\IT WING TECHNOLOGIES\.gradle\wrapper\dists\gradle-9.5.1-bin\iq79hdu3mqx29lgffhp8bfmx\gradle-9.5.1" javaHome="C:\Program Files\Android\Android Studio\jbr" gradleVersion="9.5.1" />
-  <component name="ProjectColorInfo">{
-  &quot;associatedIndex&quot;: 4
-}</component>
-  <component name="ProjectId" id="3Ex55FnxncTnOFcg6iSxiOMSN5I" />
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 4
+}]]></component>
+  <component name="ProjectId" id="3FGv7Qyovjv9nlnyuBxHiF6vIyu" />
   <component name="ProjectViewState">
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
-    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "Android App.app.executor": "Run",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
@@ -79,7 +82,6 @@
     "git-widget-placeholder": "master",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "D:/ITWingAdsPlatform/android-sdk",
-    "settings.editor.selected.configurable": "org.jetbrains.plugins.github.ui.GithubSettingsConfigurable",
     "show.migrate.to.gradle.popup": "false"
   }
 }]]></component>
@@ -159,38 +161,20 @@
   </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
-      <changelist id="103c2e10-a110-46f4-a3a7-93103cc3809e" name="Changes" comment="" />
-      <created>1781107194639</created>
+      <changelist id="428cc25e-4128-4c05-8ced-81690820a79c" name="Changes" comment="" />
+      <created>1781714052482</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
-      <updated>1781107194639</updated>
+      <updated>1781714052482</updated>
     </task>
-    <task id="LOCAL-00001" summary="Add Firebase messaging service">
-      <option name="closed" value="true" />
-      <created>1781108600487</created>
-      <option name="number" value="00001" />
-      <option name="presentableId" value="LOCAL-00001" />
-      <option name="project" value="LOCAL" />
-      <updated>1781108600487</updated>
-    </task>
-    <option name="localTasksCounter" value="2" />
     <servers />
-  </component>
-  <component name="VcsManagerConfiguration">
-    <MESSAGE value="Add Firebase messaging service" />
-    <option name="LAST_COMMIT_MESSAGE" value="Add Firebase messaging service" />
   </component>
   <component name="play_dynamic_filters_status">
     <option name="appIdToCheckInfo">
       <map>
-        <entry key="com.itwingtech.itwingsdk.example">
+        <entry key="com.itwingtech.itwingsdk.test">
           <value>
-            <CheckInfo lastCheckTimestamp="1781108484642" />
-          </value>
-        </entry>
-        <entry key="com.itwingtech.itwingsdk.example.test">
-          <value>
-            <CheckInfo lastCheckTimestamp="1781108484665" />
+            <CheckInfo lastCheckTimestamp="1781788577061" />
           </value>
         </entry>
       </map>
