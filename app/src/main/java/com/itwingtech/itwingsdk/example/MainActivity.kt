@@ -48,19 +48,14 @@ class MainActivity : AppCompatActivity() {
             toast("Event tracked")
         }
 
-        binding.showPurchaseDialog.setOnClickListener {
-            ITWingSDK.showPurchaseDialog(this) { result ->
-                renderSdkState()
-                toast("Purchase result: ${result.responseCode} ${result.debugMessage}")
-            }
-        }
-
-        binding.restorePurchases.setOnClickListener {
-            ITWingSDK.restorePurchases { adFree ->
-                renderSdkState()
-                toast("Restored. Ad free: $adFree")
-            }
-        }
+        ITWingSDK.bindSubscriptionControls(
+            activity = this,
+            statusView = binding.notificationText,
+            subscribeButton = binding.showPurchaseDialog,
+            restoreButton = binding.restorePurchases,
+            activeText = "Premium active",
+            inactiveText = "Premium inactive",
+        )
 
         binding.checkForUpdates.setOnClickListener {
             ITWingSDK.checkForUpdates(this, force = true)

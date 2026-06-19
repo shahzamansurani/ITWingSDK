@@ -4,6 +4,11 @@ import android.app.Activity
 import android.app.Application
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
+import android.widget.TextView
+import android.widget.Toast
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import com.google.android.libraries.ads.mobile.sdk.MobileAds
 import com.google.android.libraries.ads.mobile.sdk.initialization.InitializationConfig
 import com.itwingtech.itwingsdk.ads.AdManager
@@ -25,6 +30,8 @@ import java.lang.ref.WeakReference
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import androidx.core.net.toUri
+import com.android.billingclient.api.BillingClient
+import com.android.billingclient.api.BillingResult
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 
@@ -640,6 +647,89 @@ object ITWingSDK {
                     .setDebugMessage("Billing is not initialized yet.")
                     .build()
             )
+        }
+    }
+
+    @JvmStatic
+    @JvmOverloads
+    fun bindSubscriptionControls(
+        activity: Activity,
+        statusView: TextView? = null,
+        subscribeButton: View? = null,
+        restoreButton: View? = null,
+        activeText: String = "Premium active",
+        inactiveText: String = "Premium inactive",
+    ) {
+        val updateUi = {
+            val active = isAdFree()
+            statusView?.text = if (active) activeText else inactiveText
+            subscribeButton?.isEnabled = !active
+            restoreButton?.isEnabled = true
+        }
+
+        fun showToast(message: String, long: Boolean = false) {
+            if (!activity.isFinishing && !activity.isDestroyed) {
+                Toast.makeText(
+                    activity,
+                    message,
+                    if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+
+        fun messageFor(result: BillingResult): String {
+            return when (result.responseCode) {
+                BillingClient.BillingResponseCode.OK -> {
+                    if (isAdFree()) "Purchase active" else "Purchase is pending. It will activate after Google Play confirms it."
+                }
+                BillingClient.BillingResponseCode.USER_CANCELED -> "Purchase cancelled"
+                BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> activeText
+                BillingClient.BillingResponseCode.ITEM_UNAVAILABLE,
+                BillingClient.BillingResponseCode.BILLING_UNAVAILABLE -> "Purchase is unavailable right now"
+                BillingClient.BillingResponseCode.SERVICE_DISCONNECTED,
+                BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE -> "Google Play Billing is not available right now"
+                else -> result.debugMessage.takeIf { it.isNotBlank() } ?: "Purchase failed"
+            }
+        }
+
+        mainHandler.post(updateUi)
+
+        subscribeButton?.setOnClickListener {
+            if (isAdFree()) {
+                showToast(activeText)
+                mainHandler.post(updateUi)
+                return@setOnClickListener
+            }
+
+            subscribeButton.isEnabled = false
+            showPurchaseDialog(activity) { result ->
+                mainHandler.post {
+                    updateUi()
+                    showToast(messageFor(result), long = true)
+                }
+            }
+        }
+
+        restoreButton?.setOnClickListener {
+            restoreButton.isEnabled = false
+            restorePurchases { restored ->
+                mainHandler.post {
+                    updateUi()
+                    showToast(if (restored) "Purchase restored" else "No active purchase found")
+                }
+            }
+        }
+
+        if (activity is LifecycleOwner) {
+            activity.lifecycle.addObserver(object : DefaultLifecycleObserver {
+                override fun onResume(owner: LifecycleOwner) {
+                    mainHandler.post(updateUi)
+                }
+
+                override fun onDestroy(owner: LifecycleOwner) {
+                    owner.lifecycle.removeObserver(this)
+                }
+            })
         }
     }
 
