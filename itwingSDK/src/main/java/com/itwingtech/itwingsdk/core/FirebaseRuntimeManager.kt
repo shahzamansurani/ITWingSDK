@@ -6,7 +6,6 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.itwingtech.itwingsdk.data.EncryptedConfigStore
 
 internal object FirebaseRuntimeManager {
@@ -15,7 +14,7 @@ internal object FirebaseRuntimeManager {
     @Volatile
     private var analyticsInstance: FirebaseAnalytics? = null
     @Volatile
-    private var crashlyticsInstance: FirebaseCrashlytics? = null
+    private var crashlyticsInstance: Any? = null
     @Volatile
     private var authInstance: FirebaseAuth? = null
 
@@ -37,11 +36,7 @@ internal object FirebaseRuntimeManager {
         }
 
         crashlyticsInstance = if (firebaseConfig.crashlyticsEnabled) {
-            runCatching {
-                FirebaseCrashlytics.getInstance().apply {
-                    setCrashlyticsCollectionEnabled(true)
-                }
-            }.getOrNull()
+            optionalCrashlyticsInstance()
         } else {
             null
         }
@@ -87,9 +82,13 @@ internal object FirebaseRuntimeManager {
         val crashlytics = crashlyticsInstance ?: return
         runCatching {
             properties.forEach { (key, value) ->
-                crashlytics.setCustomKey(key.take(40), value?.toString()?.take(100) ?: "")
+                crashlytics.javaClass
+                    .getMethod("setCustomKey", String::class.java, String::class.java)
+                    .invoke(crashlytics, key.take(40), value?.toString()?.take(100) ?: "")
             }
-            crashlytics.recordException(throwable)
+            crashlytics.javaClass
+                .getMethod("recordException", Throwable::class.java)
+                .invoke(crashlytics, throwable)
         }
     }
 
@@ -113,5 +112,18 @@ internal object FirebaseRuntimeManager {
             .build()
 
         return runCatching { FirebaseApp.initializeApp(context, options) }.getOrNull()
+    }
+
+    private fun optionalCrashlyticsInstance(): Any? {
+        return runCatching {
+            val crashlyticsClass = Class.forName("com.google.firebase.crashlytics.FirebaseCrashlytics")
+            val crashlytics = crashlyticsClass.getMethod("getInstance").invoke(null)
+            runCatching {
+                crashlyticsClass
+                    .getMethod("setCrashlyticsCollectionEnabled", Boolean::class.javaPrimitiveType)
+                    .invoke(crashlytics, true)
+            }
+            crashlytics
+        }.getOrNull()
     }
 }

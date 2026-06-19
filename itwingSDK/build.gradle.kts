@@ -57,7 +57,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.github.shahzamansurani"
                 artifactId = "ITWingSDK"
-                version = "v1.0.8"
+                version = "v1.0.9"
             }
         }
     }
@@ -85,7 +85,6 @@ dependencies {
     implementation("com.android.installreferrer:installreferrer:2.2")
     api(platform("com.google.firebase:firebase-bom:34.14.0"))
     implementation("com.google.firebase:firebase-analytics")
-    api("com.google.firebase:firebase-crashlytics")
     api("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-messaging")
 
