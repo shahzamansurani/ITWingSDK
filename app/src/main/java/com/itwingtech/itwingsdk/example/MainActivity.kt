@@ -18,6 +18,9 @@ class MainActivity : AppCompatActivity() {
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         binding.notificationText.text = "Notification permission: ${if (granted) "granted" else "denied"}"
     }
+    private val inAppUpdateLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        toast("Update flow result: ${result.resultCode}")
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,6 +33,11 @@ class MainActivity : AppCompatActivity() {
             renderSdkState()
             Toast.makeText(this, "SDK ready", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ITWingSDK.resumeInAppUpdate(this)
     }
 
     private fun bindSdkExamples() {
@@ -58,8 +66,9 @@ class MainActivity : AppCompatActivity() {
         )
 
         binding.checkForUpdates.setOnClickListener {
-            ITWingSDK.checkForUpdates(this, force = true)
-            toast("Update check requested")
+            ITWingSDK.checkForUpdates(this, inAppUpdateLauncher, force = true) { message ->
+                toast(message)
+            }
         }
 
         binding.directSubscription.setOnClickListener {

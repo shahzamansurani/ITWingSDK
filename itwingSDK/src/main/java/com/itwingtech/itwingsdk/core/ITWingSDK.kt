@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.IntentSenderRequest
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.google.android.libraries.ads.mobile.sdk.MobileAds
@@ -738,6 +740,28 @@ object ITWingSDK {
     fun checkForUpdates(activity: Activity, force: Boolean = true) {
         if (::updates.isInitialized) {
             updates.check(activity, force)
+        }
+    }
+
+    @JvmStatic
+    @JvmOverloads
+    fun checkForUpdates(
+        activity: Activity,
+        launcher: ActivityResultLauncher<IntentSenderRequest>,
+        force: Boolean = true,
+        onResult: ((String) -> Unit)? = null,
+    ) {
+        if (::updates.isInitialized) {
+            updates.check(activity, force, launcher, onResult)
+        } else {
+            onResult?.invoke("SDK is not initialized yet.")
+        }
+    }
+
+    @JvmStatic
+    fun resumeInAppUpdate(activity: Activity) {
+        if (::updates.isInitialized) {
+            updates.onResume(activity)
         }
     }
 

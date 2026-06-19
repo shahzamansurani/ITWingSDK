@@ -1,6 +1,8 @@
 package com.itwingtech.itwingsdk.updates
 
 import android.app.Activity
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.IntentSenderRequest
 import com.google.android.play.core.appupdate.AppUpdateInfo
 import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
@@ -21,34 +23,47 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
     private var lastCheckMs: Long = 0L
     private var installStateListener: InstallStateUpdatedListener? = null
 
-    fun check(activity: Activity, force: Boolean = false) {
-        if (!activity.isUsable()) return
-        val settings = settings() ?: return
-        val enabled = settings.boolean("enabled", false)
-        if (!enabled) return
+    fun check(
+        activity: Activity,
+        force: Boolean = false,
+        launcher: ActivityResultLauncher<IntentSenderRequest>? = null,
+        onResult: ((String) -> Unit)? = null,
+    ) {
+        if (!activity.isUsable()) {
+            onResult?.invoke("Activity is not available for in-app updates.")
+            return
+        }
+
+        val settings = settings()
+        val enabled = settings?.boolean("enabled", false) ?: force
+        if (!enabled) {
+            onResult?.invoke("In-app updates are disabled in admin config.")
+            return
+        }
 
         val now = System.currentTimeMillis()
         if (!force && now - lastCheckMs < CHECK_THROTTLE_MS) {
             resumeIfNeeded(activity)
+            onResult?.invoke("In-app update check throttled; resumed any pending update.")
             return
         }
         lastCheckMs = now
         activityRef = WeakReference(activity)
 
-        val updateType = when (settings.string("type")?.lowercase()) {
-            "immediate" -> AppUpdateType.IMMEDIATE
-            else -> AppUpdateType.FLEXIBLE
+        val updateType = when (settings?.string("type")?.lowercase()) {
+            "flexible" -> AppUpdateType.FLEXIBLE
+            else -> AppUpdateType.IMMEDIATE
         }
-        val minStalenessDays = settings.int("min_staleness_days", 0)
-        val minPriority = settings.int("priority", 0)
-        val appUpdateManager = manager ?: AppUpdateManagerFactory.create(activity.applicationContext).also {
+        val minStalenessDays = settings?.int("min_staleness_days", 0) ?: 0
+        val minPriority = settings?.int("priority", 0) ?: 0
+        val appUpdateManager = manager ?: AppUpdateManagerFactory.create(activity).also {
             manager = it
         }
         registerFlexibleListener(appUpdateManager)
 
         appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
-            val staleEnough = minStalenessDays <= 0 || (info.clientVersionStalenessDays() ?: -1) >= minStalenessDays
-            val priorityEnough = minPriority <= 0 || info.updatePriority() >= minPriority
+            val staleEnough = force || minStalenessDays <= 0 || (info.clientVersionStalenessDays() ?: -1) >= minStalenessDays
+            val priorityEnough = force || minPriority <= 0 || info.updatePriority() >= minPriority
             SDKTelemetry.track(
                 "in_app_update_checked",
                 mapOf(
@@ -65,11 +80,12 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
 
             when {
                 info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS -> {
-                    startUpdateFlow(appUpdateManager, activity, info, AppUpdateType.IMMEDIATE)
+                    startUpdateFlow(appUpdateManager, activity, info, AppUpdateType.IMMEDIATE, launcher, onResult)
                 }
 
                 info.installStatus() == InstallStatus.DOWNLOADED -> {
                     completeFlexibleUpdate(appUpdateManager)
+                    onResult?.invoke("Downloaded flexible update is being completed.")
                 }
 
                 info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE && staleEnough && priorityEnough -> {
@@ -80,17 +96,33 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
                         else -> null
                     }
                     if (typeToLaunch != null) {
-                        startUpdateFlow(appUpdateManager, activity, info, typeToLaunch)
+                        startUpdateFlow(appUpdateManager, activity, info, typeToLaunch, launcher, onResult)
                     } else {
                         SDKTelemetry.track("in_app_update_not_allowed")
+                        onResult?.invoke("A Play update is available, but Play does not allow immediate or flexible update for this install.")
                     }
                 }
 
-                else -> Unit
+                info.updateAvailability() != UpdateAvailability.UPDATE_AVAILABLE -> {
+                    onResult?.invoke("No Play update is available for this install.")
+                }
+
+                !staleEnough -> {
+                    onResult?.invoke("Update is available but below configured staleness threshold.")
+                }
+
+                !priorityEnough -> {
+                    onResult?.invoke("Update is available but below configured priority threshold.")
+                }
+
+                else -> {
+                    onResult?.invoke("In-app update is not available right now.")
+                }
             }
         }.addOnFailureListener {
             SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_check"))
             SDKTelemetry.track("in_app_update_check_failed", mapOf("message" to (it.message ?: "unknown")))
+            onResult?.invoke("In-app update check failed: ${it.message ?: "unknown error"}")
         }
     }
 
@@ -104,11 +136,15 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
             when {
                 info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS -> {
-                    startUpdateFlow(appUpdateManager, activity, info, AppUpdateType.IMMEDIATE)
+                    startUpdateFlow(appUpdateManager, activity, info, AppUpdateType.IMMEDIATE, null, null)
                 }
 
                 info.installStatus() == InstallStatus.DOWNLOADED -> {
                     completeFlexibleUpdate(appUpdateManager)
+                }
+
+                else -> {
+                    flowInProgress.set(false)
                 }
             }
         }
@@ -119,17 +155,53 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         activity: Activity,
         info: AppUpdateInfo,
         updateType: Int,
+        launcher: ActivityResultLauncher<IntentSenderRequest>?,
+        onResult: ((String) -> Unit)?,
     ) {
-        if (!activity.isUsable()) return
-        if (!flowInProgress.compareAndSet(false, true)) return
+        if (!activity.isUsable()) {
+            onResult?.invoke("Activity is not available for update flow.")
+            return
+        }
+        if (!flowInProgress.compareAndSet(false, true)) {
+            onResult?.invoke("An in-app update flow is already running.")
+            return
+        }
 
         SDKTelemetry.track("in_app_update_flow_starting", mapOf("type" to updateType.label()))
+        if (launcher != null) {
+            runCatching {
+                appUpdateManager.startUpdateFlowForResult(
+                    info,
+                    launcher,
+                    AppUpdateOptions.newBuilder(updateType).build(),
+                )
+            }.onSuccess { started ->
+                SDKTelemetry.track("in_app_update_flow_started", mapOf("type" to updateType.label(), "result" to started))
+                if (started) {
+                    onResult?.invoke("In-app update flow started (${updateType.label()}).")
+                } else {
+                    flowInProgress.set(false)
+                    onResult?.invoke("Google Play did not start the in-app update flow.")
+                }
+                if (updateType == AppUpdateType.FLEXIBLE) {
+                    flowInProgress.set(false)
+                }
+            }.onFailure {
+                flowInProgress.set(false)
+                SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_flow", "type" to updateType.label()))
+                SDKTelemetry.track("in_app_update_flow_failed", mapOf("type" to updateType.label(), "message" to (it.message ?: "unknown")))
+                onResult?.invoke("In-app update flow failed: ${it.message ?: "unknown error"}")
+            }
+            return
+        }
+
         appUpdateManager.startUpdateFlow(
             info,
             activity,
             AppUpdateOptions.newBuilder(updateType).build(),
         ).addOnSuccessListener {
             SDKTelemetry.track("in_app_update_flow_started", mapOf("type" to updateType.label(), "result" to it))
+            onResult?.invoke("In-app update flow started (${updateType.label()}).")
             if (updateType == AppUpdateType.FLEXIBLE) {
                 flowInProgress.set(false)
             }
@@ -137,6 +209,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
             flowInProgress.set(false)
             SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_flow", "type" to updateType.label()))
             SDKTelemetry.track("in_app_update_flow_failed", mapOf("type" to updateType.label(), "message" to (it.message ?: "unknown")))
+            onResult?.invoke("In-app update flow failed: ${it.message ?: "unknown error"}")
         }
     }
 
