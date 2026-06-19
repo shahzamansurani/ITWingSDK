@@ -1,8 +1,11 @@
 package com.itwingtech.itwingsdk.updates
 
 import android.app.Activity
+import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.Lifecycle
 import com.google.android.play.core.appupdate.AppUpdateInfo
 import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
@@ -22,6 +25,40 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
     private val flowInProgress = AtomicBoolean(false)
     private var lastCheckMs: Long = 0L
     private var installStateListener: InstallStateUpdatedListener? = null
+    private var automaticLauncher: ActivityResultLauncher<IntentSenderRequest>? = null
+    private var automaticLauncherOwner: WeakReference<ComponentActivity>? = null
+
+    fun bind(activity: Activity) {
+        val owner = activity as? ComponentActivity ?: run {
+            SDKTelemetry.track("in_app_update_auto_launcher_unavailable", mapOf("reason" to "activity_not_component"))
+            return
+        }
+        if (!owner.isUsable()) return
+        if (automaticLauncher != null && automaticLauncherOwner?.get() === owner) return
+        if (owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            SDKTelemetry.track("in_app_update_auto_launcher_unavailable", mapOf("reason" to "activity_already_started"))
+            return
+        }
+
+        runCatching {
+            owner.registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+                flowInProgress.set(false)
+                SDKTelemetry.track(
+                    "in_app_update_flow_result",
+                    mapOf("result_code" to result.resultCode),
+                )
+            }
+        }.onSuccess {
+            automaticLauncher = it
+            automaticLauncherOwner = WeakReference(owner)
+            SDKTelemetry.track("in_app_update_auto_launcher_registered")
+        }.onFailure {
+            automaticLauncher = null
+            automaticLauncherOwner = null
+            SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_auto_launcher_register"))
+            SDKTelemetry.track("in_app_update_auto_launcher_failed", mapOf("message" to (it.message ?: "unknown")))
+        }
+    }
 
     fun check(
         activity: Activity,
@@ -80,7 +117,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
 
             when {
                 info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS -> {
-                    startUpdateFlow(appUpdateManager, activity, info, AppUpdateType.IMMEDIATE, launcher, onResult)
+                    startUpdateFlow(appUpdateManager, activity, info, AppUpdateType.IMMEDIATE, launcher ?: automaticLauncher, onResult)
                 }
 
                 info.installStatus() == InstallStatus.DOWNLOADED -> {
@@ -96,7 +133,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
                         else -> null
                     }
                     if (typeToLaunch != null) {
-                        startUpdateFlow(appUpdateManager, activity, info, typeToLaunch, launcher, onResult)
+                        startUpdateFlow(appUpdateManager, activity, info, typeToLaunch, launcher ?: automaticLauncher, onResult)
                     } else {
                         SDKTelemetry.track("in_app_update_not_allowed")
                         onResult?.invoke("A Play update is available, but Play does not allow immediate or flexible update for this install.")
@@ -136,7 +173,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
             when {
                 info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS -> {
-                    startUpdateFlow(appUpdateManager, activity, info, AppUpdateType.IMMEDIATE, null, null)
+                    startUpdateFlow(appUpdateManager, activity, info, AppUpdateType.IMMEDIATE, automaticLauncher, null)
                 }
 
                 info.installStatus() == InstallStatus.DOWNLOADED -> {

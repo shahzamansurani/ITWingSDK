@@ -123,6 +123,7 @@ object ITWingSDK {
         analytics.track("session_start")
         NotificationRuntimeManager.registerFcmDevice(activity.applicationContext, repository!!)
         updates = InAppUpdateManager { config }
+        updates.bind(activity)
         subscriptions = SubscriptionManager({ config }, { repository })
         scope.launch {
             /*
