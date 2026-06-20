@@ -23,6 +23,7 @@ internal object PurchaseDialog {
         products: List<SubscriptionProductConfig>,
         primaryColor: Int,
         detailsProvider: (String, String) -> ProductDetails?,
+        ownedProductIds: Set<String>,
         launcher: (String, (BillingResult) -> Unit) -> Unit,
         restore: (((Boolean) -> Unit) -> Unit)? = null,
         onResult: (BillingResult) -> Unit,
@@ -46,7 +47,17 @@ internal object PurchaseDialog {
         val cancelButton = content.findViewById<MaterialButton>(R.id.itwing_purchase_cancel)
 
         title.text = "Choose your premium plan"
-        subtitle.text = "Secure Google Play checkout. Prices, products, and entitlements are loaded from the app's ITWing admin configuration."
+        val hasActivePurchase = products.any { it.productId.trim() in ownedProductIds }
+        subtitle.text = if (hasActivePurchase) {
+            "Your active purchase is shown below. Google Play restores it automatically on this device."
+        } else {
+            "Secure Google Play checkout. Prices, products, and entitlements are loaded from the app's ITWing admin configuration."
+        }
+        if (hasActivePurchase) {
+            status.visibility = View.VISIBLE
+            status.text = "Premium is active. Ads are disabled for products configured to remove ads."
+            status.setTextColor(primaryColor)
+        }
 
         var dialog: AlertDialog? = null
 
@@ -79,11 +90,16 @@ internal object PurchaseDialog {
                 ?: "Secure Google Play checkout. Active purchases are restored automatically."
             row.findViewById<TextView>(R.id.itwing_purchase_product_description).text = description
 
+            val isOwned = product.productId.trim() in ownedProductIds
             row.findViewById<MaterialButton>(R.id.itwing_purchase_product_button).apply {
                 backgroundTintList = ColorStateList.valueOf(primaryColor)
                 rippleColor = ColorStateList.valueOf(primaryColor.withAlpha(0x33))
                 strokeColor = ColorStateList.valueOf(primaryColor)
+                text = if (isOwned) "Active purchase" else "Continue"
+                isEnabled = !isOwned
+                alpha = if (isOwned) 0.72f else 1f
                 setOnClickListener {
+                    if (isOwned) return@setOnClickListener
                     if (activity.isFinishing || activity.isDestroyed) {
                         onResult(failedResult("Activity is not available."))
                         dialog?.dismiss()

@@ -559,13 +559,16 @@ internal class CustomFullscreenAdRenderer {
         )
 
     private fun CustomAdConfig.primaryColor(): String? =
-        metadata["ad_primary_color"]
-                as? String
+        (metadata["ad_primary_color"]
+                as? String)?.takeIf { it.isNotBlank() }
             ?: (
                     metadata["brand"]
                             as? Map<*, *>
                     )?.get("primary_color")
-                    as? String
+                    .let { it as? String }
+                    ?.takeIf { it.isNotBlank() }
+            ?: ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
+            ?: ITWingSDK.getColor("primary_color").takeIf { it.isNotBlank() }
 
     private fun CustomAdConfig.brandName(): String? =
         (

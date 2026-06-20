@@ -61,6 +61,7 @@ class RewardedManager(
     ) {
         val config = configProvider()
         if (!config.ads.globalEnabled) {
+            AdFailureDialog.show(activity, config.adPrimaryColor(), "Rewarded ads are disabled for this app.")
             return
         }
 
@@ -68,29 +69,50 @@ class RewardedManager(
             it.name == placementName && it.enabled && it.format == "rewarded"
         }
 
-        if (placement == null || !frequency.canShow(placement)) {
-            placement?.let { AdEventTracker.log("ad_frequency_capped", it) }
+        if (placement == null) {
+            AdFailureDialog.show(
+                activity,
+                config.adPrimaryColor(),
+                "The rewarded placement '$placementName' is missing or disabled.",
+            )
+            return
+        }
+
+        if (!frequency.canShow(placement)) {
+            AdEventTracker.log("ad_frequency_capped", placement)
+            AdFailureDialog.show(activity, config.adPrimaryColor(), "This ad reached its display limit. Please try again later.")
+            return
+        }
+
+        if (!customRenderer.canRender(placement) && placement.units.none { it.network.equals("admob", true) && it.adUnitId.isNotBlank() }) {
+            AdFailureDialog.show(activity, config.adPrimaryColor(), "No valid AdMob unit is configured for this rewarded placement.")
             return
         }
 
         AdEventTracker.log("ad_requested", placement)
-        RewardedIntroDialog.show(activity, placement, onSkip = {
+        RewardedIntroDialog.show(activity, placement, config.adPrimaryColor(), onSkip = {
             AdEventTracker.log("ad_opt_out", placement)
         }) {
             if (customRenderer.canRender(placement)) {
-                frequency.markShown(placement)
-                AdEventTracker.log("ad_impression", placement)
+                val customRewardEarned = AtomicBoolean(false)
                 val shown = customRenderer.show(activity, placement, reward = {
                     AdEventTracker.log("ad_reward_earned", placement)
-                    safeCallback(onReward)
+                    customRewardEarned.set(true)
                 }, onComplete = {
                     AdEventTracker.log("ad_dismissed", placement)
                     InlineAdSafetyGate.arm("rewarded", placement.name)
                     preload(activity, placementName)
-                    safeCallback(onComplete)
+                    if (customRewardEarned.get()) {
+                        safeCallback(onReward)
+                        safeCallback(onComplete)
+                    }
                 })
                 if (!shown) {
                     AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
+                    showFailure(activity, placementName, placement, "Another full-screen ad is already showing.", onReward, onComplete)
+                } else {
+                    frequency.markShown(placement)
+                    AdEventTracker.log("ad_impression", placement)
                 }
                 return@show
             }
@@ -124,6 +146,7 @@ class RewardedManager(
         val fullscreenOwner = FullscreenAdState.tryBegin("rewarded", placement.name)
         if (fullscreenOwner == null) {
             AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
+            showFailure(activity, placementName, placement, "Another full-screen ad is already showing.", onReward, onComplete)
             return
         }
         ad.adEventCallback = object : RewardedAdEventCallback {
@@ -138,6 +161,7 @@ class RewardedManager(
                 preload(activity, placementName)
                 FullscreenAdState.end(fullscreenOwner)
                 if (rewardEarned.get()) {
+                    safeCallback(onReward)
                     completion.complete()
                 }
             }
@@ -146,8 +170,8 @@ class RewardedManager(
                 fullScreenContentError: FullScreenContentError,
             ) {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
-                preload(activity, placementName)
                 FullscreenAdState.end(fullscreenOwner)
+                showFailure(activity, placementName, placement, fullScreenContentError.message, onReward, onComplete)
             }
         }
 
@@ -156,12 +180,11 @@ class RewardedManager(
                 ad.show(activity) {
                     AdEventTracker.log("ad_reward_earned", placement)
                     rewardEarned.set(true)
-                    safeCallback(onReward)
                 }
             }.onFailure {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
-                preload(activity, placementName)
                 FullscreenAdState.end(fullscreenOwner)
+                showFailure(activity, placementName, placement, it.message ?: "The rewarded ad could not be opened.", onReward, onComplete)
             }
         }
     }
@@ -170,13 +193,15 @@ class RewardedManager(
         if (preloaderKeys[placementName] == adUnitId) return
 
         preloaderKeys[placementName]?.let { RewardedAdPreloader.destroy(it) }
-        preloaderKeys[placementName] = adUnitId
-        runCatching {
+        preloaderKeys.remove(placementName)
+        val started = runCatching {
             RewardedAdPreloader.start(
                 adUnitId,
                 PreloadConfiguration(request, 1),
             )
-        }
+            true
+        }.getOrDefault(false)
+        if (started) preloaderKeys[placementName] = adUnitId
     }
 
     private fun pollPreloadedAd(placementName: String): RewardedAd? {
@@ -205,6 +230,7 @@ class RewardedManager(
                     it.name == placementName && it.enabled && it.format == "rewarded"
                 }
                 if (placement == null) {
+                    AdFailureDialog.show(activity, configProvider().adPrimaryColor(), "The rewarded placement is no longer available.")
                     return
                 } else {
                     presentAd(activity, placementName, placement, ad, onReward, onComplete)
@@ -214,6 +240,10 @@ class RewardedManager(
 
             if (System.currentTimeMillis() - startedAt >= timeoutMs) {
                 loadingDialog.dismiss()
+                val placement = configProvider().ads.placements.firstOrNull { it.name == placementName }
+                if (placement != null) {
+                    showFailure(activity, placementName, placement, "The ad did not load within ${timeoutMs / 1000} seconds. Check your connection and try again.", onReward, onComplete)
+                }
                 return
             }
 
@@ -221,5 +251,25 @@ class RewardedManager(
         }
 
         mainHandler.postDelayed({ poll() }, 150L)
+    }
+
+    private fun showFailure(
+        activity: Activity,
+        placementName: String,
+        placement: AdPlacementConfig,
+        reason: String,
+        onReward: () -> Unit,
+        onComplete: () -> Unit,
+    ) {
+        AdFailureDialog.show(activity, configProvider().adPrimaryColor(), reason) {
+            restartPreloader(activity, placementName)
+            waitForAdAndShow(activity, placementName, onReward, onComplete)
+        }
+        AdEventTracker.log("ad_retry_offered", placement, mapOf("reason" to reason))
+    }
+
+    private fun restartPreloader(activity: Activity, placementName: String) {
+        preloaderKeys.remove(placementName)?.let { RewardedAdPreloader.destroy(it) }
+        load(activity, placementName)
     }
 }

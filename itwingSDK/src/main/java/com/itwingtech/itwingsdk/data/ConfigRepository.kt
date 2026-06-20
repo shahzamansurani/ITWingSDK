@@ -60,6 +60,13 @@ class ConfigRepository(
 
     fun isAdFreeEntitled(): Boolean = store.isAdFreeEntitled()
 
+    fun ownedProductIds(): Set<String> = store.ownedProductIds()
+
+    fun savePlayOwnership(productIds: Set<String>, removesAds: Boolean) {
+        store.saveOwnedProductIds(productIds)
+        store.saveEntitlement(productIds.isNotEmpty(), removesAds, null)
+    }
+
     fun consumeFirstOpen(): Boolean = store.consumeFirstOpen()
 
     fun consumeAppUpdate(): Pair<String?, String?>? {

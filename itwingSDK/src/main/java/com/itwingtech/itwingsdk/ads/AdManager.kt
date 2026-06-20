@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import java.lang.ref.WeakReference
+import java.util.concurrent.CopyOnWriteArrayList
 
 
 class AdManager(private val configProvider: () -> ITWingConfig, private val suppressAdsProvider: () -> Boolean = { false } ) {
@@ -16,6 +17,8 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
     private val rewardedInterstitialManager by lazy { RewardedInterstitialManager(configProvider, frequencyController) }
     private val appOpenManager by lazy { AppOpenManager(configProvider, frequencyController) }
     private val nativeLoader by lazy { NativeLoader(configProvider) }
+    private val bannerContainers = CopyOnWriteArrayList<WeakReference<ViewGroup>>()
+    private val nativeContainers = CopyOnWriteArrayList<WeakReference<ViewGroup>>()
     /**
      * Interstitial
      */
@@ -45,7 +48,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         if (adsSuppressed()) {
             trackSuppressed("rewarded", placement)
             clearCache()
-            onComplete()
+            AdFailureDialog.show(activity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
             return
         }
         rewardedManager.show(activity, placement, onReward, onComplete)
@@ -55,7 +58,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         if (adsSuppressed()) {
             trackSuppressed("rewarded", placement)
             clearCache()
-            onComplete()
+            AdFailureDialog.show(activity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
             return
         }
         rewardedManager.show(activity, placement, onReward = {}, onComplete = onComplete)
@@ -68,7 +71,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         if (adsSuppressed()) {
             trackSuppressed("rewarded_interstitial", placement)
             clearCache()
-            onComplete()
+            AdFailureDialog.show(activity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
             return
         }
         rewardedInterstitialManager.show(activity, placement, onReward, onComplete)
@@ -78,7 +81,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         if (adsSuppressed()) {
             trackSuppressed("rewarded_interstitial", placement)
             clearCache()
-            onComplete()
+            AdFailureDialog.show(activity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
             return
         }
         rewardedInterstitialManager.show(activity, placement, onReward = {}, onComplete = onComplete)
@@ -122,6 +125,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
      * Banner
      */
     fun loadBanner(activity: Activity, container: ViewGroup, placement: String, bannerType: BannerType? = null) {
+        rememberContainer(bannerContainers, container)
         if (adsSuppressed()) {
             trackSuppressed("banner", placement)
             destroyBanner(container)
@@ -162,6 +166,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
      * Native
      */
     fun loadNative(activity: Activity, container: ViewGroup, placement: String, nativeType: NativeType? = null) {
+        rememberContainer(nativeContainers, container)
         if (adsSuppressed()) {
             trackSuppressed("native", placement)
             destroyNative(container)
@@ -208,6 +213,24 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         appOpenManager.clear()
     }
 
+    internal fun onEntitlementActivated() {
+        clearCache()
+        bannerContainers.forEach { reference -> reference.get()?.let(::destroyBanner) }
+        nativeContainers.forEach { reference -> reference.get()?.let(::destroyNative) }
+        bannerContainers.removeAll { it.get() == null }
+        nativeContainers.removeAll { it.get() == null }
+    }
+
+    private fun rememberContainer(
+        containers: CopyOnWriteArrayList<WeakReference<ViewGroup>>,
+        container: ViewGroup,
+    ) {
+        containers.removeAll { it.get() == null }
+        if (containers.none { it.get() === container }) {
+            containers.add(WeakReference(container))
+        }
+    }
+
     fun preloadAll(activity: Activity){
         preloadInterstitials(activity)
         preloadRewardedAds(activity)
@@ -240,6 +263,13 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         return suppressAdsProvider() || !ads.globalEnabled || ads.blockedReason == "active_subscription"
     }
 
+    private fun rewardedSuppressionReason(): String {
+        val ads = configProvider().ads
+        return when (ads.blockedReason) {
+            "active_subscription" -> "Ads are disabled because this user has an active ad-free subscription."
+            else -> "Rewarded ads are currently unavailable for this app."
+        }
+    }
     private fun trackSuppressed(format: String, placement: String) {
         val ads = configProvider().ads
         SDKTelemetry.track(

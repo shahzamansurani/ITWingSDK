@@ -43,6 +43,13 @@ class EncryptedConfigStore(context: Context) {
         }
     }
 
+    fun saveOwnedProductIds(productIds: Set<String>) {
+        prefs.edit { putStringSet("owned_product_ids", productIds) }
+    }
+
+    fun ownedProductIds(): Set<String> =
+        prefs.getStringSet("owned_product_ids", emptySet())?.toSet().orEmpty()
+
     fun isAdFreeEntitled(): Boolean {
         if (!prefs.getBoolean("entitlement_active", false) || !prefs.getBoolean("entitlement_removes_ads", false)) {
             return false

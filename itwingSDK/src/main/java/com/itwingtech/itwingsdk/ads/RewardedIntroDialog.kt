@@ -2,6 +2,8 @@ package com.itwingtech.itwingsdk.ads
 
 import android.app.Activity
 import android.app.Dialog
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
 import android.view.Window
@@ -20,6 +22,7 @@ internal object RewardedIntroDialog {
     fun show(
         activity: Activity,
         placement: AdPlacementConfig,
+        primaryColor: Int,
         onSkip: () -> Unit,
         onWatch: () -> Unit
     ) {
@@ -89,29 +92,40 @@ internal object RewardedIntroDialog {
 
                         findViewById<TextView?>(
                             R.id.dialog_title
-                        )?.text =
-                            message
+                        )?.apply {
+                            text = message
+                            setTextColor(primaryColor)
+                        }
 
                         findViewById<MaterialButton?>(
                             R.id.btnSkip
-                        )?.setOnClickListener {
+                        )?.apply {
+                            setTextColor(primaryColor)
+                            strokeColor = ColorStateList.valueOf(primaryColor)
+                            strokeWidth = activity.resources.displayMetrics.density.toInt().coerceAtLeast(1)
+                            setOnClickListener {
 
-                            runCatching {
-                                dismiss()
+                                runCatching {
+                                    dismiss()
+                                }
+
+                                callSkipOnce()
                             }
-
-                            callSkipOnce()
                         }
 
                         findViewById<MaterialButton?>(
                             R.id.btn_watch
-                        )?.setOnClickListener {
+                        )?.apply {
+                            backgroundTintList = ColorStateList.valueOf(primaryColor)
+                            setTextColor(Color.WHITE)
+                            setOnClickListener {
 
-                            runCatching {
-                                dismiss()
+                                runCatching {
+                                    dismiss()
+                                }
+
+                                callWatchOnce()
                             }
-
-                            callWatchOnce()
                         }
 
                         setOnCancelListener {

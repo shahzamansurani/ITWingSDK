@@ -124,7 +124,9 @@ object ITWingSDK {
         NotificationRuntimeManager.registerFcmDevice(activity.applicationContext, repository!!)
         updates = InAppUpdateManager { config }
         updates.bind(activity)
-        subscriptions = SubscriptionManager({ config }, { repository })
+        subscriptions = SubscriptionManager({ config }, { repository }) { adFree ->
+            if (adFree) ads.onEntitlementActivated()
+        }
         scope.launch {
             /*
              * Load cached config first
@@ -144,9 +146,6 @@ object ITWingSDK {
              * but DO NOT preload ads yet.
              */
             if (config.configVersion > 0) {
-                initializeMobileAds(activity) {
-                    ads.startAutomaticAppOpen(activity)
-                }
                 FirebaseRuntimeManager.configure(activity.applicationContext, config.firebase)
                 SDKTelemetry.track(
                     "firebase_configured",
@@ -160,9 +159,14 @@ object ITWingSDK {
                 NotificationRuntimeManager.configure(activity, config, repository)
                 notifyListeners { it.onNotificationsReady() }
                 updates.check(activity)
-                subscriptions.connect(activity)
-                notifyListeners { it.onBillingReady() }
-                subscriptions.restorePurchases()
+                subscriptions.connect(activity) {
+                    notifyListeners { it.onBillingReady() }
+                    subscriptions.restorePurchases {
+                        initializeMobileAds(activity) {
+                            ads.startAutomaticAppOpen(activity)
+                        }
+                    }
+                }
             }
 
             /*
@@ -187,11 +191,6 @@ object ITWingSDK {
                 )
                 notifyReady(true)
                 notifyListeners { it.onConfigLoaded(remote) }
-                initializeMobileAds(activity) {
-                    preloadAdsIfNeeded(activity)
-                    ads.startAutomaticAppOpen(activity)
-                    notifyListeners { it.onAdsReady() }
-                }
                 FirebaseRuntimeManager.configure(activity.applicationContext, config.firebase)
                 SDKTelemetry.track(
                     "firebase_configured",
@@ -205,9 +204,16 @@ object ITWingSDK {
                 NotificationRuntimeManager.configure(activity, config, repository)
                 notifyListeners { it.onNotificationsReady() }
                 updates.check(activity)
-                subscriptions.connect(activity)
-                notifyListeners { it.onBillingReady() }
-                subscriptions.restorePurchases()
+                subscriptions.connect(activity) {
+                    notifyListeners { it.onBillingReady() }
+                    subscriptions.restorePurchases {
+                        initializeMobileAds(activity) {
+                            preloadAdsIfNeeded(activity)
+                            ads.startAutomaticAppOpen(activity)
+                            notifyListeners { it.onAdsReady() }
+                        }
+                    }
+                }
 
             }.onFailure {
                 val cachedConfigAvailable = config.configVersion > 0
@@ -594,10 +600,20 @@ object ITWingSDK {
     @JvmStatic
     fun showSplash(activity: Activity, onComplete: () -> Unit = {}) {
         val startedAt = System.currentTimeMillis()
+        fun showRuntimeSplash() {
+            if (::updates.isInitialized) {
+                updates.checkBeforeSplash(activity) {
+                    runtime.showSplash(activity, onComplete)
+                }
+            } else {
+                runtime.showSplash(activity, onComplete)
+            }
+        }
+
         fun runWhenReady() {
             val waitedMs = System.currentTimeMillis() - startedAt
             if ((bootstrapFinished && config.configVersion > 0) || (!bootstrapInFlight && config.configVersion > 0) || waitedMs >= 4000L) {
-                runtime.showSplash(activity, onComplete)
+                showRuntimeSplash()
                 return
             }
             mainHandler.postDelayed({ runWhenReady() }, 100L)

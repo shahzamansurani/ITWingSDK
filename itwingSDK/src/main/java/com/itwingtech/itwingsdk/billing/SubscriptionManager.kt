@@ -30,6 +30,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 class SubscriptionManager(
     private val configProvider: () -> ITWingConfig,
     private val repositoryProvider: () -> ConfigRepository?,
+    private val onEntitlementChanged: (Boolean) -> Unit = {},
 ) {
     private var billingClient: BillingClient? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -129,6 +130,13 @@ class SubscriptionManager(
         }
 
         val requestedProductId = productId.trim()
+        if (requestedProductId in ownedProductIds()) {
+            restorePurchases()
+            return failedResult(
+                BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED,
+                "This product is already active on your Google Play account.",
+            )
+        }
         val adminProduct = configProvider().subscriptions.products.firstOrNull {
             it.productId.trim() == requestedProductId
         }
@@ -255,7 +263,7 @@ class SubscriptionManager(
             return
         }
 
-        mainHandler.post {
+        fun renderDialog() = mainHandler.post {
             if (activity.isFinishing || activity.isDestroyed) {
                 onResult(
                     failedResult(
@@ -274,6 +282,7 @@ class SubscriptionManager(
                     detailsProvider = { productId, productType ->
                         productDetails[productKey(productId, productType)] ?: productDetails[productId]
                     },
+                    ownedProductIds = ownedProductIds(),
                     launcher = { productId, result -> launchPurchaseWhenReady(activity, productId.trim(), result) },
                     restore = { callback -> restorePurchases(callback) },
                     onResult = onResult,
@@ -288,10 +297,7 @@ class SubscriptionManager(
             }
         }
 
-        connect(activity) {
-            queryProducts()
-            restorePurchases()
-        }
+        connect(activity) { restorePurchases { renderDialog() } }
     }
 
     fun isAdFree(): Boolean = repositoryProvider()?.isAdFreeEntitled() == true
@@ -316,20 +322,22 @@ class SubscriptionManager(
         }
 
         val restored = mutableListOf<Purchase>()
-        queryPurchases(client, ProductType.SUBS) {
-            restored.addAll(it)
-            queryPurchases(client, ProductType.INAPP) { inAppPurchases ->
+        queryPurchases(client, ProductType.SUBS) { subscriptionsSucceeded, subscriptionPurchases ->
+            restored.addAll(subscriptionPurchases)
+            queryPurchases(client, ProductType.INAPP) { inAppSucceeded, inAppPurchases ->
                 restored.addAll(inAppPurchases)
-                if (restored.isEmpty()) {
+                if (!subscriptionsSucceeded || !inAppSucceeded) {
                     scope.launch(Dispatchers.IO) {
                         runCatching { repositoryProvider()?.restoreSubscriptions() }
                         launch(Dispatchers.Main.immediate) {
-                            SDKTelemetry.track("purchase_restore_completed", mapOf("active" to isAdFree(), "purchase_count" to 0))
+                            SDKTelemetry.track("purchase_restore_completed", mapOf("active" to isAdFree(), "purchase_count" to restored.size))
                             onComplete?.invoke(isAdFree())
                         }
                     }
                     return@queryPurchases
                 }
+
+                replacePlayOwnership(restored)
                 restored.forEach { purchase -> verifyPurchase(purchase) }
                 SDKTelemetry.track("purchase_restore_completed", mapOf("active" to isAdFree(), "purchase_count" to restored.size))
                 onComplete?.invoke(isAdFree())
@@ -432,6 +440,10 @@ class SubscriptionManager(
             )
             return
         }
+        recordPlayOwnership(purchase)
+        if (adminProduct?.isConsumable() != true) {
+            acknowledgeIfNeeded(purchase)
+        }
         scope.launch(Dispatchers.IO) {
             val result = runCatching {
                 repositoryProvider()?.verifySubscriptionPurchase(
@@ -454,7 +466,9 @@ class SubscriptionManager(
                     ),
                 )
                 finishPurchaseIfNeeded(purchase, adminProduct)
+                recordPlayOwnership(purchase)
             }.onFailure {
+                recordPlayOwnership(purchase)
                 lastBillingMessage = it.message
                 SDKTelemetry.track(
                     "purchase_verify_failed",
@@ -467,9 +481,7 @@ class SubscriptionManager(
     private fun finishPurchaseIfNeeded(purchase: Purchase, adminProduct: SubscriptionProductConfig?) {
         if (adminProduct?.isConsumable() == true) {
             consumeIfNeeded(purchase)
-            return
         }
-        acknowledgeIfNeeded(purchase)
     }
 
     private fun acknowledgeIfNeeded(purchase: Purchase) {
@@ -530,16 +542,56 @@ class SubscriptionManager(
         }?.offerToken ?: offers.firstOrNull()?.offerToken
     }
 
-    private fun queryPurchases(client: BillingClient, productType: String, onComplete: (List<Purchase>) -> Unit) {
+    private fun queryPurchases(client: BillingClient, productType: String, onComplete: (Boolean, List<Purchase>) -> Unit) {
         client.queryPurchasesAsync(
             QueryPurchasesParams.newBuilder().setProductType(productType).build(),
         ) { result, purchases ->
             if (result.responseCode != BillingClient.BillingResponseCode.OK) {
                 lastBillingMessage = result.debugMessage
-                onComplete(emptyList())
+                onComplete(false, emptyList())
                 return@queryPurchasesAsync
             }
-            onComplete(purchases)
+            onComplete(true, purchases)
+        }
+    }
+
+    private fun ownedProductIds(): Set<String> = repositoryProvider()?.ownedProductIds().orEmpty()
+
+    private fun recordPlayOwnership(purchase: Purchase) {
+        if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) return
+        val productIds = purchase.products.map(String::trim).filter(String::isNotBlank)
+        val nonConsumableIds = productIds.filterNot { productId ->
+            configProvider().subscriptions.products.firstOrNull { it.productId.trim() == productId }?.isConsumable() == true
+        }
+        if (nonConsumableIds.isEmpty()) return
+        savePlayOwnership(ownedProductIds() + nonConsumableIds)
+    }
+
+    private fun replacePlayOwnership(purchases: List<Purchase>) {
+        val validProductIds = purchases
+            .filter { it.purchaseState == Purchase.PurchaseState.PURCHASED }
+            .filter { purchase ->
+                GooglePlaySignatureValidator.verify(googlePlayLicenseKey(), purchase.originalJson, purchase.signature) != false
+            }
+            .flatMap { it.products }
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .filterNot { productId ->
+                configProvider().subscriptions.products.firstOrNull { it.productId.trim() == productId }?.isConsumable() == true
+            }
+            .toSet()
+        savePlayOwnership(validProductIds)
+    }
+
+    private fun savePlayOwnership(productIds: Set<String>) {
+        val wasAdFree = isAdFree()
+        val removesAds = configProvider().subscriptions.products.any { product ->
+            product.productId.trim() in productIds && product.removesAds
+        }
+        repositoryProvider()?.savePlayOwnership(productIds, removesAds)
+        val isAdFree = isAdFree()
+        if (wasAdFree != isAdFree) {
+            mainHandler.post { onEntitlementChanged(isAdFree) }
         }
     }
 

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="ad_failed_title">Ad unavailable</string>
+    <string name="ad_failed_reason">The ad could not be shown. %1$s</string>
     <string name="ad_not_ready">Sorry Ad isn’t Ready Yet, Please Check your Internet Connection and Try Again. thanks</string>
     <string name="go_back">Go Back</string>
     <string name="try_again">Try Again</string>
