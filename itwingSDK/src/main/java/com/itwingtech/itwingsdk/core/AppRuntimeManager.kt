@@ -5,6 +5,7 @@ import android.app.AlertDialog
 import android.os.Handler
 import android.os.Looper
 import com.itwingtech.itwingsdk.ads.AdManager
+import com.itwingtech.itwingsdk.ads.FullscreenAdState
 import com.itwingtech.itwingsdk.utils.safeCallback
 
 internal class AppRuntimeManager(
@@ -27,13 +28,18 @@ internal class AppRuntimeManager(
         }
 
         val delayMs = splashDelayMs(config)
+        val splashDelayOwner = FullscreenAdState.tryBegin("sdk_splash", "delay")
         mainHandler.postDelayed({
-            runCatching { showSplashAd(activity, config, onComplete) }
-                .onFailure { safeCallback(onComplete) }
+            runCatching { showSplashAd(activity, config, splashDelayOwner, onComplete) }
+                .onFailure {
+                    FullscreenAdState.end(splashDelayOwner)
+                    safeCallback(onComplete)
+                }
         }, delayMs)
     }
 
-    private fun showSplashAd(activity: Activity, config: ITWingConfig, onComplete: () -> Unit) {
+    private fun showSplashAd(activity: Activity, config: ITWingConfig, splashDelayOwner: String?, onComplete: () -> Unit) {
+        FullscreenAdState.end(splashDelayOwner)
         val ads = adManagerProvider()
         if (ads == null || !config.ads.globalEnabled) {
             safeCallback(onComplete)

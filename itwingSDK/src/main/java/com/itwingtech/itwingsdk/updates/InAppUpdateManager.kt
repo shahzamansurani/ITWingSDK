@@ -1,6 +1,8 @@
 package com.itwingtech.itwingsdk.updates
 
 import android.app.Activity
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
@@ -14,19 +16,23 @@ import com.google.android.play.core.install.InstallStateUpdatedListener
 import com.google.android.play.core.install.model.InstallStatus
 import com.google.android.play.core.install.model.AppUpdateType
 import com.google.android.play.core.install.model.UpdateAvailability
+import com.itwingtech.itwingsdk.ads.FullscreenAdState
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicBoolean
 
 class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var manager: AppUpdateManager? = null
     private var activityRef: WeakReference<Activity>? = null
     private val flowInProgress = AtomicBoolean(false)
+    private val pendingAutomaticCheck = AtomicBoolean(false)
     private var lastCheckMs: Long = 0L
     private var installStateListener: InstallStateUpdatedListener? = null
     private var automaticLauncher: ActivityResultLauncher<IntentSenderRequest>? = null
     private var automaticLauncherOwner: WeakReference<ComponentActivity>? = null
+    private var activeFullscreenOwner: String? = null
 
     fun bind(activity: Activity) {
         val owner = activity as? ComponentActivity ?: run {
@@ -43,6 +49,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         runCatching {
             owner.registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
                 flowInProgress.set(false)
+                endActiveFullscreenOwner()
                 SDKTelemetry.track(
                     "in_app_update_flow_result",
                     mapOf("result_code" to result.resultCode),
@@ -68,6 +75,17 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
     ) {
         if (!activity.isUsable()) {
             onResult?.invoke("Activity is not available for in-app updates.")
+            return
+        }
+
+        if (!force && FullscreenAdState.isActive()) {
+            pendingAutomaticCheck.set(true)
+            scheduleAutomaticRetry(activity)
+            SDKTelemetry.track(
+                "in_app_update_deferred",
+                mapOf("reason" to "fullscreen_flow_active", "owner" to FullscreenAdState.activeOwner()),
+            )
+            onResult?.invoke("In-app update check deferred until splash/ad flow finishes.")
             return
         }
 
@@ -166,6 +184,9 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
     fun onResume(activity: Activity) {
         if (!activity.isUsable()) return
         resumeIfNeeded(activity)
+        if (pendingAutomaticCheck.get()) {
+            scheduleAutomaticRetry(activity, delayMs = 700L)
+        }
     }
 
     private fun resumeIfNeeded(activity: Activity) {
@@ -182,6 +203,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
 
                 else -> {
                     flowInProgress.set(false)
+                    endActiveFullscreenOwner()
                 }
             }
         }
@@ -203,6 +225,19 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
             onResult?.invoke("An in-app update flow is already running.")
             return
         }
+        val fullscreenOwner = FullscreenAdState.tryBegin("play_update", "in_app_update")
+        if (fullscreenOwner == null) {
+            flowInProgress.set(false)
+            pendingAutomaticCheck.set(true)
+            scheduleAutomaticRetry(activity)
+            SDKTelemetry.track(
+                "in_app_update_deferred",
+                mapOf("reason" to "fullscreen_flow_active", "owner" to FullscreenAdState.activeOwner()),
+            )
+            onResult?.invoke("In-app update flow deferred because another full-screen flow is active.")
+            return
+        }
+        activeFullscreenOwner = fullscreenOwner
 
         SDKTelemetry.track("in_app_update_flow_starting", mapOf("type" to updateType.label()))
         if (launcher != null) {
@@ -218,13 +253,12 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
                     onResult?.invoke("In-app update flow started (${updateType.label()}).")
                 } else {
                     flowInProgress.set(false)
+                    endActiveFullscreenOwner()
                     onResult?.invoke("Google Play did not start the in-app update flow.")
-                }
-                if (updateType == AppUpdateType.FLEXIBLE) {
-                    flowInProgress.set(false)
                 }
             }.onFailure {
                 flowInProgress.set(false)
+                endActiveFullscreenOwner()
                 SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_flow", "type" to updateType.label()))
                 SDKTelemetry.track("in_app_update_flow_failed", mapOf("type" to updateType.label(), "message" to (it.message ?: "unknown")))
                 onResult?.invoke("In-app update flow failed: ${it.message ?: "unknown error"}")
@@ -239,11 +273,9 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         ).addOnSuccessListener {
             SDKTelemetry.track("in_app_update_flow_started", mapOf("type" to updateType.label(), "result" to it))
             onResult?.invoke("In-app update flow started (${updateType.label()}).")
-            if (updateType == AppUpdateType.FLEXIBLE) {
-                flowInProgress.set(false)
-            }
         }.addOnFailureListener {
             flowInProgress.set(false)
+            endActiveFullscreenOwner()
             SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_flow", "type" to updateType.label()))
             SDKTelemetry.track("in_app_update_flow_failed", mapOf("type" to updateType.label(), "message" to (it.message ?: "unknown")))
             onResult?.invoke("In-app update flow failed: ${it.message ?: "unknown error"}")
@@ -267,13 +299,37 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         appUpdateManager.completeUpdate()
             .addOnSuccessListener {
                 flowInProgress.set(false)
+                endActiveFullscreenOwner()
                 SDKTelemetry.track("in_app_update_completed")
             }
             .addOnFailureListener {
                 flowInProgress.set(false)
+                endActiveFullscreenOwner()
                 SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_complete"))
                 SDKTelemetry.track("in_app_update_complete_failed", mapOf("message" to (it.message ?: "unknown")))
             }
+    }
+
+    private fun scheduleAutomaticRetry(activity: Activity, delayMs: Long = 1500L, attempt: Int = 0) {
+        if (attempt > MAX_DEFERRED_RETRIES) return
+        val activityReference = WeakReference(activity)
+        mainHandler.postDelayed({
+            val current = activityReference.get()
+            if (current == null || !current.isUsable() || !pendingAutomaticCheck.get()) {
+                return@postDelayed
+            }
+            if (FullscreenAdState.isActive()) {
+                scheduleAutomaticRetry(current, delayMs, attempt + 1)
+                return@postDelayed
+            }
+            pendingAutomaticCheck.set(false)
+            check(current, force = false)
+        }, delayMs)
+    }
+
+    private fun endActiveFullscreenOwner() {
+        FullscreenAdState.end(activeFullscreenOwner)
+        activeFullscreenOwner = null
     }
 
     private fun settings(): Map<*, *>? = configProvider().app["in_app_updates"] as? Map<*, *>
@@ -303,5 +359,6 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
 
     companion object {
         private const val CHECK_THROTTLE_MS = 6 * 60 * 60 * 1000L
+        private const val MAX_DEFERRED_RETRIES = 20
     }
 }
