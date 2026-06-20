@@ -594,10 +594,20 @@ object ITWingSDK {
     @JvmStatic
     fun showSplash(activity: Activity, onComplete: () -> Unit = {}) {
         val startedAt = System.currentTimeMillis()
+        fun showRuntimeSplash() {
+            if (::updates.isInitialized) {
+                updates.checkBeforeSplash(activity) {
+                    runtime.showSplash(activity, onComplete)
+                }
+            } else {
+                runtime.showSplash(activity, onComplete)
+            }
+        }
+
         fun runWhenReady() {
             val waitedMs = System.currentTimeMillis() - startedAt
             if ((bootstrapFinished && config.configVersion > 0) || (!bootstrapInFlight && config.configVersion > 0) || waitedMs >= 4000L) {
-                runtime.showSplash(activity, onComplete)
+                showRuntimeSplash()
                 return
             }
             mainHandler.postDelayed({ runWhenReady() }, 100L)

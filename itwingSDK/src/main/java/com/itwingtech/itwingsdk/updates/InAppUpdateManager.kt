@@ -28,11 +28,13 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
     private var activityRef: WeakReference<Activity>? = null
     private val flowInProgress = AtomicBoolean(false)
     private val pendingAutomaticCheck = AtomicBoolean(false)
+    private val preSplashCheckInFlight = AtomicBoolean(false)
     private var lastCheckMs: Long = 0L
     private var installStateListener: InstallStateUpdatedListener? = null
     private var automaticLauncher: ActivityResultLauncher<IntentSenderRequest>? = null
     private var automaticLauncherOwner: WeakReference<ComponentActivity>? = null
     private var activeFullscreenOwner: String? = null
+    private var pendingAfterUpdateFlow: (() -> Unit)? = null
 
     fun bind(activity: Activity) {
         val owner = activity as? ComponentActivity ?: run {
@@ -50,6 +52,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
             owner.registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
                 flowInProgress.set(false)
                 endActiveFullscreenOwner()
+                completePendingUpdateContinuation()
                 SDKTelemetry.track(
                     "in_app_update_flow_result",
                     mapOf("result_code" to result.resultCode),
@@ -67,18 +70,58 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         }
     }
 
+    fun checkBeforeSplash(activity: Activity, onContinue: () -> Unit) {
+        if (!activity.isUsable()) {
+            onContinue()
+            return
+        }
+        val settings = settings()
+        val enabled = settings?.boolean("enabled", false) ?: false
+        if (!enabled || automaticLauncher == null) {
+            onContinue()
+            return
+        }
+        if (!preSplashCheckInFlight.compareAndSet(false, true)) {
+            onContinue()
+            return
+        }
+
+        var continued = false
+        fun continueOnce() {
+            if (continued) return
+            continued = true
+            preSplashCheckInFlight.set(false)
+            onContinue()
+        }
+
+        check(
+            activity = activity,
+            force = true,
+            launcher = automaticLauncher,
+            deferForFullscreen = false,
+            onFlowStarted = {
+                pendingAfterUpdateFlow = ::continueOnce
+            },
+            onNoFlow = ::continueOnce,
+        )
+    }
+
     fun check(
         activity: Activity,
         force: Boolean = false,
         launcher: ActivityResultLauncher<IntentSenderRequest>? = null,
         onResult: ((String) -> Unit)? = null,
+        deferForFullscreen: Boolean = true,
+        onFlowStarted: (() -> Unit)? = null,
+        onNoFlow: (() -> Unit)? = null,
     ) {
         if (!activity.isUsable()) {
             onResult?.invoke("Activity is not available for in-app updates.")
+            onNoFlow?.invoke()
             return
         }
 
-        if (!force && FullscreenAdState.isActive()) {
+        if (!force && deferForFullscreen && FullscreenAdState.isActive()) {
             pendingAutomaticCheck.set(true)
             scheduleAutomaticRetry(activity)
             SDKTelemetry.track(
@@ -86,6 +129,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
                 mapOf("reason" to "fullscreen_flow_active", "owner" to FullscreenAdState.activeOwner()),
             )
             onResult?.invoke("In-app update check deferred until splash/ad flow finishes.")
+            onNoFlow?.invoke()
             return
         }
 
@@ -93,6 +137,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         val enabled = settings?.boolean("enabled", false) ?: force
         if (!enabled) {
             onResult?.invoke("In-app updates are disabled in admin config.")
+            onNoFlow?.invoke()
             return
         }
 
@@ -100,6 +145,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         if (!force && now - lastCheckMs < CHECK_THROTTLE_MS) {
             resumeIfNeeded(activity)
             onResult?.invoke("In-app update check throttled; resumed any pending update.")
+            onNoFlow?.invoke()
             return
         }
         lastCheckMs = now
@@ -135,12 +181,13 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
 
             when {
                 info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS -> {
-                    startUpdateFlow(appUpdateManager, activity, info, AppUpdateType.IMMEDIATE, launcher ?: automaticLauncher, onResult)
+                    startUpdateFlow(appUpdateManager, activity, info, AppUpdateType.IMMEDIATE, launcher ?: automaticLauncher, onResult, onFlowStarted, onNoFlow)
                 }
 
                 info.installStatus() == InstallStatus.DOWNLOADED -> {
                     completeFlexibleUpdate(appUpdateManager)
                     onResult?.invoke("Downloaded flexible update is being completed.")
+                    onNoFlow?.invoke()
                 }
 
                 info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE && staleEnough && priorityEnough -> {
@@ -151,33 +198,39 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
                         else -> null
                     }
                     if (typeToLaunch != null) {
-                        startUpdateFlow(appUpdateManager, activity, info, typeToLaunch, launcher ?: automaticLauncher, onResult)
+                        startUpdateFlow(appUpdateManager, activity, info, typeToLaunch, launcher ?: automaticLauncher, onResult, onFlowStarted, onNoFlow)
                     } else {
                         SDKTelemetry.track("in_app_update_not_allowed")
                         onResult?.invoke("A Play update is available, but Play does not allow immediate or flexible update for this install.")
+                        onNoFlow?.invoke()
                     }
                 }
 
                 info.updateAvailability() != UpdateAvailability.UPDATE_AVAILABLE -> {
                     onResult?.invoke("No Play update is available for this install.")
+                    onNoFlow?.invoke()
                 }
 
                 !staleEnough -> {
                     onResult?.invoke("Update is available but below configured staleness threshold.")
+                    onNoFlow?.invoke()
                 }
 
                 !priorityEnough -> {
                     onResult?.invoke("Update is available but below configured priority threshold.")
+                    onNoFlow?.invoke()
                 }
 
                 else -> {
                     onResult?.invoke("In-app update is not available right now.")
+                    onNoFlow?.invoke()
                 }
             }
         }.addOnFailureListener {
             SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_check"))
             SDKTelemetry.track("in_app_update_check_failed", mapOf("message" to (it.message ?: "unknown")))
             onResult?.invoke("In-app update check failed: ${it.message ?: "unknown error"}")
+            onNoFlow?.invoke()
         }
     }
 
@@ -216,13 +269,17 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         updateType: Int,
         launcher: ActivityResultLauncher<IntentSenderRequest>?,
         onResult: ((String) -> Unit)?,
+        onFlowStarted: (() -> Unit)? = null,
+        onNoFlow: (() -> Unit)? = null,
     ) {
         if (!activity.isUsable()) {
             onResult?.invoke("Activity is not available for update flow.")
+            onNoFlow?.invoke()
             return
         }
         if (!flowInProgress.compareAndSet(false, true)) {
             onResult?.invoke("An in-app update flow is already running.")
+            onNoFlow?.invoke()
             return
         }
         val fullscreenOwner = FullscreenAdState.tryBegin("play_update", "in_app_update")
@@ -235,6 +292,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
                 mapOf("reason" to "fullscreen_flow_active", "owner" to FullscreenAdState.activeOwner()),
             )
             onResult?.invoke("In-app update flow deferred because another full-screen flow is active.")
+            onNoFlow?.invoke()
             return
         }
         activeFullscreenOwner = fullscreenOwner
@@ -251,10 +309,12 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
                 SDKTelemetry.track("in_app_update_flow_started", mapOf("type" to updateType.label(), "result" to started))
                 if (started) {
                     onResult?.invoke("In-app update flow started (${updateType.label()}).")
+                    onFlowStarted?.invoke()
                 } else {
                     flowInProgress.set(false)
                     endActiveFullscreenOwner()
                     onResult?.invoke("Google Play did not start the in-app update flow.")
+                    onNoFlow?.invoke()
                 }
             }.onFailure {
                 flowInProgress.set(false)
@@ -262,6 +322,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
                 SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_flow", "type" to updateType.label()))
                 SDKTelemetry.track("in_app_update_flow_failed", mapOf("type" to updateType.label(), "message" to (it.message ?: "unknown")))
                 onResult?.invoke("In-app update flow failed: ${it.message ?: "unknown error"}")
+                onNoFlow?.invoke()
             }
             return
         }
@@ -273,12 +334,14 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         ).addOnSuccessListener {
             SDKTelemetry.track("in_app_update_flow_started", mapOf("type" to updateType.label(), "result" to it))
             onResult?.invoke("In-app update flow started (${updateType.label()}).")
+            onFlowStarted?.invoke()
         }.addOnFailureListener {
             flowInProgress.set(false)
             endActiveFullscreenOwner()
             SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_flow", "type" to updateType.label()))
             SDKTelemetry.track("in_app_update_flow_failed", mapOf("type" to updateType.label(), "message" to (it.message ?: "unknown")))
             onResult?.invoke("In-app update flow failed: ${it.message ?: "unknown error"}")
+            onNoFlow?.invoke()
         }
     }
 
@@ -330,6 +393,13 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
     private fun endActiveFullscreenOwner() {
         FullscreenAdState.end(activeFullscreenOwner)
         activeFullscreenOwner = null
+    }
+
+    private fun completePendingUpdateContinuation() {
+        val continuation = pendingAfterUpdateFlow
+        pendingAfterUpdateFlow = null
+        preSplashCheckInFlight.set(false)
+        continuation?.invoke()
     }
 
     private fun settings(): Map<*, *>? = configProvider().app["in_app_updates"] as? Map<*, *>
