@@ -62,9 +62,21 @@ class ConfigRepository(
 
     fun ownedProductIds(): Set<String> = store.ownedProductIds()
 
+    fun entitlementExpiresAt(): String? = store.entitlementExpiresAt()
+
+    fun isEntitlementActive(): Boolean = store.isEntitlementActive()
+
+    fun entitlementRemovesAds(): Boolean = store.entitlementRemovesAds()
+
     fun savePlayOwnership(productIds: Set<String>, removesAds: Boolean) {
+        val previousProductIds = store.ownedProductIds()
+        val preservedExpiry = store.entitlementExpiresAt()?.takeIf { expiresAt ->
+            productIds == previousProductIds && runCatching {
+                java.time.Instant.parse(expiresAt).toEpochMilli() > System.currentTimeMillis()
+            }.getOrDefault(false)
+        }
         store.saveOwnedProductIds(productIds)
-        store.saveEntitlement(productIds.isNotEmpty(), removesAds, null)
+        store.saveEntitlement(productIds.isNotEmpty(), removesAds, preservedExpiry)
     }
 
     fun consumeFirstOpen(): Boolean = store.consumeFirstOpen()

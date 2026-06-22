@@ -443,6 +443,11 @@ object ITWingSDK {
     }
 
     @JvmStatic
+    fun getCurrentSubscription(): SubscriptionPlanInfo? {
+        return if (::subscriptions.isInitialized) subscriptions.currentSubscription() else null
+    }
+
+    @JvmStatic
     fun restorePurchases(onComplete: ((Boolean) -> Unit)? = null) {
         if (::subscriptions.isInitialized) {
             subscriptions.restorePurchases(onComplete)

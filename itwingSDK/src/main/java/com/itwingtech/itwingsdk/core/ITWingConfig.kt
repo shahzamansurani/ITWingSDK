@@ -144,6 +144,18 @@ data class SubscriptionProductConfig(
     val metadata: Map<String, Any?> = emptyMap(),
 )
 
+data class SubscriptionPlanInfo(
+    val productId: String,
+    val name: String,
+    val productType: String,
+    val billingPeriod: String,
+    val price: Double?,
+    val currency: String?,
+    val active: Boolean,
+    val removesAds: Boolean,
+    val expiresAt: String?,
+)
+
 data class FirebaseConfig(
     val enabled: Boolean = false,
     val analyticsEnabled: Boolean = false,

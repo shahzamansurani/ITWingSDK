@@ -17,21 +17,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="103c2e10-a110-46f4-a3a7-93103cc3809e" name="Changes" comment="Check Play updates before splash ads">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AdFailureDialog.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/itwingSDK/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AdManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AdManager.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/BannerLoader.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/BannerLoader.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/NativeLoader.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/NativeLoader.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedInterstitialManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedInterstitialManager.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedIntroDialog.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedIntroDialog.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/RewardedManager.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/PurchaseDialog.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/PurchaseDialog.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/SubscriptionManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/SubscriptionManager.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/ITWingSDK.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/ITWingSDK.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/data/ConfigRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/data/ConfigRepository.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/data/EncryptedConfigStore.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/data/EncryptedConfigStore.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/values/strings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/values/strings.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -48,6 +35,7 @@
     </projectState>
   </component>
   <component name="Git.Settings">
+    <option name="PUSH_AUTO_UPDATE" value="true" />
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="GitHubPullRequestSearchHistory">{
@@ -221,7 +209,15 @@
       <option name="project" value="LOCAL" />
       <updated>1781943442399</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="Check Play updates before splash ads">
+      <option name="closed" value="true" />
+      <created>1782106526660</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1782106526660</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -246,7 +242,7 @@
         </entry>
         <entry key="com.itwingtech.itwingsdk.test">
           <value>
-            <CheckInfo lastCheckTimestamp="1781792748441" />
+            <CheckInfo lastCheckTimestamp="1782106442871" />
           </value>
         </entry>
       </map>

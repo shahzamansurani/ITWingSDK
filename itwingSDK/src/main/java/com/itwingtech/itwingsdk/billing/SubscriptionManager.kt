@@ -17,6 +17,7 @@ import com.android.billingclient.api.QueryProductDetailsParams
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.SubscriptionProductConfig
+import com.itwingtech.itwingsdk.core.SubscriptionPlanInfo
 import com.itwingtech.itwingsdk.data.ConfigRepository
 import android.os.Handler
 import android.os.Looper
@@ -283,6 +284,7 @@ class SubscriptionManager(
                         productDetails[productKey(productId, productType)] ?: productDetails[productId]
                     },
                     ownedProductIds = ownedProductIds(),
+                    currentSubscription = currentSubscription(),
                     launcher = { productId, result -> launchPurchaseWhenReady(activity, productId.trim(), result) },
                     restore = { callback -> restorePurchases(callback) },
                     onResult = onResult,
@@ -301,6 +303,24 @@ class SubscriptionManager(
     }
 
     fun isAdFree(): Boolean = repositoryProvider()?.isAdFreeEntitled() == true
+
+    fun currentSubscription(): SubscriptionPlanInfo? {
+        val repository = repositoryProvider() ?: return null
+        val product = configProvider().subscriptions.products.firstOrNull { configured ->
+            configured.productId.trim() in repository.ownedProductIds()
+        } ?: return null
+        return SubscriptionPlanInfo(
+            productId = product.productId.trim(),
+            name = product.name.ifBlank { product.productId.trim() },
+            productType = product.productType,
+            billingPeriod = product.billingPeriod,
+            price = product.price,
+            currency = product.currency,
+            active = repository.isEntitlementActive(),
+            removesAds = repository.entitlementRemovesAds(),
+            expiresAt = repository.entitlementExpiresAt(),
+        )
+    }
 
     fun diagnostics(): Map<String, Any?> = mapOf(
         "connected" to (billingClient?.isReady == true),

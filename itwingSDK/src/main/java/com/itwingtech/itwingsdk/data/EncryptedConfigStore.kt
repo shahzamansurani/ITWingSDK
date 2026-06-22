@@ -50,14 +50,21 @@ class EncryptedConfigStore(context: Context) {
     fun ownedProductIds(): Set<String> =
         prefs.getStringSet("owned_product_ids", emptySet())?.toSet().orEmpty()
 
-    fun isAdFreeEntitled(): Boolean {
-        if (!prefs.getBoolean("entitlement_active", false) || !prefs.getBoolean("entitlement_removes_ads", false)) {
-            return false
-        }
-        val expiresAt = prefs.getString("entitlement_expires_at", null) ?: return true
+    fun entitlementExpiresAt(): String? =
+        prefs.getString("entitlement_expires_at", null)?.takeIf(String::isNotBlank)
+
+    fun isEntitlementActive(): Boolean {
+        if (!prefs.getBoolean("entitlement_active", false)) return false
+        val expiresAt = entitlementExpiresAt() ?: return true
         return runCatching {
             java.time.Instant.parse(expiresAt).toEpochMilli() > System.currentTimeMillis()
         }.getOrDefault(false)
+    }
+
+    fun entitlementRemovesAds(): Boolean = prefs.getBoolean("entitlement_removes_ads", false)
+
+    fun isAdFreeEntitled(): Boolean {
+        return isEntitlementActive() && entitlementRemovesAds()
     }
 
     fun installId(): String? = prefs.getString("install_id", null)

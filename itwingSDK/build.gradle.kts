@@ -1,5 +1,10 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+val sdkPublicationGroup = providers.gradleProperty("group")
+    .orElse("com.github.shahzamansurani")
+val sdkPublicationVersion = providers.gradleProperty("version")
+    .orElse("v1.11")
+
 plugins {
     alias(libs.plugins.android.library)
     id("maven-publish")
@@ -55,9 +60,9 @@ afterEvaluate {
         publications {
             create<MavenPublication>("release") {
                 from(components["release"])
-                groupId = "com.github.shahzamansurani"
+                groupId = sdkPublicationGroup.get()
                 artifactId = "ITWingSDK"
-                version = "v1.9"
+                version = sdkPublicationVersion.get()
             }
         }
     }
