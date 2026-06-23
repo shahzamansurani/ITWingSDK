@@ -13,6 +13,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import com.bumptech.glide.Glide
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.databinding.SdkMediaViewBinding
+import java.util.concurrent.atomic.AtomicBoolean
 
 class SDKMediaView @JvmOverloads constructor(
     context: Context,
@@ -77,9 +78,12 @@ class SDKMediaView @JvmOverloads constructor(
     |--------------------------------------------------------------------------
     */
 
+    @JvmOverloads
     fun render(
         url: String?,
-        video: Boolean
+        video: Boolean,
+        loop: Boolean = true,
+        onCompleted: (() -> Unit)? = null,
     ) {
 
         release()
@@ -92,7 +96,7 @@ class SDKMediaView @JvmOverloads constructor(
 
         if (video) {
 
-            renderVideo(url)
+            renderVideo(url, loop, onCompleted)
 
         } else {
 
@@ -137,7 +141,9 @@ class SDKMediaView @JvmOverloads constructor(
     */
 
     private fun renderVideo(
-        url: String
+        url: String,
+        loop: Boolean,
+        onCompleted: (() -> Unit)?,
     ) {
 
         imageView.visibility =
@@ -146,9 +152,19 @@ class SDKMediaView @JvmOverloads constructor(
         playerView.visibility =
             VISIBLE
 
+        val completionSent = AtomicBoolean(false)
         player =
             ExoPlayer.Builder(context)
                 .build()
+                .also { exoPlayer ->
+                    exoPlayer.addListener(object : Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            if (playbackState == Player.STATE_ENDED && completionSent.compareAndSet(false, true)) {
+                                onCompleted?.invoke()
+                            }
+                        }
+                    })
+                }
 
         playerView.player =
             player
@@ -175,7 +191,7 @@ class SDKMediaView @JvmOverloads constructor(
             */
 
             repeatMode =
-                Player.REPEAT_MODE_ALL
+                if (loop) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
 
             playWhenReady = true
 

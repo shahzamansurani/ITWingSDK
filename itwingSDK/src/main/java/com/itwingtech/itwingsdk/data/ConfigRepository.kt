@@ -68,6 +68,16 @@ class ConfigRepository(
 
     fun entitlementRemovesAds(): Boolean = store.entitlementRemovesAds()
 
+    fun activeProductId(): String? = store.activeProductId()
+
+    fun activeBasePlanId(): String? = store.activeBasePlanId()
+
+    fun activeOfferId(): String? = store.activeOfferId()
+
+    fun saveActivePlan(productId: String?, basePlanId: String?, offerId: String?) {
+        store.saveActivePlan(productId, basePlanId, offerId)
+    }
+
     fun savePlayOwnership(productIds: Set<String>, removesAds: Boolean) {
         val previousProductIds = store.ownedProductIds()
         val preservedExpiry = store.entitlementExpiresAt()?.takeIf { expiresAt ->
@@ -76,6 +86,7 @@ class ConfigRepository(
             }.getOrDefault(false)
         }
         store.saveOwnedProductIds(productIds)
+        if (productIds.isEmpty()) store.saveActivePlan(null, null, null)
         store.saveEntitlement(productIds.isNotEmpty(), removesAds, preservedExpiry)
     }
 
@@ -273,6 +284,18 @@ class ConfigRepository(
                     }?.optString("expires_at")?.takeIf(String::isNotBlank)
                 }.maxOrNull()
             }
+        val activePurchase = data.optJSONArray("purchases")?.let { purchases ->
+            (0 until purchases.length()).mapNotNull { purchases.optJSONObject(it) }
+                .firstOrNull { it.optBoolean("active", false) }
+        }
+        val productId = data.optCleanString("product_id") ?: activePurchase?.optCleanString("product_id")
+        val basePlanId = data.optCleanString("base_plan_id") ?: activePurchase?.optCleanString("base_plan_id")
+        val offerId = data.optCleanString("offer_id") ?: activePurchase?.optCleanString("offer_id")
+        if (active && !productId.isNullOrBlank()) {
+            store.saveActivePlan(productId, basePlanId, offerId)
+        } else if (!active) {
+            store.saveActivePlan(null, null, null)
+        }
         store.saveEntitlement(active, removesAds, expiresAt)
     }
 

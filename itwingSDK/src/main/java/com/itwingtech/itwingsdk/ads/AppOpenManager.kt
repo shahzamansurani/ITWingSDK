@@ -145,14 +145,19 @@ class AppOpenManager(
 
         AdEventTracker.log("ad_requested", placement)
         if (customRenderer.canRender(placement)) {
-            frequency.markShown(placement)
-            AdEventTracker.log("ad_impression", placement)
-            customRenderer.show(activity, placement, onComplete = {
+            val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
                 InlineAdSafetyGate.arm("app_open", placement.name)
                 preload(activity, placementName)
                 safeCallback(onComplete)
             })
+            if (shown) {
+                frequency.markShown(placement)
+                AdEventTracker.log("ad_impression", placement)
+            } else {
+                AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active_or_show_failed"))
+                safeCallback(onComplete)
+            }
             return
         }
 

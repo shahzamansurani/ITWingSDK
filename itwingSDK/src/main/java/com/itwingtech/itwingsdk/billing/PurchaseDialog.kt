@@ -27,10 +27,10 @@ internal object PurchaseDialog {
         activity: Activity,
         products: List<SubscriptionProductConfig>,
         primaryColor: Int,
-        detailsProvider: (String, String) -> ProductDetails?,
+        detailsProvider: (SubscriptionProductConfig) -> ProductDetails?,
         ownedProductIds: Set<String>,
         currentSubscription: SubscriptionPlanInfo?,
-        launcher: (String, (BillingResult) -> Unit) -> Unit,
+        launcher: (SubscriptionProductConfig, (BillingResult) -> Unit) -> Unit,
         restore: (((Boolean) -> Unit) -> Unit)? = null,
         onResult: (BillingResult) -> Unit,
     ) {
@@ -70,7 +70,7 @@ internal object PurchaseDialog {
 
         products.forEach { product ->
             val productType = product.billingProductType()
-            val details = detailsProvider(product.productId.trim(), productType)
+            val details = detailsProvider(product)
             val row = LayoutInflater.from(activity)
                 .inflate(R.layout.item_purchase_product, list, false) as LinearLayout
             row.layoutParams = LinearLayout.LayoutParams(
@@ -88,7 +88,7 @@ internal object PurchaseDialog {
                 if (productType == BillingClient.ProductType.INAPP) {
                     "One-time purchase"
                 } else {
-                    details?.subscriptionPeriodLabel() ?: product.billingPeriod.replaceFirstChar { it.titlecase() }
+                    details?.subscriptionPeriodLabel(product) ?: product.billingPeriod.replaceFirstChar { it.titlecase() }
                 }
 
             val description = details?.description?.takeIf { it.isNotBlank() }
@@ -97,12 +97,20 @@ internal object PurchaseDialog {
                 ?: "Secure Google Play checkout. Active purchases are restored automatically."
             row.findViewById<TextView>(R.id.itwing_purchase_product_description).text = description
 
-            val isOwned = currentSubscription?.active == true && product.productId.trim() in ownedProductIds
+            val isOwned = currentSubscription?.active == true &&
+                product.productId.trim() in ownedProductIds &&
+                currentSubscription.productId == product.productId.trim() &&
+                (currentSubscription.basePlanId.isNullOrBlank() || currentSubscription.basePlanId == product.basePlanId)
+            val idleButtonText = when {
+                isOwned -> "Active purchase"
+                hasActivePurchase && productType == BillingClient.ProductType.SUBS -> "Change plan"
+                else -> "Continue"
+            }
             row.findViewById<MaterialButton>(R.id.itwing_purchase_product_button).apply {
                 backgroundTintList = ColorStateList.valueOf(primaryColor)
                 rippleColor = ColorStateList.valueOf(primaryColor.withAlpha(0x33))
                 strokeColor = ColorStateList.valueOf(primaryColor)
-                text = if (isOwned) "Active purchase" else "Continue"
+                text = idleButtonText
                 isEnabled = !isOwned
                 alpha = if (isOwned) 0.72f else 1f
                 setOnClickListener {
@@ -116,7 +124,7 @@ internal object PurchaseDialog {
                     text = "Opening Google Play..."
                     status.visibility = View.VISIBLE
                     status.text = "Connecting to Google Play Billing for ${product.productId.trim()}..."
-                    launcher(product.productId.trim()) { result ->
+                    launcher(product) { result ->
                         activity.runOnUiThread {
                             onResult(result)
                             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
@@ -124,7 +132,7 @@ internal object PurchaseDialog {
                                 dialog?.dismiss()
                             } else {
                                 isEnabled = true
-                                text = "Continue"
+                                text = idleButtonText
                                 status.visibility = View.VISIBLE
                                 status.text = result.debugMessage
                                     .takeIf { it.isNotBlank() }
@@ -175,11 +183,7 @@ internal object PurchaseDialog {
     }
 
     private fun SubscriptionProductConfig.displayPrice(details: ProductDetails?): String {
-        googleFormattedPrice(details)?.let { return it }
-        if (price != null && !currency.isNullOrBlank()) {
-            return "${currency} ${"%.2f".format(price)}"
-        }
-        return "Price from Google Play"
+        return googleFormattedPrice(details, this) ?: "Price unavailable from Google Play"
     }
 
     private fun SubscriptionPlanInfo.activeDescription(): String {
@@ -199,30 +203,46 @@ internal object PurchaseDialog {
             .format(Instant.parse(value))
     }.getOrDefault(value)
 
-    private fun googleFormattedPrice(details: ProductDetails?): String? {
+    private fun googleFormattedPrice(details: ProductDetails?, product: SubscriptionProductConfig): String? {
         if (details == null) return null
-        details.subscriptionOfferDetails
-            ?.firstOrNull()
+        return details.subscriptionOfferDetails
+            ?.firstOrNull { offer ->
+                (product.basePlanId.isNullOrBlank() || offer.basePlanId == product.basePlanId) &&
+                    (product.offerId.isNullOrBlank() || offer.offerId == product.offerId)
+            }
             ?.pricingPhases
             ?.pricingPhaseList
-            ?.firstOrNull()
+            ?.lastOrNull()
             ?.formattedPrice
             ?.takeIf { it.isNotBlank() }
-            ?.let { return it }
-
-        return runCatching {
+            ?: details.subscriptionOfferDetails
+            ?.firstOrNull { offer -> product.basePlanId.isNullOrBlank() || offer.basePlanId == product.basePlanId }
+            ?.pricingPhases
+            ?.pricingPhaseList
+            ?.lastOrNull()
+            ?.formattedPrice
+            ?.takeIf { it.isNotBlank() }
+            ?: runCatching {
             val oneTime = details.javaClass.methods
                 .firstOrNull { it.name == "getOneTimePurchaseOfferDetails" }
                 ?.invoke(details)
             oneTime?.javaClass?.methods
                 ?.firstOrNull { it.name == "getFormattedPrice" }
                 ?.invoke(oneTime) as? String
-        }.getOrNull()?.takeIf { it.isNotBlank() }
+            }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
-    private fun ProductDetails.subscriptionPeriodLabel(): String? {
+    private fun ProductDetails.subscriptionPeriodLabel(product: SubscriptionProductConfig): String? {
         val phase = subscriptionOfferDetails
-            ?.firstOrNull()
+            ?.firstOrNull { offer ->
+                (product.basePlanId.isNullOrBlank() || offer.basePlanId == product.basePlanId) &&
+                    (product.offerId.isNullOrBlank() || offer.offerId == product.offerId)
+            }
+            ?.pricingPhases
+            ?.pricingPhaseList
+            ?.lastOrNull()
+            ?: subscriptionOfferDetails
+            ?.firstOrNull { offer -> product.basePlanId.isNullOrBlank() || offer.basePlanId == product.basePlanId }
             ?.pricingPhases
             ?.pricingPhaseList
             ?.lastOrNull()

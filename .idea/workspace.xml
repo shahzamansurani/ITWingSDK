@@ -10,6 +10,11 @@
           <theme>@android:style/Theme.Material.Light</theme>
         </config>
       </layout>
+      <layout url="file://$PROJECT_DIR$/itwingSDK/src/main/res/layout/view_itwing_premium.xml">
+        <config>
+          <theme>@android:style/Theme.Material.Light</theme>
+        </config>
+      </layout>
     </layouts>
   </component>
   <component name="AutoImportSettings">
@@ -17,8 +22,27 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="103c2e10-a110-46f4-a3a7-93103cc3809e" name="Changes" comment="Check Play updates before splash ads">
-      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AdFailureDialog.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/itwingSDK/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/build.gradle.kts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/ITWingPremiumView.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable/itwing_ic_premium.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable/itwing_premium_badge_bg.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/drawable/itwing_premium_icon_bg.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/layout/view_itwing_premium.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/res/layout/activity_main.xml" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/res/layout/activity_main.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AppOpenManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/AppOpenManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/InterstitialManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/InterstitialManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/PurchaseDialog.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/PurchaseDialog.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/SubscriptionManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/billing/SubscriptionManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/AppRuntimeManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/AppRuntimeManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/ITWingConfig.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/ITWingConfig.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/ITWingSDK.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/core/ITWingSDK.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/data/ConfigRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/data/ConfigRepository.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/data/EncryptedConfigStore.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/data/EncryptedConfigStore.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/updates/InAppUpdateManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/updates/InAppUpdateManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/utils/SDKMediaView.kt" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/java/com/itwingtech/itwingsdk/utils/SDKMediaView.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/values/attrs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/values/attrs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/itwingSDK/src/main/res/values/strings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/itwingSDK/src/main/res/values/strings.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -217,13 +241,30 @@
       <option name="project" value="LOCAL" />
       <updated>1782106526660</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="Check Play updates before splash ads">
+      <option name="closed" value="true" />
+      <created>1782107901591</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1782107901591</updated>
+    </task>
+    <task id="LOCAL-00009" summary="Check Play updates before splash ads">
+      <option name="closed" value="true" />
+      <created>1782114158924</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1782114158924</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Add Firebase messaging service" />
     <MESSAGE value="Fix Media3 XML attrs for host resource linking" />
     <MESSAGE value="Rework billing purchase flow for SDK subscriptions" />
+    <MESSAGE value="Merge remote-tracking branch 'origin/master'&#10;&#10;# Conflicts:&#10;#&#9;.idea/workspace.xml&#10;#&#9;itwingSDK/build.gradle.kts" />
     <MESSAGE value="Check Play updates before splash ads" />
     <option name="LAST_COMMIT_MESSAGE" value="Check Play updates before splash ads" />
   </component>

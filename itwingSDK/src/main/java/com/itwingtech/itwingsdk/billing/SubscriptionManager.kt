@@ -27,6 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.ConcurrentHashMap
 
 class SubscriptionManager(
     private val configProvider: () -> ITWingConfig,
@@ -37,6 +38,8 @@ class SubscriptionManager(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val productDetails = mutableMapOf<String, ProductDetails>()
+    private val activePurchases = ConcurrentHashMap<String, Purchase>()
+    private val pendingProductSelections = ConcurrentHashMap<String, SubscriptionProductConfig>()
     private val readyCallbacks = CopyOnWriteArrayList<() -> Unit>()
     @Volatile
     private var lastBillingMessage: String? = null
@@ -118,6 +121,17 @@ class SubscriptionManager(
     }
 
     fun launchPurchase(activity: Activity, productId: String): BillingResult {
+        val product = configProvider().subscriptions.products.firstOrNull {
+            it.productId.trim() == productId.trim()
+        } ?: return failedResult(
+            BillingClient.BillingResponseCode.ITEM_UNAVAILABLE,
+            "Product is not configured in ITWing admin: $productId",
+        )
+        return launchPurchase(activity, product)
+    }
+
+    private fun launchPurchase(activity: Activity, adminProduct: SubscriptionProductConfig): BillingResult {
+        val productId = adminProduct.productId
         SDKTelemetry.track("purchase_flow_requested", mapOf("product_id" to productId))
         val client = billingClient ?: return failedResult(
             BillingClient.BillingResponseCode.SERVICE_DISCONNECTED,
@@ -131,20 +145,13 @@ class SubscriptionManager(
         }
 
         val requestedProductId = productId.trim()
-        if (requestedProductId in ownedProductIds()) {
+        if (isCurrentPlan(adminProduct)) {
             restorePurchases()
             return failedResult(
                 BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED,
                 "This product is already active on your Google Play account.",
             )
         }
-        val adminProduct = configProvider().subscriptions.products.firstOrNull {
-            it.productId.trim() == requestedProductId
-        }
-            ?: return failedResult(
-                BillingClient.BillingResponseCode.ITEM_UNAVAILABLE,
-                "Product is not configured in ITWing admin: $productId",
-            )
         val productType = adminProduct.billingProductType()
         val details = productDetails[productKey(requestedProductId, productType)]
             ?: productDetails[requestedProductId]
@@ -161,17 +168,39 @@ class SubscriptionManager(
             )
         }
 
+        val oldSubscriptionPurchase = if (productType == ProductType.SUBS) {
+            activeSubscriptionPurchase(adminProduct)
+        } else {
+            null
+        }
         val productParamsBuilder = BillingFlowParams.ProductDetailsParams.newBuilder()
             .setProductDetails(details)
         if (!offerToken.isNullOrBlank()) {
             productParamsBuilder.setOfferToken(offerToken)
         }
+        if (oldSubscriptionPurchase != null) {
+            currentSubscription()?.productId?.takeIf(String::isNotBlank)?.let { oldProductId ->
+                productParamsBuilder.setSubscriptionProductReplacementParams(
+                    BillingFlowParams.ProductDetailsParams.SubscriptionProductReplacementParams.newBuilder()
+                        .setOldProductId(oldProductId)
+                        .setReplacementMode(adminProduct.replacementMode())
+                        .build(),
+                )
+            }
+        }
         val productParams = productParamsBuilder.build()
 
-        val result = client.launchBillingFlow(
-            activity,
-            BillingFlowParams.newBuilder().setProductDetailsParamsList(listOf(productParams)).build(),
-        )
+        val flowBuilder = BillingFlowParams.newBuilder()
+            .setProductDetailsParamsList(listOf(productParams))
+        if (oldSubscriptionPurchase != null) {
+            flowBuilder.setSubscriptionUpdateParams(
+                BillingFlowParams.SubscriptionUpdateParams.newBuilder()
+                    .setOldPurchaseToken(oldSubscriptionPurchase.purchaseToken)
+                    .build(),
+            )
+        }
+        pendingProductSelections[requestedProductId] = adminProduct
+        val result = client.launchBillingFlow(activity, flowBuilder.build())
         if (result.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
             restorePurchases()
         }
@@ -203,6 +232,21 @@ class SubscriptionManager(
     }
 
     fun launchPurchaseWhenReady(activity: Activity, productId: String, onResult: (BillingResult) -> Unit) {
+        val product = configProvider().subscriptions.products.firstOrNull {
+            it.productId.trim() == productId.trim()
+        }
+        if (product == null) {
+            onResult(failedResult(BillingClient.BillingResponseCode.ITEM_UNAVAILABLE, "Product is not configured in ITWing admin: $productId"))
+            return
+        }
+        launchConfiguredPurchaseWhenReady(activity, product, onResult)
+    }
+
+    private fun launchConfiguredPurchaseWhenReady(
+        activity: Activity,
+        product: SubscriptionProductConfig,
+        onResult: (BillingResult) -> Unit,
+    ) {
         if (activity.isFinishing || activity.isDestroyed) {
             onResult(failedResult(BillingClient.BillingResponseCode.ERROR, "Activity is not available."))
             return
@@ -218,18 +262,18 @@ class SubscriptionManager(
         mainHandler.postDelayed({
             complete(
                 failedResult(
-                    BillingClient.BillingResponseCode.SERVICE_TIMEOUT,
+                    BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE,
                     "Google Play Billing did not become ready in time. Check Play Store availability and try again.",
                 ),
             )
         }, 10_000L)
 
         connect(activity) {
-            ensureProductDetailsLoaded(productId) {
-                val firstResult = launchPurchase(activity, productId)
+            ensureProductDetailsLoaded(product.productId) {
+                val firstResult = launchPurchase(activity, product)
                 if (firstResult.shouldRetryAfterProductRefresh()) {
                     queryProducts {
-                        complete(launchPurchase(activity, productId))
+                        complete(launchPurchase(activity, product))
                     }
                 } else {
                     complete(firstResult)
@@ -239,6 +283,21 @@ class SubscriptionManager(
     }
 
     fun products(): List<SubscriptionProductConfig> = configProvider().subscriptions.products
+
+    fun canChangeSubscriptionPlan(): Boolean {
+        val current = currentSubscription()?.takeIf {
+            it.active && !it.productType.equals("inapp", ignoreCase = true)
+        } ?: return false
+
+        return products().any { candidate ->
+            candidate.isGooglePlayStore() &&
+                candidate.productId.isNotBlank() &&
+                candidate.billingProductType() == ProductType.SUBS &&
+                (candidate.productId.trim() != current.productId ||
+                    candidate.basePlanId != current.basePlanId ||
+                    candidate.offerId != current.offerId)
+        }
+    }
 
     fun showPurchaseDialog(activity: Activity, onResult: (BillingResult) -> Unit = {}) {
         val products = products().filter { it.isGooglePlayStore() && it.productId.isNotBlank() }
@@ -280,12 +339,13 @@ class SubscriptionManager(
                     activity = activity,
                     products = products,
                     primaryColor = purchasePrimaryColor(),
-                    detailsProvider = { productId, productType ->
-                        productDetails[productKey(productId, productType)] ?: productDetails[productId]
+                    detailsProvider = { product ->
+                        productDetails[productKey(product.productId.trim(), product.billingProductType())]
+                            ?: productDetails[product.productId.trim()]
                     },
                     ownedProductIds = ownedProductIds(),
                     currentSubscription = currentSubscription(),
-                    launcher = { productId, result -> launchPurchaseWhenReady(activity, productId.trim(), result) },
+                    launcher = { product, result -> launchConfiguredPurchaseWhenReady(activity, product, result) },
                     restore = { callback -> restorePurchases(callback) },
                     onResult = onResult,
                 )
@@ -306,16 +366,24 @@ class SubscriptionManager(
 
     fun currentSubscription(): SubscriptionPlanInfo? {
         val repository = repositoryProvider() ?: return null
+        val activeProductId = repository.activeProductId()
+        val activeBasePlanId = repository.activeBasePlanId()
         val product = configProvider().subscriptions.products.firstOrNull { configured ->
+            configured.productId.trim() == activeProductId &&
+                (activeBasePlanId.isNullOrBlank() || configured.basePlanId == activeBasePlanId)
+        } ?: configProvider().subscriptions.products.firstOrNull { configured ->
             configured.productId.trim() in repository.ownedProductIds()
         } ?: return null
         return SubscriptionPlanInfo(
             productId = product.productId.trim(),
+            basePlanId = product.basePlanId,
+            offerId = product.offerId,
             name = product.name.ifBlank { product.productId.trim() },
             productType = product.productType,
             billingPeriod = product.billingPeriod,
             price = product.price,
             currency = product.currency,
+            formattedPrice = formattedPlayPrice(product),
             active = repository.isEntitlementActive(),
             removesAds = repository.entitlementRemovesAds(),
             expiresAt = repository.entitlementExpiresAt(),
@@ -342,6 +410,7 @@ class SubscriptionManager(
         }
 
         val restored = mutableListOf<Purchase>()
+        activePurchases.clear()
         queryPurchases(client, ProductType.SUBS) { subscriptionsSucceeded, subscriptionPurchases ->
             restored.addAll(subscriptionPurchases)
             queryPurchases(client, ProductType.INAPP) { inAppSucceeded, inAppPurchases ->
@@ -445,7 +514,13 @@ class SubscriptionManager(
             )
             return
         }
-        val adminProduct = configProvider().subscriptions.products.firstOrNull { it.productId.trim() == productId.trim() }
+        purchase.products.forEach { activePurchases[it.trim()] = purchase }
+        val adminProduct = pendingProductSelections.remove(productId.trim())
+            ?: configProvider().subscriptions.products.firstOrNull {
+                it.productId.trim() == productId.trim() &&
+                    (repositoryProvider()?.activeBasePlanId().isNullOrBlank() || it.basePlanId == repositoryProvider()?.activeBasePlanId())
+            }
+            ?: configProvider().subscriptions.products.firstOrNull { it.productId.trim() == productId.trim() }
         val productType = adminProduct?.billingProductType() ?: ProductType.SUBS
         val signatureVerified = GooglePlaySignatureValidator.verify(
             googlePlayLicenseKey(),
@@ -460,7 +535,7 @@ class SubscriptionManager(
             )
             return
         }
-        recordPlayOwnership(purchase)
+        recordPlayOwnership(purchase, adminProduct)
         if (adminProduct?.isConsumable() != true) {
             acknowledgeIfNeeded(purchase)
         }
@@ -486,9 +561,9 @@ class SubscriptionManager(
                     ),
                 )
                 finishPurchaseIfNeeded(purchase, adminProduct)
-                recordPlayOwnership(purchase)
+                recordPlayOwnership(purchase, adminProduct)
             }.onFailure {
-                recordPlayOwnership(purchase)
+                recordPlayOwnership(purchase, adminProduct)
                 lastBillingMessage = it.message
                 SDKTelemetry.track(
                     "purchase_verify_failed",
@@ -562,6 +637,57 @@ class SubscriptionManager(
         }?.offerToken ?: offers.firstOrNull()?.offerToken
     }
 
+    private fun isCurrentPlan(product: SubscriptionProductConfig): Boolean {
+        val repository = repositoryProvider() ?: return false
+        if (!repository.isEntitlementActive()) return false
+        if (repository.activeProductId() != product.productId.trim()) return false
+        val activeBasePlan = repository.activeBasePlanId()
+        return activeBasePlan.isNullOrBlank() || activeBasePlan == product.basePlanId
+    }
+
+    private fun activeSubscriptionPurchase(target: SubscriptionProductConfig): Purchase? {
+        if (target.billingProductType() != ProductType.SUBS) return null
+        val current = currentSubscription()?.takeIf { it.active && it.productType != "inapp" }
+            ?: return null
+        if (current.productId == target.productId.trim() && current.basePlanId == target.basePlanId) return null
+        return activePurchases[current.productId] ?: activePurchases.values.firstOrNull { purchase ->
+            purchase.products.any { productId ->
+                configProvider().subscriptions.products.any {
+                    it.productId.trim() == productId.trim() && it.billingProductType() == ProductType.SUBS
+                }
+            }
+        }
+    }
+
+    private fun SubscriptionProductConfig.replacementMode(): Int {
+        return when (metadata["replacement_mode"]?.toString()?.trim()?.lowercase()) {
+            "charge_full_price", "full_price" -> BillingFlowParams.ProductDetailsParams.SubscriptionProductReplacementParams.ReplacementMode.CHARGE_FULL_PRICE
+            "without_proration", "no_proration" -> BillingFlowParams.ProductDetailsParams.SubscriptionProductReplacementParams.ReplacementMode.WITHOUT_PRORATION
+            "deferred" -> BillingFlowParams.ProductDetailsParams.SubscriptionProductReplacementParams.ReplacementMode.DEFERRED
+            "charge_prorated_price", "prorated_price" -> BillingFlowParams.ProductDetailsParams.SubscriptionProductReplacementParams.ReplacementMode.CHARGE_PRORATED_PRICE
+            else -> BillingFlowParams.ProductDetailsParams.SubscriptionProductReplacementParams.ReplacementMode.WITH_TIME_PRORATION
+        }
+    }
+
+    private fun formattedPlayPrice(product: SubscriptionProductConfig): String? {
+        val details = productDetails[productKey(product.productId.trim(), product.billingProductType())]
+            ?: productDetails[product.productId.trim()]
+            ?: return null
+        if (product.billingProductType() == ProductType.SUBS) {
+            val offer = details.subscriptionOfferDetails.orEmpty().firstOrNull { candidate ->
+                (product.basePlanId.isNullOrBlank() || candidate.basePlanId == product.basePlanId) &&
+                    (product.offerId.isNullOrBlank() || candidate.offerId == product.offerId)
+            } ?: details.subscriptionOfferDetails.orEmpty().firstOrNull { candidate ->
+                product.basePlanId.isNullOrBlank() || candidate.basePlanId == product.basePlanId
+            }
+            return offer?.pricingPhases?.pricingPhaseList?.lastOrNull()?.formattedPrice?.takeIf(String::isNotBlank)
+        }
+        return runCatching {
+            val oneTime = details.javaClass.methods.firstOrNull { it.name == "getOneTimePurchaseOfferDetails" }?.invoke(details)
+            oneTime?.javaClass?.methods?.firstOrNull { it.name == "getFormattedPrice" }?.invoke(oneTime) as? String
+        }.getOrNull()?.takeIf(String::isNotBlank)
+    }
+
     private fun queryPurchases(client: BillingClient, productType: String, onComplete: (Boolean, List<Purchase>) -> Unit) {
         client.queryPurchasesAsync(
             QueryPurchasesParams.newBuilder().setProductType(productType).build(),
@@ -571,19 +697,25 @@ class SubscriptionManager(
                 onComplete(false, emptyList())
                 return@queryPurchasesAsync
             }
+            purchases.filter { it.purchaseState == Purchase.PurchaseState.PURCHASED }.forEach { purchase ->
+                purchase.products.forEach { activePurchases[it.trim()] = purchase }
+            }
             onComplete(true, purchases)
         }
     }
 
     private fun ownedProductIds(): Set<String> = repositoryProvider()?.ownedProductIds().orEmpty()
 
-    private fun recordPlayOwnership(purchase: Purchase) {
+    private fun recordPlayOwnership(purchase: Purchase, product: SubscriptionProductConfig? = null) {
         if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) return
         val productIds = purchase.products.map(String::trim).filter(String::isNotBlank)
         val nonConsumableIds = productIds.filterNot { productId ->
             configProvider().subscriptions.products.firstOrNull { it.productId.trim() == productId }?.isConsumable() == true
         }
         if (nonConsumableIds.isEmpty()) return
+        product?.let {
+            repositoryProvider()?.saveActivePlan(it.productId.trim(), it.basePlanId, it.offerId)
+        }
         savePlayOwnership(ownedProductIds() + nonConsumableIds)
     }
 

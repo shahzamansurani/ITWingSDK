@@ -113,13 +113,13 @@ internal class AppRuntimeManager(
 
     private fun splashDelayMs(config: ITWingConfig): Long {
         val splash = config.app["splash"].safeMap()
-        val seconds = splash["seconds"].safeLong(2L)
+        val seconds = splash["seconds"].safeLong(7L)
         return seconds.coerceIn(0L, 10L) * 1000L
     }
 
     private fun splashFormat(config: ITWingConfig): String {
         val splash = config.app["splash"].safeMap()
-        return splash["ad_format"].safeString() ?: "app_open"
+        return splash["ad_format"].safeString() ?: "none"
     }
 
     private fun Any?.safeBoolean(defaultValue: Boolean): Boolean {

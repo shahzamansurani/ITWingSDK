@@ -52,11 +52,18 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
             owner.registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
                 flowInProgress.set(false)
                 endActiveFullscreenOwner()
-                completePendingUpdateContinuation()
                 SDKTelemetry.track(
                     "in_app_update_flow_result",
                     mapOf("result_code" to result.resultCode),
                 )
+                if (result.resultCode == Activity.RESULT_OK) {
+                    // An accepted immediate update restarts the app. Do not continue into a
+                    // splash ad in the old process, otherwise users can receive two ads.
+                    pendingAfterUpdateFlow = null
+                    preSplashCheckInFlight.set(false)
+                } else {
+                    completePendingUpdateContinuation()
+                }
             }
         }.onSuccess {
             automaticLauncher = it
@@ -77,12 +84,16 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         }
         val settings = settings()
         val enabled = settings?.boolean("enabled", false) ?: false
-        if (!enabled || automaticLauncher == null) {
+        if (!enabled) {
             onContinue()
             return
         }
+        if (flowInProgress.get()) {
+            pendingAfterUpdateFlow = onContinue
+            return
+        }
         if (!preSplashCheckInFlight.compareAndSet(false, true)) {
-            onContinue()
+            pendingAfterUpdateFlow = onContinue
             return
         }
 
@@ -192,6 +203,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
 
                 info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE && staleEnough && priorityEnough -> {
                     val typeToLaunch = when {
+                        onFlowStarted != null && info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE) -> AppUpdateType.IMMEDIATE
                         info.isUpdateTypeAllowed(updateType) -> updateType
                         updateType == AppUpdateType.IMMEDIATE && info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE) -> AppUpdateType.FLEXIBLE
                         updateType == AppUpdateType.FLEXIBLE && info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE) -> AppUpdateType.IMMEDIATE
@@ -252,11 +264,13 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
 
                 info.installStatus() == InstallStatus.DOWNLOADED -> {
                     completeFlexibleUpdate(appUpdateManager)
+                    completePendingUpdateContinuation()
                 }
 
                 else -> {
                     flowInProgress.set(false)
                     endActiveFullscreenOwner()
+                    completePendingUpdateContinuation()
                 }
             }
         }
@@ -279,7 +293,11 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         }
         if (!flowInProgress.compareAndSet(false, true)) {
             onResult?.invoke("An in-app update flow is already running.")
-            onNoFlow?.invoke()
+            if (onFlowStarted != null) {
+                onFlowStarted.invoke()
+            } else {
+                onNoFlow?.invoke()
+            }
             return
         }
         val fullscreenOwner = FullscreenAdState.tryBegin("play_update", "in_app_update")
@@ -363,11 +381,13 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
             .addOnSuccessListener {
                 flowInProgress.set(false)
                 endActiveFullscreenOwner()
+                completePendingUpdateContinuation()
                 SDKTelemetry.track("in_app_update_completed")
             }
             .addOnFailureListener {
                 flowInProgress.set(false)
                 endActiveFullscreenOwner()
+                completePendingUpdateContinuation()
                 SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_complete"))
                 SDKTelemetry.track("in_app_update_complete_failed", mapOf("message" to (it.message ?: "unknown")))
             }

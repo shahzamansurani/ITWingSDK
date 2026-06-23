@@ -30,4 +30,10 @@
         </attr>
     </declare-styleable>
 
+    <declare-styleable name="ITWingPremiumView">
+        <attr name="ITWingPremiumTitle" format="string" />
+        <attr name="ITWingPremiumDescription" format="string" />
+        <attr name="ITWingPremiumShowRestore" format="boolean" />
+    </declare-styleable>
+
 </resources>

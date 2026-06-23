@@ -20,4 +20,27 @@
     <string name="banner_ad_loading">Banner Ad Loading...</string>
     <string name="ad">AD</string>
     <string name="install">Install</string>
+    <string name="premium_title">Premium</string>
+    <string name="premium_description">Remove ads and unlock the premium experience.</string>
+    <string name="premium_status_active">ACTIVE</string>
+    <string name="premium_status_expired">EXPIRED</string>
+    <string name="premium_status_available">AVAILABLE</string>
+    <string name="premium_plan_label">Plan</string>
+    <string name="premium_billing_label">Billing</string>
+    <string name="premium_price_label">Price</string>
+    <string name="premium_expiry_label">Expiry</string>
+    <string name="premium_purchase">Remove Ads</string>
+    <string name="premium_renew">Renew Premium</string>
+    <string name="premium_active_button">Premium Active</string>
+    <string name="premium_change_plan">Change Plan</string>
+    <string name="premium_restore">Restore purchase</string>
+    <string name="premium_checking">Checking your Google Play purchase...</string>
+    <string name="premium_restored">Purchase restored</string>
+    <string name="premium_not_found">No active purchase was found</string>
+    <string name="premium_expiry_syncing">Managed by Google Play</string>
+    <string name="premium_lifetime">Never expires</string>
+    <string name="premium_price_play">See price in Google Play</string>
+    <string name="premium_subscription">Subscription</string>
+    <string name="premium_one_time">One-time purchase</string>
+    <string name="premium_screen_closing">Purchase is unavailable while this screen is closing</string>
 </resources>

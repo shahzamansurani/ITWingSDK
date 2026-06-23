@@ -47,6 +47,20 @@ class EncryptedConfigStore(context: Context) {
         prefs.edit { putStringSet("owned_product_ids", productIds) }
     }
 
+    fun saveActivePlan(productId: String?, basePlanId: String?, offerId: String?) {
+        prefs.edit {
+            putString("active_product_id", productId)
+            putString("active_base_plan_id", basePlanId)
+            putString("active_offer_id", offerId)
+        }
+    }
+
+    fun activeProductId(): String? = prefs.getString("active_product_id", null)?.takeIf(String::isNotBlank)
+
+    fun activeBasePlanId(): String? = prefs.getString("active_base_plan_id", null)?.takeIf(String::isNotBlank)
+
+    fun activeOfferId(): String? = prefs.getString("active_offer_id", null)?.takeIf(String::isNotBlank)
+
     fun ownedProductIds(): Set<String> =
         prefs.getStringSet("owned_product_ids", emptySet())?.toSet().orEmpty()
 

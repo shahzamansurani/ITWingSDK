@@ -19,6 +19,8 @@ import com.itwingtech.itwingsdk.analytics.InstallReferrerReporter
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.billing.SubscriptionManager
 import com.itwingtech.itwingsdk.data.ConfigRepository
+import com.itwingtech.itwingsdk.ui.ITWingActionDialog
+import com.itwingtech.itwingsdk.ui.ITWingLoadingDialog
 import com.itwingtech.itwingsdk.updates.InAppUpdateManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -448,6 +450,11 @@ object ITWingSDK {
     }
 
     @JvmStatic
+    fun canChangeSubscriptionPlan(): Boolean {
+        return ::subscriptions.isInitialized && subscriptions.canChangeSubscriptionPlan()
+    }
+
+    @JvmStatic
     fun restorePurchases(onComplete: ((Boolean) -> Unit)? = null) {
         if (::subscriptions.isInitialized) {
             subscriptions.restorePurchases(onComplete)
@@ -527,14 +534,14 @@ object ITWingSDK {
     fun getAppLogoUri(): Uri? = getLogoUri()
 
     @JvmStatic
-    fun getSplashDelayMs(defaultValue: Long = 2000L): Long {
+    fun getSplashDelayMs(defaultValue: Long = 7000L): Long {
         val splash = config.app["splash"] as? Map<*, *> ?: return defaultValue
         val seconds = splash["seconds"] as? Number ?: return defaultValue
         return seconds.toLong().coerceIn(0L, 10L) * 1000L
     }
 
     @JvmStatic
-    fun getSplashAdFormat(defaultValue: String = "app_open"): String {
+    fun getSplashAdFormat(defaultValue: String = "none"): String {
         val splash = config.app["splash"] as? Map<*, *> ?: return defaultValue
         return splash["ad_format"] as? String ?: defaultValue
     }
@@ -670,6 +677,62 @@ object ITWingSDK {
                     .setResponseCode(com.android.billingclient.api.BillingClient.BillingResponseCode.SERVICE_DISCONNECTED)
                     .setDebugMessage("Billing is not initialized yet.")
                     .build()
+            )
+        }
+    }
+
+    @JvmStatic
+    fun createLoadingDialog(activity: Activity): ITWingLoadingDialog {
+        return ITWingLoadingDialog(activity) { config.app["loading_lottie_url"] as? String }
+    }
+
+    @JvmStatic
+    @JvmOverloads
+    fun showLoadingDialog(activity: Activity, lottieUrl: String? = null): ITWingLoadingDialog {
+        return createLoadingDialog(activity).also {
+            it.show(lottieUrl ?: config.app["loading_lottie_url"] as? String)
+        }
+    }
+
+    @JvmStatic
+    fun createActionDialog(activity: Activity): ITWingActionDialog {
+        return ITWingActionDialog(
+            activity = activity,
+            defaultsProvider = { config.app["host_dialog"] as? Map<*, *> ?: emptyMap<Any?, Any?>() },
+            primaryColorProvider = { appPrimaryColorInt() },
+        )
+    }
+
+    @JvmSynthetic
+    fun showActionDialog(activity: Activity, onPositive: () -> Unit): ITWingActionDialog {
+        return showActionDialog(activity = activity, onPositive = Runnable(onPositive))
+    }
+
+    @JvmStatic
+    @JvmOverloads
+    fun showActionDialog(
+        activity: Activity,
+        title: String? = null,
+        description: String? = null,
+        positiveText: String? = null,
+        negativeText: String? = null,
+        nativePlacement: String? = null,
+        nativeType: String? = null,
+        onPositive: Runnable? = null,
+        onNegative: Runnable? = null,
+        onCancel: Runnable? = null,
+    ): ITWingActionDialog {
+        return createActionDialog(activity).also {
+            it.show(
+                title = title,
+                description = description,
+                positiveText = positiveText,
+                negativeText = negativeText,
+                nativePlacement = nativePlacement,
+                nativeType = nativeType,
+                onPositive = onPositive,
+                onNegative = onNegative,
+                onCancel = onCancel,
             )
         }
     }
@@ -992,6 +1055,16 @@ object ITWingSDK {
         return object : SDKInitListener {
             override fun onReady() = onReady()
         }
+    }
+
+    private fun appPrimaryColorInt(): Int {
+        val color = listOf(
+            getColor("primary"),
+            getColor("primary_color"),
+            config.app["primary_color"]?.toString().orEmpty(),
+        ).firstOrNull { it.isNotBlank() } ?: "#2563EB"
+        return runCatching { android.graphics.Color.parseColor(color) }
+            .getOrDefault(android.graphics.Color.rgb(37, 99, 235))
     }
 
     private fun ApiKeyConfig.sanitizedApiKeyConfig(): ApiKeyConfig {

@@ -165,8 +165,14 @@ internal class CustomFullscreenAdRenderer {
         )
 
         binding.adMedia.render(
-            ad.mediaUrl(),
-            ad.isVideo()
+            url = ad.mediaUrl(),
+            video = ad.isVideo(),
+            loop = !isRewardedPlacement,
+            onCompleted = {
+                if (isRewardedPlacement && rewardEarned.compareAndSet(false, true)) {
+                    reward?.invoke()
+                }
+            },
         )
 
         binding.adMedia.play()
@@ -446,7 +452,7 @@ internal class CustomFullscreenAdRenderer {
             Looper.getMainLooper()
         ).postDelayed({
 
-            if (isRewardedPlacement && rewardEarned.compareAndSet(false, true)) {
+            if (isRewardedPlacement && !ad.isVideo() && rewardEarned.compareAndSet(false, true)) {
                 reward?.invoke()
             }
 
@@ -526,9 +532,17 @@ internal class CustomFullscreenAdRenderer {
             binding.root
         )
 
-        dialog.show()
-
-        return true
+        return runCatching {
+            dialog.show()
+            true
+        }.getOrElse {
+            destroy(binding.adMedia)
+            FullscreenAdState.end(fullscreenOwner)
+            runCatching {
+                activity.application.unregisterActivityLifecycleCallbacks(lifecycleCallbacks)
+            }
+            false
+        }
     }
 
     private fun destroy(

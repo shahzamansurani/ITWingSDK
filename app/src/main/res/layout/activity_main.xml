@@ -59,6 +59,12 @@
             android:textSize="13sp"
             tools:text="Notification and billing status" />
 
+        <com.itwingtech.itwingsdk.billing.ITWingPremiumView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:ITWingPremiumShowRestore="true" />
+
         <Button
             android:id="@+id/refreshConfig"
             android:layout_width="match_parent"

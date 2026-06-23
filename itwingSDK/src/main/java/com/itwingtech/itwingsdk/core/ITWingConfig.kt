@@ -146,11 +146,14 @@ data class SubscriptionProductConfig(
 
 data class SubscriptionPlanInfo(
     val productId: String,
+    val basePlanId: String? = null,
+    val offerId: String? = null,
     val name: String,
     val productType: String,
     val billingPeriod: String,
     val price: Double?,
     val currency: String?,
+    val formattedPrice: String? = null,
     val active: Boolean,
     val removesAds: Boolean,
     val expiresAt: String?,
