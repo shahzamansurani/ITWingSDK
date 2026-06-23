@@ -63,6 +63,8 @@ object ITWingSDK {
     @Volatile
     private var lifecycleTrackingRegistered = false
     @Volatile
+    private var autoApplyResponsiveLayout = false
+    @Volatile
     private var foregroundActivityCount = 0
     @Volatile
     private var foregroundStartedAtMs = 0L
@@ -93,6 +95,14 @@ object ITWingSDK {
     @JvmOverloads
     fun initialize(activity: Activity, apiKey: String, options: ITWingOptions = ITWingOptions(), listener: SDKInitListener? = null) {
         listener?.let { initListeners.add(it) }
+        autoApplyResponsiveLayout = options.autoApplyResponsiveLayout
+        if (autoApplyResponsiveLayout) {
+            HostLayoutController.apply(
+                activity = activity,
+                primaryColor = appPrimaryColorInt(),
+                applyContentInsets = true,
+            )
+        }
         repository = ConfigRepository(activity.applicationContext, apiKey, options)
         bootstrapFinished = false
         bootstrapInFlight = true
@@ -136,6 +146,13 @@ object ITWingSDK {
              */
             config = repository?.loadCachedConfig() ?: ITWingConfig()
             if (config.configVersion > 0) {
+                if (autoApplyResponsiveLayout) {
+                    HostLayoutController.apply(
+                        activity = activity,
+                        primaryColor = appPrimaryColorInt(),
+                        applyContentInsets = true,
+                    )
+                }
                 connectionState = "cached_config_loaded"
                 lastError = null
                 analytics.track("sdk_cached_config_loaded", mapOf("config_version" to config.configVersion))
@@ -176,6 +193,15 @@ object ITWingSDK {
              */
             runCatching { repository!!.bootstrap() }.onSuccess { remote ->
                 config = remote
+                if (autoApplyResponsiveLayout) {
+                    getActiveActivity()?.let { active ->
+                        HostLayoutController.apply(
+                            activity = active,
+                            primaryColor = appPrimaryColorInt(),
+                            applyContentInsets = true,
+                        )
+                    }
+                }
                 lastError = null
                 connectionState = "ready"
                 bootstrapFinished = true
@@ -290,6 +316,15 @@ object ITWingSDK {
             val updated = runCatching {
                 repository?.syncConfig(config.configVersion)?.let {
                     config = it
+                    if (autoApplyResponsiveLayout) {
+                        getActiveActivity()?.let { active ->
+                            HostLayoutController.apply(
+                                activity = active,
+                                primaryColor = appPrimaryColorInt(),
+                                applyContentInsets = true,
+                            )
+                        }
+                    }
                     notifyListeners { listener -> listener.onConfigLoaded(config) }
                     true
                 } ?: false
@@ -321,7 +356,23 @@ object ITWingSDK {
         "config_version" to config.configVersion,
         "bootstrap_finished" to bootstrapFinished,
         "bootstrap_in_flight" to bootstrapInFlight,
+        "auto_responsive_layout" to autoApplyResponsiveLayout,
     )
+
+    @JvmStatic
+    @JvmOverloads
+    fun applyResponsiveLayout(activity: Activity, applyContentInsets: Boolean = true) {
+        runSdkCall(
+            operation = "apply_responsive_layout",
+            properties = mapOf("content_insets" to applyContentInsets),
+        ) {
+            HostLayoutController.apply(
+                activity = activity,
+                primaryColor = appPrimaryColorInt(),
+                applyContentInsets = applyContentInsets,
+            )
+        }
+    }
 
     @JvmStatic
     fun onReady(callback: (Boolean) -> Unit) {
@@ -698,7 +749,7 @@ object ITWingSDK {
     fun createActionDialog(activity: Activity): ITWingActionDialog {
         return ITWingActionDialog(
             activity = activity,
-            defaultsProvider = { config.app["host_dialog"] as? Map<*, *> ?: emptyMap<Any?, Any?>() },
+            defaultsProvider = { hostDialogDefaults() },
             primaryColorProvider = { appPrimaryColorInt() },
         )
     }
@@ -706,6 +757,21 @@ object ITWingSDK {
     @JvmSynthetic
     fun showActionDialog(activity: Activity, onPositive: () -> Unit): ITWingActionDialog {
         return showActionDialog(activity = activity, onPositive = Runnable(onPositive))
+    }
+
+    @JvmSynthetic
+    fun showActionDialog(
+        activity: Activity,
+        onPositive: () -> Unit,
+        onNegative: () -> Unit,
+        onCancel: () -> Unit = {},
+    ): ITWingActionDialog {
+        return showActionDialog(
+            activity = activity,
+            onPositive = Runnable(onPositive),
+            onNegative = Runnable(onNegative),
+            onCancel = Runnable(onCancel),
+        )
     }
 
     @JvmStatic
@@ -907,6 +973,13 @@ object ITWingSDK {
                      */
 
                     activeActivity = WeakReference(activity)
+                    if (autoApplyResponsiveLayout) {
+                        HostLayoutController.apply(
+                            activity = activity,
+                            primaryColor = appPrimaryColorInt(),
+                            applyContentInsets = true,
+                        )
+                    }
                     ads.updateForegroundActivity(activity)
                     NotificationRuntimeManager.reportOpened(activity.intent?.getStringExtra("itwing_notification_id"))
                     NotificationRuntimeManager.syncNow()
@@ -935,6 +1008,13 @@ object ITWingSDK {
                     activity: Activity,
                     savedInstanceState: Bundle?
                 ) {
+                    if (autoApplyResponsiveLayout) {
+                        HostLayoutController.apply(
+                            activity = activity,
+                            primaryColor = appPrimaryColorInt(),
+                            applyContentInsets = true,
+                        )
+                    }
                 }
 
                 override fun onActivityStarted(
@@ -1066,6 +1146,57 @@ object ITWingSDK {
         ).firstOrNull { it.isNotBlank() } ?: "#2563EB"
         return runCatching { android.graphics.Color.parseColor(color) }
             .getOrDefault(android.graphics.Color.rgb(37, 99, 235))
+    }
+
+    private fun hostDialogDefaults(): Map<*, *> {
+        val candidates = listOf(
+            config.app["host_dialog"],
+            config.app["hostDialog"],
+            config.remoteConfig["host_dialog"],
+            config.remoteConfig["hostDialog"],
+            config.features["host_dialog"],
+            config.features["hostDialog"],
+        )
+        candidates.firstNotNullOfOrNull { it as? Map<*, *> }?.let { return it }
+
+        val flat = linkedMapOf<String, Any?>(
+            "enabled" to (
+                config.app["host_dialog_enabled"]
+                    ?: config.remoteConfig["host_dialog_enabled"]
+                    ?: config.features["host_dialog_enabled"]
+                ),
+            "title" to (
+                config.app["host_dialog_title"]
+                    ?: config.remoteConfig["host_dialog_title"]
+                    ?: config.features["host_dialog_title"]
+                ),
+            "description" to (
+                config.app["host_dialog_description"]
+                    ?: config.remoteConfig["host_dialog_description"]
+                    ?: config.features["host_dialog_description"]
+                ),
+            "positive_text" to (
+                config.app["host_dialog_positive_text"]
+                    ?: config.remoteConfig["host_dialog_positive_text"]
+                    ?: config.features["host_dialog_positive_text"]
+                ),
+            "negative_text" to (
+                config.app["host_dialog_negative_text"]
+                    ?: config.remoteConfig["host_dialog_negative_text"]
+                    ?: config.features["host_dialog_negative_text"]
+                ),
+            "native_placement" to (
+                config.app["host_dialog_native_placement"]
+                    ?: config.remoteConfig["host_dialog_native_placement"]
+                    ?: config.features["host_dialog_native_placement"]
+                ),
+            "native_type" to (
+                config.app["host_dialog_native_type"]
+                    ?: config.remoteConfig["host_dialog_native_type"]
+                    ?: config.features["host_dialog_native_type"]
+                ),
+        )
+        return flat.filterValues { it != null }
     }
 
     private fun ApiKeyConfig.sanitizedApiKeyConfig(): ApiKeyConfig {

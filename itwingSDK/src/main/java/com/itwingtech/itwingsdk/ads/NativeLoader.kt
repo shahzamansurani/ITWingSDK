@@ -32,13 +32,13 @@ import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.utils.SDKMediaView
 import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
+import java.util.WeakHashMap
 
 class NativeLoader(
     private val configProvider: () -> ITWingConfig
 ) {
 
-    private var currentNativeAd: NativeAd? =
-        null
+    private val nativeAds = WeakHashMap<ViewGroup, NativeAd>()
 
     /*
     |--------------------------------------------------------------------------
@@ -174,11 +174,19 @@ class NativeLoader(
                     ) {
 
                         activity.runOnUiThread {
+                            if (
+                                activity.isFinishing ||
+                                activity.isDestroyed ||
+                                !container.isAttachedToWindow
+                            ) {
+                                nativeAd.destroy()
+                                return@runOnUiThread
+                            }
 
-                            currentNativeAd?.destroy()
-
-                            currentNativeAd =
-                                nativeAd
+                            synchronized(nativeAds) {
+                                nativeAds.remove(container)?.destroy()
+                                nativeAds[container] = nativeAd
+                            }
 
                             @LayoutRes
                             val layoutRes =
@@ -264,14 +272,15 @@ class NativeLoader(
         container: ViewGroup? = null
     ) {
 
-        try {
-
-            currentNativeAd?.destroy()
-
-        } catch (_: Exception) {
+        if (container == null) {
+            val ads = synchronized(nativeAds) {
+                nativeAds.values.toList().also { nativeAds.clear() }
+            }
+            ads.forEach { ad -> runCatching { ad.destroy() } }
+        } else {
+            val ad = synchronized(nativeAds) { nativeAds.remove(container) }
+            runCatching { ad?.destroy() }
         }
-
-        currentNativeAd = null
 
         container?.let {
 
@@ -917,6 +926,14 @@ class NativeLoader(
 
         if (media.isNullOrBlank()) {
             activity.runOnUiThread {
+                if (
+                    activity.isFinishing ||
+                    activity.isDestroyed ||
+                    !container.isAttachedToWindow
+                ) {
+                    stopShimmer(loadingView)
+                    return@runOnUiThread
+                }
                 stopShimmer(loadingView)
                 renderCustomNative(activity = activity, container = container, ad = ad, type = type)
             }
@@ -941,6 +958,14 @@ class NativeLoader(
         container.postDelayed({
 
             activity.runOnUiThread {
+                if (
+                    activity.isFinishing ||
+                    activity.isDestroyed ||
+                    !container.isAttachedToWindow
+                ) {
+                    stopShimmer(loadingView)
+                    return@runOnUiThread
+                }
 
                 renderCustomNative(
                     activity = activity,

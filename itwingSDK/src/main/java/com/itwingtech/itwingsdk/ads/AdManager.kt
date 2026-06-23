@@ -170,6 +170,25 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
      * Native
      */
     fun loadNative(activity: Activity, container: ViewGroup, placement: String, nativeType: NativeType? = null) {
+        loadNative(activity, container, placement, nativeType, respectInlineSafetyGate = true)
+    }
+
+    internal fun loadNativeForDialog(
+        activity: Activity,
+        container: ViewGroup,
+        placement: String,
+        nativeType: NativeType? = null,
+    ) {
+        loadNative(activity, container, placement, nativeType, respectInlineSafetyGate = false)
+    }
+
+    private fun loadNative(
+        activity: Activity,
+        container: ViewGroup,
+        placement: String,
+        nativeType: NativeType?,
+        respectInlineSafetyGate: Boolean,
+    ) {
         rememberContainer(nativeContainers, container)
         if (adsSuppressed()) {
             trackSuppressed("native", placement)
@@ -178,7 +197,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         }
         val activityRef = WeakReference(activity)
         val containerRef = WeakReference(container)
-        if (InlineAdSafetyGate.suppressInlineAd(
+        if (respectInlineSafetyGate && InlineAdSafetyGate.suppressInlineAd(
                 activity = activity,
                 inlineFormat = "native",
                 placement = placement,
@@ -192,7 +211,13 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
                         !resumedActivity.isDestroyed &&
                         resumedContainer.isAttachedToWindow
                     ) {
-                        loadNative(resumedActivity, resumedContainer, placement, nativeType)
+                        loadNative(
+                            resumedActivity,
+                            resumedContainer,
+                            placement,
+                            nativeType,
+                            respectInlineSafetyGate = true,
+                        )
                     }
                 },
             )

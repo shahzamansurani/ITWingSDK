@@ -21,6 +21,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal object PurchaseDialog {
     fun show(
@@ -51,6 +52,22 @@ internal object PurchaseDialog {
         val status = content.findViewById<TextView>(R.id.itwing_purchase_status)
         val restoreButton = content.findViewById<MaterialButton>(R.id.itwing_purchase_restore)
         val cancelButton = content.findViewById<MaterialButton>(R.id.itwing_purchase_cancel)
+        val resultDelivered = AtomicBoolean(false)
+
+        fun deliverResult(result: BillingResult) {
+            if (resultDelivered.compareAndSet(false, true)) {
+                onResult(result)
+            }
+        }
+
+        fun deliverCancellation() {
+            deliverResult(
+                BillingResult.newBuilder()
+                    .setResponseCode(BillingClient.BillingResponseCode.USER_CANCELED)
+                    .setDebugMessage("Purchase options were closed by the user.")
+                    .build()
+            )
+        }
 
         title.text = "Choose your premium plan"
         val hasActivePurchase = currentSubscription?.active == true
@@ -116,7 +133,7 @@ internal object PurchaseDialog {
                 setOnClickListener {
                     if (isOwned) return@setOnClickListener
                     if (activity.isFinishing || activity.isDestroyed) {
-                        onResult(failedResult("Activity is not available."))
+                        deliverResult(failedResult("Activity is not available."))
                         dialog?.dismiss()
                         return@setOnClickListener
                     }
@@ -126,7 +143,7 @@ internal object PurchaseDialog {
                     status.text = "Connecting to Google Play Billing for ${product.productId.trim()}..."
                     launcher(product) { result ->
                         activity.runOnUiThread {
-                            onResult(result)
+                            deliverResult(result)
                             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                                 status.text = "Google Play checkout opened."
                                 dialog?.dismiss()
@@ -172,10 +189,17 @@ internal object PurchaseDialog {
             .setView(content)
             .create()
 
+        dialog.setOnCancelListener {
+            deliverCancellation()
+        }
+        dialog.setOnDismissListener {
+            deliverCancellation()
+        }
         dialog.setOnShowListener {
             dialog.window?.setBackgroundDrawable(rounded(Color.rgb(248, 250, 252), activity.dp(22).toFloat()))
             dialog.window?.setLayout(activity.dialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT)
             cancelButton.setOnClickListener {
+                deliverCancellation()
                 dialog.dismiss()
             }
         }

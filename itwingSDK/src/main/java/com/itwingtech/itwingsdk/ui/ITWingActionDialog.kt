@@ -14,7 +14,9 @@ import androidx.core.graphics.ColorUtils
 import com.google.android.material.button.MaterialButton
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.ads.NativeType
+import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingSDK
+import java.util.concurrent.atomic.AtomicBoolean
 
 class ITWingActionDialog internal constructor(
     private val activity: Activity,
@@ -37,49 +39,46 @@ class ITWingActionDialog internal constructor(
         onCancel: Runnable? = null,
     ) {
         if (!activity.isUsable()) {
-            onCancel?.run()
+            safeCallback("cancel_unavailable", onCancel)
             return
         }
 
         val defaults = defaultsProvider()
         if (!defaults.boolean("enabled", true)) {
-            onCancel?.run()
+            safeCallback("cancel_disabled", onCancel)
             return
         }
 
         dismiss()
+        val callbackDelivered = AtomicBoolean(false)
+        fun deliverCallback(name: String, callback: Runnable?) {
+            if (callbackDelivered.compareAndSet(false, true)) {
+                safeCallback(name, callback)
+            }
+        }
 
         val content = LayoutInflater.from(activity).inflate(R.layout.dialog_itwing_action, null, false)
         val primaryColor = primaryColorProvider()
         val onPrimary = if (ColorUtils.calculateLuminance(primaryColor) > 0.58) Color.BLACK else Color.WHITE
-        val resolvedTitle = title ?: defaults.string("title") ?: "Continue?"
-        val resolvedDescription = description ?: defaults.string("description") ?: "Choose how you want to continue."
-        val resolvedPositive = positiveText ?: defaults.string("positive_text") ?: "Continue"
-        val resolvedNegative = negativeText ?: defaults.string("negative_text") ?: "Cancel"
-        val resolvedNativePlacement = nativePlacement ?: defaults.string("native_placement")
-        val resolvedNativeType = nativeType ?: defaults.string("native_type")
+        val resolvedTitle = title ?: defaults.string("title", "dialog_title") ?: "Continue?"
+        val resolvedDescription = description ?: defaults.string("description", "body") ?: "Choose how you want to continue."
+        val resolvedPositive = positiveText ?: defaults.string("positive_text", "positiveText") ?: "Continue"
+        val resolvedNegative = negativeText ?: defaults.string("negative_text", "negativeText") ?: "Cancel"
+        val resolvedNativePlacement = nativePlacement ?: defaults.string("native_placement", "nativePlacement")
+        val resolvedNativeType = nativeType ?: defaults.string("native_type", "nativeType")
 
         content.findViewById<TextView>(R.id.itwing_action_title).text = resolvedTitle
         content.findViewById<TextView>(R.id.itwing_action_description).text = resolvedDescription
         content.findViewById<TextView>(R.id.itwing_action_close).setOnClickListener {
             dismiss()
-            onCancel?.run()
+            deliverCallback("cancel_close", onCancel)
         }
 
         nativeContainer = content.findViewById(R.id.itwing_action_native_container)
-        if (!resolvedNativePlacement.isNullOrBlank() && !resolvedNativeType.equals("none", ignoreCase = true)) {
-            nativeContainer?.visibility = View.VISIBLE
-            ITWingSDK.ads.loadNative(
-                activity = activity,
-                container = nativeContainer!!,
-                placement = resolvedNativePlacement,
-                nativeType = when (resolvedNativeType?.lowercase()) {
-                    "small" -> NativeType.SMALL
-                    "large" -> NativeType.LARGE
-                    else -> null
-                },
-            )
-        }
+        val shouldLoadNative =
+            !resolvedNativePlacement.isNullOrBlank() &&
+                !resolvedNativeType.equals("none", ignoreCase = true)
+        nativeContainer?.visibility = if (shouldLoadNative) View.VISIBLE else View.GONE
 
         content.findViewById<MaterialButton>(R.id.itwing_action_positive).apply {
             text = resolvedPositive
@@ -88,7 +87,7 @@ class ITWingActionDialog internal constructor(
             rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(primaryColor, 44))
             setOnClickListener {
                 dismiss()
-                onPositive?.run()
+                deliverCallback("positive", onPositive)
             }
         }
 
@@ -99,7 +98,7 @@ class ITWingActionDialog internal constructor(
             rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(primaryColor, 28))
             setOnClickListener {
                 dismiss()
-                onNegative?.run()
+                deliverCallback("negative", onNegative)
             }
         }
 
@@ -108,7 +107,7 @@ class ITWingActionDialog internal constructor(
             .create()
             .also { alert ->
                 alert.setOnCancelListener {
-                    onCancel?.run()
+                    deliverCallback("cancel_system", onCancel)
                 }
                 alert.setOnDismissListener {
                     nativeContainer?.let { container -> ITWingSDK.ads.destroyNative(container) }
@@ -117,6 +116,20 @@ class ITWingActionDialog internal constructor(
                 alert.setOnShowListener {
                     alert.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
                     alert.window?.setLayout(activity.dialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT)
+                    if (shouldLoadNative && activity.isUsable()) {
+                        nativeContainer?.let { container ->
+                            ITWingSDK.ads.loadNativeForDialog(
+                                activity = activity,
+                                container = container,
+                                placement = resolvedNativePlacement!!,
+                                nativeType = when (resolvedNativeType?.lowercase()) {
+                                    "small" -> NativeType.SMALL
+                                    "large" -> NativeType.LARGE
+                                    else -> null
+                                },
+                            )
+                        }
+                    }
                 }
                 alert.show()
             }
@@ -146,6 +159,20 @@ class ITWingActionDialog internal constructor(
         else -> default
     }
 
-    private fun Map<*, *>.string(key: String): String? =
-        this[key]?.toString()?.trim()?.takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+    private fun Map<*, *>.string(vararg keys: String): String? =
+        keys.firstNotNullOfOrNull { key ->
+            this[key]?.toString()?.trim()?.takeIf {
+                it.isNotBlank() && !it.equals("null", ignoreCase = true)
+            }
+        }
+
+    private fun safeCallback(name: String, callback: Runnable?) {
+        if (callback == null) return
+        runCatching { callback.run() }.onFailure { error ->
+            SDKTelemetry.recordNonFatal(
+                error,
+                mapOf("operation" to "action_dialog_callback", "callback" to name),
+            )
+        }
+    }
 }

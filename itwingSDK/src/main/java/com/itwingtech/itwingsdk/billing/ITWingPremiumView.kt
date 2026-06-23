@@ -132,11 +132,13 @@ class ITWingPremiumView @JvmOverloads constructor(
         runCatching {
             ITWingSDK.showPurchaseDialog(activity) { result ->
                 runOnMain {
-                    if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-                        setBusy(false)
+                    setBusy(false)
+                    if (result.responseCode == BillingClient.BillingResponseCode.USER_CANCELED) {
+                        showMessage(null)
+                    } else if (result.responseCode != BillingClient.BillingResponseCode.OK) {
                         showMessage(result.debugMessage.takeIf(String::isNotBlank))
-                        render()
                     }
+                    render()
                 }
             }
         }.onFailure { error ->

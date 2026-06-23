@@ -5,5 +5,5 @@ data class ITWingOptions(
     val bootstrapTimeoutMs: Long = 4_000,
     val strictSslPinning: Boolean = false,
     val analyticsEnabled: Boolean = true,
+    val autoApplyResponsiveLayout: Boolean = false,
 )
-
