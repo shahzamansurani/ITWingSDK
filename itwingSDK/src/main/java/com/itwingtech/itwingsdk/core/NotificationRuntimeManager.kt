@@ -359,8 +359,15 @@ internal object NotificationRuntimeManager {
         addAction(context, builder, id, payload, 3)
 
         if (canPostNotifications(context)) {
-            NotificationManagerCompat.from(context).notify(id.hashCode(), builder.build())
-            markNotificationShown(context, id)
+            try {
+                NotificationManagerCompat.from(context).notify(id.hashCode(), builder.build())
+                markNotificationShown(context, id)
+            } catch (securityException: SecurityException) {
+                SDKTelemetry.recordNonFatal(
+                    securityException,
+                    mapOf("operation" to "post_notification", "notification_id" to id),
+                )
+            }
         }
     }
 

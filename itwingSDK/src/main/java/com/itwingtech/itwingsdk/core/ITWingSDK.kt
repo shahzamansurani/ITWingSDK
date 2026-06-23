@@ -907,6 +907,7 @@ object ITWingSDK {
                      */
 
                     activeActivity = WeakReference(activity)
+                    ads.updateForegroundActivity(activity)
                     NotificationRuntimeManager.reportOpened(activity.intent?.getStringExtra("itwing_notification_id"))
                     NotificationRuntimeManager.syncNow()
                     if (::updates.isInitialized) {

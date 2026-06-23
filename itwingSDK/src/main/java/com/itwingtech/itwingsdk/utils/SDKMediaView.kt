@@ -8,6 +8,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.bumptech.glide.Glide
@@ -15,6 +16,7 @@ import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.databinding.SdkMediaViewBinding
 import java.util.concurrent.atomic.AtomicBoolean
 
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 class SDKMediaView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,

@@ -121,6 +121,10 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         appOpenManager.startAutomatic(activity)
     }
 
+    fun updateForegroundActivity(activity: Activity) {
+        appOpenManager.updateForegroundActivity(activity)
+    }
+
     /**
      * Banner
      */

@@ -16,6 +16,7 @@ import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.utils.runOnMain
 import com.itwingtech.itwingsdk.utils.safeCallback
+import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicBoolean
 
 class AppOpenManager(
@@ -27,11 +28,11 @@ class AppOpenManager(
     private val automaticStarted = AtomicBoolean(false)
     private var loadedPlacement: String? = null
     private var appOpenAd: AppOpenAd? = null
-    private var foregroundActivity: Activity? = null
+    private var foregroundActivity: WeakReference<Activity>? = null
     private val customRenderer = CustomFullscreenAdRenderer()
 
     fun startAutomatic(activity: Activity) {
-        foregroundActivity = activity
+        updateForegroundActivity(activity)
         safeCallback {
             if (!automaticStarted.compareAndSet(false, true)) {
                 preloadAll(activity)
@@ -43,7 +44,9 @@ class AppOpenManager(
                     object : DefaultLifecycleObserver {
                         override fun onStart(owner: LifecycleOwner) {
                             runCatching {
-                                val currentActivity = foregroundActivity ?: return
+                                val currentActivity = foregroundActivity?.get()?.takeUnless {
+                                    it.isFinishing || it.isDestroyed
+                                } ?: return
                                 if (FullscreenAdState.isActive()) {
                                     SDKTelemetry.track(
                                         "ad_suppressed",
@@ -65,6 +68,10 @@ class AppOpenManager(
 
             preloadAll(activity)
         }
+    }
+
+    fun updateForegroundActivity(activity: Activity) {
+        foregroundActivity = WeakReference(activity)
     }
 
     fun preloadAll(activity: Activity) {
@@ -121,7 +128,7 @@ class AppOpenManager(
         onComplete: () -> Unit = {},
         waitForLoad: Boolean = true,
     ) {
-        foregroundActivity = activity
+        updateForegroundActivity(activity)
         val config = configProvider()
         val placement =
             config.ads.placements.firstOrNull {
