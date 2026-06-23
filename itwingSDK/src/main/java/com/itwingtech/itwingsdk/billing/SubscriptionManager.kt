@@ -365,29 +365,36 @@ class SubscriptionManager(
     fun isAdFree(): Boolean = repositoryProvider()?.isAdFreeEntitled() == true
 
     fun currentSubscription(): SubscriptionPlanInfo? {
-        val repository = repositoryProvider() ?: return null
-        val activeProductId = repository.activeProductId()
-        val activeBasePlanId = repository.activeBasePlanId()
-        val product = configProvider().subscriptions.products.firstOrNull { configured ->
-            configured.productId.trim() == activeProductId &&
-                (activeBasePlanId.isNullOrBlank() || configured.basePlanId == activeBasePlanId)
-        } ?: configProvider().subscriptions.products.firstOrNull { configured ->
-            configured.productId.trim() in repository.ownedProductIds()
-        } ?: return null
-        return SubscriptionPlanInfo(
-            productId = product.productId.trim(),
-            basePlanId = product.basePlanId,
-            offerId = product.offerId,
-            name = product.name.ifBlank { product.productId.trim() },
-            productType = product.productType,
-            billingPeriod = product.billingPeriod,
-            price = product.price,
-            currency = product.currency,
-            formattedPrice = formattedPlayPrice(product),
-            active = repository.isEntitlementActive(),
-            removesAds = repository.entitlementRemovesAds(),
-            expiresAt = repository.entitlementExpiresAt(),
-        )
+        return runCatching {
+            val repository = repositoryProvider() ?: return null
+            val activeProductId = repository.activeProductId()?.trim().orEmpty()
+            val activeBasePlanId = repository.activeBasePlanId()?.trim()
+            val ownedIds = repository.ownedProductIds().map(String::trim).filter(String::isNotBlank).toSet()
+            val products = configProvider().subscriptions.products
+            val product = products.firstOrNull { configured ->
+                configured.productId.trim() == activeProductId &&
+                    (activeBasePlanId.isNullOrBlank() || configured.basePlanId == activeBasePlanId)
+            } ?: products.firstOrNull { configured ->
+                configured.productId.trim() in ownedIds
+            } ?: return null
+            SubscriptionPlanInfo(
+                productId = product.productId.trim(),
+                basePlanId = product.basePlanId,
+                offerId = product.offerId,
+                name = product.name.ifBlank { product.productId.trim() },
+                productType = product.productType,
+                billingPeriod = product.billingPeriod,
+                price = product.price,
+                currency = product.currency,
+                formattedPrice = formattedPlayPrice(product),
+                active = repository.isEntitlementActive(),
+                removesAds = repository.entitlementRemovesAds(),
+                expiresAt = repository.entitlementExpiresAt(),
+            )
+        }.onFailure { error ->
+            lastBillingMessage = error.message
+            SDKTelemetry.recordNonFatal(error, mapOf("operation" to "current_subscription"))
+        }.getOrNull()
     }
 
     fun diagnostics(): Map<String, Any?> = mapOf(

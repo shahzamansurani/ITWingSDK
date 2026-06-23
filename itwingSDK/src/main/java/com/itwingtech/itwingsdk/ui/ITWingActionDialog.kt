@@ -17,6 +17,7 @@ import com.itwingtech.itwingsdk.ads.NativeType
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import java.util.concurrent.atomic.AtomicBoolean
+import androidx.core.graphics.drawable.toDrawable
 
 class ITWingActionDialog internal constructor(
     private val activity: Activity,
@@ -60,12 +61,28 @@ class ITWingActionDialog internal constructor(
         val content = LayoutInflater.from(activity).inflate(R.layout.dialog_itwing_action, null, false)
         val primaryColor = primaryColorProvider()
         val onPrimary = if (ColorUtils.calculateLuminance(primaryColor) > 0.58) Color.BLACK else Color.WHITE
-        val resolvedTitle = title ?: defaults.string("title", "dialog_title") ?: "Continue?"
-        val resolvedDescription = description ?: defaults.string("description", "body") ?: "Choose how you want to continue."
-        val resolvedPositive = positiveText ?: defaults.string("positive_text", "positiveText") ?: "Continue"
-        val resolvedNegative = negativeText ?: defaults.string("negative_text", "negativeText") ?: "Cancel"
-        val resolvedNativePlacement = nativePlacement ?: defaults.string("native_placement", "nativePlacement")
-        val resolvedNativeType = nativeType ?: defaults.string("native_type", "nativeType")
+        val resolvedTitle = title ?: defaults.string("title", "dialog_title", "host_dialog_title") ?: "Continue?"
+        val resolvedDescription = description ?: defaults.string("description", "body", "message", "host_dialog_description") ?: "Choose how you want to continue."
+        val resolvedPositive = positiveText ?: defaults.string("positive_text", "positiveText", "positive_button", "positiveButton", "host_dialog_positive_text") ?: "Continue"
+        val resolvedNegative = negativeText ?: defaults.string("negative_text", "negativeText", "negative_button", "negativeButton", "host_dialog_negative_text") ?: "Cancel"
+        val resolvedNativePlacement = nativePlacement ?: defaults.string(
+            "native_placement",
+            "nativePlacement",
+            "native_ad_placement",
+            "nativeAdPlacement",
+            "host_dialog_native_placement",
+        )
+        val normalizedNativeType = normalizeNativeType(
+            nativeType ?: defaults.string(
+                "native_type",
+                "nativeType",
+                "native_ad_size",
+                "nativeAdSize",
+                "native_size",
+                "host_dialog_native_type",
+            ),
+            resolvedNativePlacement,
+        )
 
         content.findViewById<TextView>(R.id.itwing_action_title).text = resolvedTitle
         content.findViewById<TextView>(R.id.itwing_action_description).text = resolvedDescription
@@ -77,7 +94,7 @@ class ITWingActionDialog internal constructor(
         nativeContainer = content.findViewById(R.id.itwing_action_native_container)
         val shouldLoadNative =
             !resolvedNativePlacement.isNullOrBlank() &&
-                !resolvedNativeType.equals("none", ignoreCase = true)
+                normalizedNativeType != null
         nativeContainer?.visibility = if (shouldLoadNative) View.VISIBLE else View.GONE
 
         content.findViewById<MaterialButton>(R.id.itwing_action_positive).apply {
@@ -114,20 +131,24 @@ class ITWingActionDialog internal constructor(
                     nativeContainer = null
                 }
                 alert.setOnShowListener {
-                    alert.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+                    alert.window?.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
                     alert.window?.setLayout(activity.dialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT)
                     if (shouldLoadNative && activity.isUsable()) {
                         nativeContainer?.let { container ->
-                            ITWingSDK.ads.loadNativeForDialog(
-                                activity = activity,
-                                container = container,
-                                placement = resolvedNativePlacement!!,
-                                nativeType = when (resolvedNativeType?.lowercase()) {
-                                    "small" -> NativeType.SMALL
-                                    "large" -> NativeType.LARGE
-                                    else -> null
-                                },
-                            )
+                            runCatching {
+                                ITWingSDK.ads.loadNativeForDialog(
+                                    activity = activity,
+                                    container = container,
+                                    placement = resolvedNativePlacement,
+                                    nativeType = normalizedNativeType,
+                                )
+                            }.onFailure { error ->
+                                container.visibility = View.GONE
+                                SDKTelemetry.recordNonFatal(
+                                    error,
+                                    mapOf("operation" to "action_dialog_native_load", "placement" to resolvedNativePlacement),
+                                )
+                            }
                         }
                     }
                 }
@@ -165,6 +186,30 @@ class ITWingActionDialog internal constructor(
                 it.isNotBlank() && !it.equals("null", ignoreCase = true)
             }
         }
+
+    private fun normalizeNativeType(value: String?, placement: String?): NativeType? {
+        val normalized = value?.trim()?.lowercase().orEmpty()
+        if (
+            normalized.isBlank() &&
+            !placement.isNullOrBlank()
+        ) {
+            return NativeType.LARGE
+        }
+        if (
+            normalized == "none" ||
+            normalized == "no_native" ||
+            normalized == "disabled" ||
+            normalized == "off"
+        ) {
+            return null
+        }
+        return when {
+            normalized.contains("small") -> NativeType.SMALL
+            normalized.contains("large") -> NativeType.LARGE
+            !placement.isNullOrBlank() -> NativeType.LARGE
+            else -> null
+        }
+    }
 
     private fun safeCallback(name: String, callback: Runnable?) {
         if (callback == null) return

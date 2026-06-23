@@ -56,13 +56,14 @@ internal class AppRuntimeManager(
             runCatching {
                 it.enabled &&
                     it.format == format &&
-                    (it.metadata["splash"].safeBoolean(false) ||
-                        it.metadata["usage"].safeString().equals("splash", ignoreCase = true))
+                    (it.metadata.safeValue("splash").safeBoolean(false) ||
+                        it.metadata.safeValue("usage").safeString().equals("splash", ignoreCase = true))
             }.getOrDefault(false)
         } ?: config.ads.placements.firstOrNull {
-            it.enabled && it.format == format && it.name.contains("splash", ignoreCase = true)
+            runCatching { it.enabled && it.format == format && it.name.contains("splash", ignoreCase = true) }
+                .getOrDefault(false)
         } ?: config.ads.placements.firstOrNull {
-            it.enabled && it.format == format
+            runCatching { it.enabled && it.format == format }.getOrDefault(false)
         }
 
         if (placement == null) {
@@ -112,14 +113,19 @@ internal class AppRuntimeManager(
     }
 
     private fun splashDelayMs(config: ITWingConfig): Long {
-        val splash = config.app["splash"].safeMap()
-        val seconds = splash["seconds"].safeLong(7L)
+        val splash = config.app.safeValue("splash").safeMap()
+        val seconds = splash.safeValue("seconds").safeLong(7L)
         return seconds.coerceIn(0L, 10L) * 1000L
     }
 
     private fun splashFormat(config: ITWingConfig): String {
-        val splash = config.app["splash"].safeMap()
-        return splash["ad_format"].safeString() ?: "none"
+        val splash = config.app.safeValue("splash").safeMap()
+        return listOf(
+            splash.safeValue("ad_format"),
+            splash.safeValue("adFormat"),
+            config.app.safeValue("splash_ad_format"),
+            config.app.safeValue("splashAdFormat"),
+        ).firstNotNullOfOrNull { it.safeString() }?.lowercase() ?: "none"
     }
 
     private fun Any?.safeBoolean(defaultValue: Boolean): Boolean {
@@ -151,6 +157,9 @@ internal class AppRuntimeManager(
             else -> emptyMap<Any?, Any?>()
         }
     }
+
+    private fun Map<*, *>?.safeValue(key: String): Any? =
+        runCatching { this?.get(key) }.getOrNull()
 
     private fun Any?.normalizedValue(): Any? {
         return runCatching {

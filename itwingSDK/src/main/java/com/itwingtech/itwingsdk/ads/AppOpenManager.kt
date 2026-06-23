@@ -200,9 +200,9 @@ class AppOpenManager(
             runCatching {
                 placement.enabled &&
                     placement.format == "app_open" &&
-                    placement.metadata["splash"].isDisabledByDefault() &&
-                    !placement.metadata["usage"].safeString().equals("splash", ignoreCase = true) &&
-                    placement.metadata["show_automatically"].isEnabledByDefault()
+                    placement.metadata.safeValue("splash").isDisabledByDefault() &&
+                    !placement.metadata.safeValue("usage").safeString().equals("splash", ignoreCase = true) &&
+                    placement.metadata.safeValue("show_automatically").isEnabledByDefault()
             }.getOrDefault(false)
         }
     }
@@ -320,6 +320,9 @@ class AppOpenManager(
     }
 
     private fun Any?.safeString(): String? = normalizedValue()?.toString()?.trim()?.takeIf { it.isNotBlank() }
+
+    private fun Map<*, *>?.safeValue(key: String): Any? =
+        runCatching { this?.get(key) }.getOrNull()
 
     private fun Any?.normalizedValue(): Any? {
         return runCatching {
