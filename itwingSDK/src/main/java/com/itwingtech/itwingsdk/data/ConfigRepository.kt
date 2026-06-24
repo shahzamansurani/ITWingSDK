@@ -85,9 +85,8 @@ class ConfigRepository(
     }
 
     fun savePlayOwnership(productIds: Set<String>, removesAds: Boolean) {
-        val previousProductIds = store.ownedProductIds()
         val preservedExpiry = store.entitlementExpiresAt()?.takeIf { expiresAt ->
-            productIds == previousProductIds && runCatching {
+            productIds.isNotEmpty() && runCatching {
                 java.time.Instant.parse(expiresAt).toEpochMilli() > System.currentTimeMillis()
             }.getOrDefault(false)
         }

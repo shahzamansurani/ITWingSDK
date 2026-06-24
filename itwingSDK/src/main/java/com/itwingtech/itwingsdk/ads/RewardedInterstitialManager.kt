@@ -27,7 +27,12 @@ class RewardedInterstitialManager(
     fun preloadAll(activity: Activity) {
         val config = configProvider()
         config.ads.placements
-            .filter { config.ads.globalEnabled && it.enabled && it.format == "rewarded_interstitial" }
+            .filter {
+                config.ads.globalEnabled &&
+                    it.enabled &&
+                    it.format == "rewarded_interstitial" &&
+                    it.metadata["preload_on_start"].isTruthy()
+            }
             .forEach { preload(activity, it.name) }
     }
 
@@ -289,4 +294,13 @@ class RewardedInterstitialManager(
     }
 
     private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed
+
+    private fun Any?.isTruthy(): Boolean {
+        return when (this) {
+            is Boolean -> this
+            is String -> equals("true", ignoreCase = true) || this == "1"
+            is Number -> toInt() != 0
+            else -> false
+        }
+    }
 }

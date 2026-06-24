@@ -3,8 +3,10 @@ package com.itwingtech.itwingsdk.billing
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
@@ -96,7 +98,7 @@ class ITWingPremiumView @JvmOverloads constructor(
         setStrokeColor(Color.rgb(226, 232, 240))
 
         purchaseButton.setOnClickListener { launchPurchase() }
-        restoreButton.setOnClickListener { refresh(restoreFromGooglePlay = true, announceResult = true) }
+        restoreButton.setOnClickListener { openSubscriptionManagement() }
         render()
     }
 
@@ -205,7 +207,8 @@ class ITWingPremiumView @JvmOverloads constructor(
         )
         purchaseButton.isEnabled = canChangePlan
         purchaseButton.alpha = if (canChangePlan) 1f else 0.72f
-        restoreButton.isVisible = false
+        restoreButton.text = context.getString(R.string.premium_manage_subscription)
+        restoreButton.isVisible = plan?.productType?.equals("inapp", ignoreCase = true) != true
     }
 
     private fun renderExpired(plan: SubscriptionPlanInfo) {
@@ -215,7 +218,8 @@ class ITWingPremiumView @JvmOverloads constructor(
         purchaseButton.text = context.getString(R.string.premium_renew)
         purchaseButton.isEnabled = true
         purchaseButton.alpha = 1f
-        restoreButton.isVisible = showRestore
+        restoreButton.text = context.getString(R.string.premium_manage_subscription)
+        restoreButton.isVisible = !plan.productType.equals("inapp", ignoreCase = true)
     }
 
     private fun renderAvailable() {
@@ -224,7 +228,7 @@ class ITWingPremiumView @JvmOverloads constructor(
         purchaseButton.text = context.getString(R.string.premium_purchase)
         purchaseButton.isEnabled = true
         purchaseButton.alpha = 1f
-        restoreButton.isVisible = showRestore
+        restoreButton.isVisible = false
     }
 
     private fun renderDetails(plan: SubscriptionPlanInfo) {
@@ -271,6 +275,28 @@ class ITWingPremiumView @JvmOverloads constructor(
     private fun showMessage(value: String?) {
         message.text = value.orEmpty()
         message.isVisible = !value.isNullOrBlank()
+    }
+
+    private fun openSubscriptionManagement() {
+        val activity = context.findActivity()
+        if (activity == null || !activity.isUsable()) {
+            showMessage(context.getString(R.string.premium_screen_closing))
+            return
+        }
+
+        val plan = ITWingSDK.getCurrentSubscription()
+        val packageName = activity.packageName
+        val url = if (plan?.productId.isNullOrBlank()) {
+            "https://play.google.com/store/account/subscriptions"
+        } else {
+            "https://play.google.com/store/account/subscriptions?sku=${Uri.encode(plan?.productId)}&package=${Uri.encode(packageName)}"
+        }
+
+        runCatching {
+            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }.onFailure { error ->
+            showMessage(error.message ?: context.getString(R.string.premium_manage_subscription_failed))
+        }
     }
 
     private fun applyPrimaryColor() {

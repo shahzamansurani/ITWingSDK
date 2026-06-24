@@ -210,7 +210,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         runCatching {
             InterstitialAdPreloader.start(
                 adUnitId,
-                PreloadConfiguration(request, 2),
+                PreloadConfiguration(request, 1),
             )
         }
     }

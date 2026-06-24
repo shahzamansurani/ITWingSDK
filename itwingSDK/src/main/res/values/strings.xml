@@ -35,6 +35,8 @@
     <string name="premium_active_button">Premium Active</string>
     <string name="premium_change_plan">Change Plan</string>
     <string name="premium_restore">Restore purchase</string>
+    <string name="premium_manage_subscription">Manage subscription</string>
+    <string name="premium_manage_subscription_failed">Could not open Google Play subscription management.</string>
     <string name="premium_checking">Checking your Google Play purchase...</string>
     <string name="premium_restored">Purchase restored</string>
     <string name="premium_not_found">No active purchase was found</string>

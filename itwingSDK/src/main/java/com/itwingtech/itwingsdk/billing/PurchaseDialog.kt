@@ -145,13 +145,8 @@ internal object PurchaseDialog {
                         activity.runOnUiThread {
                             deliverResult(result)
                             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                                status.text = "Complete the purchase in Google Play. If you cancel, you can try again."
-                                postDelayed({
-                                    if (dialog?.isShowing == true) {
-                                        isEnabled = true
-                                        text = idleButtonText
-                                    }
-                                }, 1800L)
+                                status.text = "Purchase completed successfully."
+                                dialog?.dismiss()
                             } else {
                                 isEnabled = true
                                 text = idleButtonText

@@ -40,6 +40,7 @@ class SubscriptionManager(
     private val productDetails = mutableMapOf<String, ProductDetails>()
     private val activePurchases = ConcurrentHashMap<String, Purchase>()
     private val pendingProductSelections = ConcurrentHashMap<String, SubscriptionProductConfig>()
+    private val pendingPurchaseCallbacks = ConcurrentHashMap<String, CopyOnWriteArrayList<(BillingResult) -> Unit>>()
     private val readyCallbacks = CopyOnWriteArrayList<() -> Unit>()
     @Volatile
     private var lastBillingMessage: String? = null
@@ -86,10 +87,22 @@ class SubscriptionManager(
 
                     BillingClient.BillingResponseCode.USER_CANCELED -> {
                         lastBillingMessage = "Purchase was canceled by the user."
+                        completeAllPendingPurchases(
+                            failedResult(
+                                BillingClient.BillingResponseCode.USER_CANCELED,
+                                lastBillingMessage.orEmpty(),
+                            ),
+                        )
                     }
 
                     else -> {
                         lastBillingMessage = result.debugMessage
+                        completeAllPendingPurchases(
+                            failedResult(
+                                result.responseCode,
+                                result.debugMessage.ifBlank { "Google Play Billing did not complete the purchase." },
+                            ),
+                        )
                         purchases?.forEach { purchase -> verifyPurchase(purchase) }
                     }
                 }
@@ -253,6 +266,7 @@ class SubscriptionManager(
         }
 
         val completed = AtomicBoolean(false)
+        val launchStarted = AtomicBoolean(false)
         fun complete(result: BillingResult) {
             if (completed.compareAndSet(false, true)) {
                 onResult(result)
@@ -260,24 +274,20 @@ class SubscriptionManager(
         }
 
         mainHandler.postDelayed({
-            complete(
-                failedResult(
-                    BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE,
-                    "Google Play Billing did not become ready in time. Check Play Store availability and try again.",
-                ),
-            )
+            if (!launchStarted.get()) {
+                complete(
+                    failedResult(
+                        BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE,
+                        "Google Play Billing did not become ready in time. Check Play Store availability and try again.",
+                    ),
+                )
+            }
         }, 10_000L)
 
         connect(activity) {
             ensureProductDetailsLoaded(product.productId) {
-                val firstResult = launchPurchase(activity, product)
-                if (firstResult.shouldRetryAfterProductRefresh()) {
-                    queryProducts {
-                        complete(launchPurchase(activity, product))
-                    }
-                } else {
-                    complete(firstResult)
-                }
+                launchStarted.set(true)
+                launchPurchaseAndWaitForCompletion(activity, product, ::complete)
             }
         }
     }
@@ -544,7 +554,6 @@ class SubscriptionManager(
             )
             return
         }
-        recordPlayOwnership(purchase, adminProduct)
         if (adminProduct?.isConsumable() != true) {
             acknowledgeIfNeeded(purchase)
         }
@@ -572,15 +581,80 @@ class SubscriptionManager(
                 )
                 finishPurchaseIfNeeded(purchase, adminProduct)
                 recordPlayOwnership(purchase, adminProduct)
+                completePendingPurchase(
+                    productId,
+                    BillingResult.newBuilder()
+                        .setResponseCode(BillingClient.BillingResponseCode.OK)
+                        .setDebugMessage("Purchase completed successfully.")
+                        .build(),
+                )
             }.onFailure {
-                recordPlayOwnership(purchase, adminProduct)
                 lastBillingMessage = it.message
                 SDKTelemetry.track(
                     "purchase_verify_failed",
                     mapOf("product_id" to productId, "message" to (it.message ?: "verification_failed")),
                 )
+                completePendingPurchase(
+                    productId,
+                    failedResult(
+                        BillingClient.BillingResponseCode.ERROR,
+                        it.message ?: "Purchase completed in Google Play, but server verification failed. Please try restore purchase.",
+                    ),
+                )
             }
         }
+    }
+
+    private fun launchPurchaseAndWaitForCompletion(
+        activity: Activity,
+        product: SubscriptionProductConfig,
+        onResult: (BillingResult) -> Unit,
+    ) {
+        val requestedProductId = product.productId.trim()
+        val callback: (BillingResult) -> Unit = { result -> onResult(result) }
+
+        fun attemptLaunch() {
+            addPendingPurchaseCallback(requestedProductId, callback)
+            val result = launchPurchase(activity, product)
+            if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                mainHandler.postDelayed({
+                    removePendingPurchaseCallback(requestedProductId, callback)
+                    onResult(
+                        failedResult(
+                            BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE,
+                            "Google Play purchase was not completed yet. Please try again or restore purchase.",
+                        ),
+                    )
+                }, 180_000L)
+                return
+            }
+
+            removePendingPurchaseCallback(requestedProductId, callback)
+            if (result.shouldRetryAfterProductRefresh()) {
+                queryProducts {
+                    addPendingPurchaseCallback(requestedProductId, callback)
+                    val retryResult = launchPurchase(activity, product)
+                    if (retryResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                        mainHandler.postDelayed({
+                            removePendingPurchaseCallback(requestedProductId, callback)
+                            onResult(
+                                failedResult(
+                                    BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE,
+                                    "Google Play purchase was not completed yet. Please try again or restore purchase.",
+                                ),
+                            )
+                        }, 180_000L)
+                    } else {
+                        removePendingPurchaseCallback(requestedProductId, callback)
+                        onResult(retryResult)
+                    }
+                }
+            } else {
+                onResult(result)
+            }
+        }
+
+        attemptLaunch()
     }
 
     private fun finishPurchaseIfNeeded(purchase: Purchase, adminProduct: SubscriptionProductConfig?) {
@@ -767,6 +841,48 @@ class SubscriptionManager(
         val isAdFree = isAdFree()
         if (wasAdFree != isAdFree) {
             mainHandler.post { onEntitlementChanged(isAdFree) }
+        }
+    }
+
+    private fun addPendingPurchaseCallback(productId: String, callback: (BillingResult) -> Unit) {
+        val key = productId.trim()
+        if (key.isBlank()) return
+        pendingPurchaseCallbacks.getOrPut(key) { CopyOnWriteArrayList() }.add(callback)
+    }
+
+    private fun removePendingPurchaseCallback(productId: String, callback: (BillingResult) -> Unit) {
+        val key = productId.trim()
+        val callbacks = pendingPurchaseCallbacks[key] ?: return
+        callbacks.remove(callback)
+        if (callbacks.isEmpty()) {
+            pendingPurchaseCallbacks.remove(key)
+            pendingProductSelections.remove(key)
+        }
+    }
+
+    private fun completePendingPurchase(productId: String, result: BillingResult) {
+        val callbacks = pendingPurchaseCallbacks.remove(productId.trim()).orEmpty()
+        if (callbacks.isEmpty()) return
+        mainHandler.post {
+            callbacks.forEach { callback ->
+                runCatching { callback(result) }.onFailure { error ->
+                    SDKTelemetry.recordNonFatal(error, mapOf("operation" to "purchase_completion_callback"))
+                }
+            }
+        }
+    }
+
+    private fun completeAllPendingPurchases(result: BillingResult) {
+        val callbacks = pendingPurchaseCallbacks.values.flatMap { it.toList() }
+        pendingPurchaseCallbacks.clear()
+        pendingProductSelections.clear()
+        if (callbacks.isEmpty()) return
+        mainHandler.post {
+            callbacks.forEach { callback ->
+                runCatching { callback(result) }.onFailure { error ->
+                    SDKTelemetry.recordNonFatal(error, mapOf("operation" to "purchase_completion_callback"))
+                }
+            }
         }
     }
 
