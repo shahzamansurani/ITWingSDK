@@ -2,68 +2,97 @@
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="@dimen/_180sdp"
-    android:layout_centerInParent="true"
-    android:layout_margin="@dimen/_10sdp"
-    app:cardBackgroundColor="#DCDEDE"
-    app:cardCornerRadius="@dimen/_10sdp"
-    app:cardElevation="@dimen/_10sdp"
-    android:layout_gravity="center"
-    app:cardPreventCornerOverlap="false">
+    android:layout_height="wrap_content"
+    app:cardBackgroundColor="@android:color/white"
+    app:cardCornerRadius="20dp"
+    app:cardElevation="0dp"
+    app:strokeColor="#E2E8F0"
+    app:strokeWidth="1dp">
 
-    <RelativeLayout
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="#DCDEDE"
+        android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="@dimen/_10sdp">
+        android:padding="18dp">
 
-        <TextView
-            android:id="@+id/dialog_title"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_above="@id/bottom_nav"
-            android:layout_gravity="center"
-            android:layout_marginBottom="@dimen/_20sdp"
-            android:fontFamily="sans-serif"
-            android:gravity="center"
-            android:padding="@dimen/_7sdp"
-            android:text="@string/watch_video_ad_to_proceed"
-            android:textColor="?attr/colorPrimary"
-            android:textSize="@dimen/_14ssp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/dialog_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/rewarded_intro_title"
+                    android:textColor="#0F172A"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/dialog_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="@string/watch_video_ad_to_proceed"
+                    android:textColor="#64748B"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/btn_close"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/itwing_purchase_card_bg"
+                android:gravity="center"
+                android:text="X"
+                android:textColor="#475569"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/bottom_nav"
             android:layout_width="match_parent"
-            android:layout_height="@dimen/_45sdp"
-            android:layout_alignParentBottom="true"
-            android:layout_gravity="bottom"
-            android:orientation="horizontal"
-            android:weightSum="2">
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSkip"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginHorizontal="@dimen/_5sdp"
+                android:layout_height="46dp"
+                android:layout_marginEnd="8dp"
                 android:layout_weight="1"
-                android:backgroundTint="@color/white"
                 android:text="@string/skip"
-                android:textColor="@color/colorPrimary"
-                app:cornerRadius="@dimen/_5sdp" />
+                android:textAllCaps="false"
+                android:textStyle="bold"
+                app:cornerRadius="12dp"
+                app:strokeWidth="1dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_watch"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginHorizontal="@dimen/_5sdp"
+                android:layout_height="46dp"
+                android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:backgroundTint="@color/colorPrimary"
                 android:text="@string/watch_ad"
-                android:textColor="@color/white"
-                app:cornerRadius="@dimen/_5sdp" />
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textStyle="bold"
+                app:cornerRadius="12dp" />
         </LinearLayout>
 
-    </RelativeLayout>
+    </LinearLayout>
 
 </com.google.android.material.card.MaterialCardView>

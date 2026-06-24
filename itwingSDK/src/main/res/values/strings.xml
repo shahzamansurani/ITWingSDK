@@ -10,6 +10,7 @@
     <string name="collapsable_banner_text">Collapsable Banner Ad Area..</string>
     <string name="watch_ad">Watch ad</string>
     <string name="skip">No thanks</string>
+    <string name="rewarded_intro_title">Rewarded ad</string>
     <string name="watch_video_ad_to_proceed">Watch a rewarded ad to continue and earn this reward.</string>
     <string name="loading_ad">Loading Ad...</string>
     <string name="confim_delete_action">Title</string>

@@ -228,7 +228,7 @@ class ITWingPremiumView @JvmOverloads constructor(
     }
 
     private fun renderDetails(plan: SubscriptionPlanInfo) {
-        planText.text = "${context.getString(R.string.premium_plan_label)}: ${plan.name}\n${plan.productId}"
+        planText.text = "${context.getString(R.string.premium_plan_label)}: ${plan.name}"
         val productType = if (plan.productType.equals("inapp", ignoreCase = true)) {
             context.getString(R.string.premium_one_time)
         } else {

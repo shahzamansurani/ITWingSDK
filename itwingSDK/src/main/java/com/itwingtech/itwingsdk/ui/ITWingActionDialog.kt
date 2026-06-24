@@ -26,6 +26,7 @@ class ITWingActionDialog internal constructor(
 ) {
     private var dialog: AlertDialog? = null
     private var nativeContainer: FrameLayout? = null
+    private var restoreHiddenInlineAds: (() -> Unit)? = null
 
     @JvmOverloads
     fun show(
@@ -96,6 +97,9 @@ class ITWingActionDialog internal constructor(
             !resolvedNativePlacement.isNullOrBlank() &&
                 normalizedNativeType != null
         nativeContainer?.visibility = if (shouldLoadNative) View.VISIBLE else View.GONE
+        if (shouldLoadNative) {
+            restoreHiddenInlineAds = ITWingSDK.ads.hideInlineAdsForDialog(activity)
+        }
 
         content.findViewById<MaterialButton>(R.id.itwing_action_positive).apply {
             text = resolvedPositive
@@ -119,46 +123,58 @@ class ITWingActionDialog internal constructor(
             }
         }
 
-        dialog = AlertDialog.Builder(activity)
+        val alert = AlertDialog.Builder(activity)
             .setView(content)
             .create()
-            .also { alert ->
-                alert.setOnCancelListener {
-                    deliverCallback("cancel_system", onCancel)
-                }
-                alert.setOnDismissListener {
-                    nativeContainer?.let { container -> ITWingSDK.ads.destroyNative(container) }
-                    nativeContainer = null
-                }
-                alert.setOnShowListener {
-                    alert.window?.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
-                    alert.window?.setLayout(activity.dialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT)
-                    if (shouldLoadNative && activity.isUsable()) {
-                        nativeContainer?.let { container ->
-                            runCatching {
-                                ITWingSDK.ads.loadNativeForDialog(
-                                    activity = activity,
-                                    container = container,
-                                    placement = resolvedNativePlacement,
-                                    nativeType = normalizedNativeType,
-                                )
-                            }.onFailure { error ->
-                                container.visibility = View.GONE
-                                SDKTelemetry.recordNonFatal(
-                                    error,
-                                    mapOf("operation" to "action_dialog_native_load", "placement" to resolvedNativePlacement),
-                                )
-                            }
-                        }
+        alert.setOnCancelListener {
+            deliverCallback("cancel_system", onCancel)
+        }
+        alert.setOnDismissListener {
+            nativeContainer?.let { container -> ITWingSDK.ads.destroyNative(container) }
+            nativeContainer = null
+            restoreHiddenInlineAds?.invoke()
+            restoreHiddenInlineAds = null
+        }
+        alert.setOnShowListener {
+            alert.window?.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
+            alert.window?.setLayout(activity.dialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT)
+            if (shouldLoadNative && activity.isUsable()) {
+                nativeContainer?.let { container ->
+                    runCatching {
+                        ITWingSDK.ads.loadNativeForDialog(
+                            activity = activity,
+                            container = container,
+                            placement = resolvedNativePlacement,
+                            nativeType = normalizedNativeType,
+                        )
+                    }.onFailure { error ->
+                        container.visibility = View.GONE
+                        SDKTelemetry.recordNonFatal(
+                            error,
+                            mapOf("operation" to "action_dialog_native_load", "placement" to resolvedNativePlacement),
+                        )
                     }
                 }
-                alert.show()
             }
+        }
+        dialog = alert
+        runCatching {
+            alert.show()
+        }.onFailure { error ->
+            dialog = null
+            nativeContainer = null
+            restoreHiddenInlineAds?.invoke()
+            restoreHiddenInlineAds = null
+            SDKTelemetry.recordNonFatal(error, mapOf("operation" to "action_dialog_show"))
+            deliverCallback("cancel_show_failed", onCancel)
+        }
     }
 
     fun dismiss() {
         nativeContainer?.let { container -> ITWingSDK.ads.destroyNative(container) }
         nativeContainer = null
+        restoreHiddenInlineAds?.invoke()
+        restoreHiddenInlineAds = null
         dialog?.takeIf { it.isShowing }?.dismiss()
         dialog = null
     }

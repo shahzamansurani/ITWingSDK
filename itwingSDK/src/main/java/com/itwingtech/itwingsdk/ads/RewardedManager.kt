@@ -59,6 +59,9 @@ class RewardedManager(
         onReward: () -> Unit,
         onComplete: () -> Unit = {},
     ) {
+        if (!activity.isUsable()) {
+            return
+        }
         val config = configProvider()
         if (!config.ads.globalEnabled) {
             AdFailureDialog.show(activity, config.adPrimaryColor(), "Rewarded ads are disabled for this app.")
@@ -176,6 +179,10 @@ class RewardedManager(
         }
 
         runOnMain {
+            if (!activity.isUsable()) {
+                FullscreenAdState.end(fullscreenOwner)
+                return@runOnMain
+            }
             runCatching {
                 ad.show(activity) {
                     AdEventTracker.log("ad_reward_earned", placement)
@@ -223,6 +230,10 @@ class RewardedManager(
         loadingDialog.show(lottieUrl)
 
         fun poll() {
+            if (!activity.isUsable()) {
+                loadingDialog.dismiss()
+                return
+            }
             val ad = pollPreloadedAd(placementName)
             if (ad != null) {
                 loadingDialog.dismiss()
@@ -272,4 +283,6 @@ class RewardedManager(
         preloaderKeys.remove(placementName)?.let { RewardedAdPreloader.destroy(it) }
         load(activity, placementName)
     }
+
+    private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed
 }

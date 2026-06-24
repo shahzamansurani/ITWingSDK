@@ -34,10 +34,7 @@ class SpalashActivity : AppCompatActivity() {
         ITWingSDK.initialize(
             activity = this,
             apiKey = "itw_test_example_android_sdk_key_change_me_1234567890",
-            options = ITWingOptions(
-                endpoint = BuildConfig.ITWING_SDK_ENDPOINT,
-                autoApplyResponsiveLayout = true,
-            ),
+            options = ITWingOptions(endpoint = BuildConfig.ITWING_SDK_ENDPOINT, autoApplyResponsiveLayout = true),
             listener = object : SDKInitListener {
                 override fun onReady() {
                     Log.d("ITWingExample", "SDK ready")

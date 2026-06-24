@@ -128,6 +128,10 @@ class AppOpenManager(
         onComplete: () -> Unit = {},
         waitForLoad: Boolean = true,
     ) {
+        if (!activity.isUsable()) {
+            safeCallback(onComplete)
+            return
+        }
         updateForegroundActivity(activity)
         val config = configProvider()
         val placement =
@@ -247,6 +251,11 @@ class AppOpenManager(
             }
 
         runOnMain {
+            if (!activity.isUsable()) {
+                FullscreenAdState.end(fullscreenOwner)
+                completion.complete()
+                return@runOnMain
+            }
             runCatching {
                 ad.show(activity)
             }.onFailure {
@@ -267,6 +276,11 @@ class AppOpenManager(
         loadingDialog.show(lottieUrl)
 
         fun poll() {
+            if (!activity.isUsable()) {
+                loadingDialog.dismiss()
+                safeCallback(onComplete)
+                return
+            }
             val ad = appOpenAd
             if (ad != null) {
                 loadingDialog.dismiss()
@@ -342,4 +356,6 @@ class AppOpenManager(
             }
         }.getOrNull()
     }
+
+    private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed
 }

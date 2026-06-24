@@ -104,6 +104,12 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
             preSplashCheckInFlight.set(false)
             onContinue()
         }
+        mainHandler.postDelayed({
+            if (!continued) {
+                SDKTelemetry.track("in_app_update_pre_splash_timeout")
+                continueOnce()
+            }
+        }, PRE_SPLASH_CHECK_TIMEOUT_MS)
 
         check(
             activity = activity,
@@ -449,6 +455,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
 
     companion object {
         private const val CHECK_THROTTLE_MS = 6 * 60 * 60 * 1000L
+        private const val PRE_SPLASH_CHECK_TIMEOUT_MS = 3_000L
         private const val MAX_DEFERRED_RETRIES = 20
     }
 }

@@ -140,13 +140,18 @@ internal object PurchaseDialog {
                     isEnabled = false
                     text = "Opening Google Play..."
                     status.visibility = View.VISIBLE
-                    status.text = "Connecting to Google Play Billing for ${product.productId.trim()}..."
+                    status.text = "Opening secure Google Play checkout..."
                     launcher(product) { result ->
                         activity.runOnUiThread {
                             deliverResult(result)
                             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                                status.text = "Google Play checkout opened."
-                                dialog?.dismiss()
+                                status.text = "Complete the purchase in Google Play. If you cancel, you can try again."
+                                postDelayed({
+                                    if (dialog?.isShowing == true) {
+                                        isEnabled = true
+                                        text = idleButtonText
+                                    }
+                                }, 1800L)
                             } else {
                                 isEnabled = true
                                 text = idleButtonText
@@ -203,11 +208,23 @@ internal object PurchaseDialog {
                 dialog.dismiss()
             }
         }
-        dialog.show()
+        runCatching {
+            dialog.show()
+        }.onFailure {
+            deliverResult(failedResult(it.message ?: "Could not open purchase options."))
+        }
     }
 
     private fun SubscriptionProductConfig.displayPrice(details: ProductDetails?): String {
-        return googleFormattedPrice(details, this) ?: "Price unavailable from Google Play"
+        return googleFormattedPrice(details, this)
+            ?: formattedConfiguredPrice()
+            ?: "See price in Google Play"
+    }
+
+    private fun SubscriptionProductConfig.formattedConfiguredPrice(): String? {
+        val value = price ?: return null
+        val amount = "%.2f".format(java.util.Locale.US, value)
+        return currency?.takeIf { it.isNotBlank() }?.let { "$it $amount" } ?: amount
     }
 
     private fun SubscriptionPlanInfo.activeDescription(): String {

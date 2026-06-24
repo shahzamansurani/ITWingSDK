@@ -36,8 +36,11 @@ import java.net.UnknownHostException
 import androidx.core.net.toUri
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingResult
+import com.itwingtech.itwingsdk.ads.FullscreenAdState
+import com.itwingtech.itwingsdk.utils.safeCallback
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import java.util.concurrent.atomic.AtomicBoolean
 
 object ITWingSDK {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -300,10 +303,19 @@ object ITWingSDK {
             onInitialized()
             return
         }
-        val appId = config.ads.admobAppId?.takeIf { it.isNotBlank() } ?: return
+        val appId = config.ads.admobAppId?.takeIf { it.isNotBlank() } ?: run {
+            SDKTelemetry.track("mobile_ads_initialize_skipped", mapOf("reason" to "missing_admob_app_id"))
+            onInitialized()
+            return
+        }
         CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
-            MobileAds.initialize(activity, InitializationConfig.Builder(appId).build()) {
-                mobileAdsInitialized = true
+            runCatching {
+                MobileAds.initialize(activity, InitializationConfig.Builder(appId).build()) {
+                    mobileAdsInitialized = true
+                    onInitialized()
+                }
+            }.onFailure {
+                SDKTelemetry.recordNonFatal(it, mapOf("operation" to "mobile_ads_initialize"))
                 onInitialized()
             }
         }
@@ -663,18 +675,61 @@ object ITWingSDK {
     @JvmStatic
     fun showSplash(activity: Activity, onComplete: () -> Unit = {}) {
         val startedAt = System.currentTimeMillis()
+        val completed = AtomicBoolean(false)
+        fun completeOnce(reason: String) {
+            if (!completed.compareAndSet(false, true)) return
+            SDKTelemetry.track("splash_completed", mapOf("reason" to reason, "elapsed_ms" to (System.currentTimeMillis() - startedAt)))
+            safeCallback(onComplete)
+        }
+        fun scheduleHardTimeout(delayMs: Long = 15_000L) {
+            mainHandler.postDelayed({
+                if (completed.get()) return@postDelayed
+                if (FullscreenAdState.isActive()) {
+                    scheduleHardTimeout(1_000L)
+                } else {
+                    completeOnce("hard_timeout")
+                }
+            }, delayMs)
+        }
+        scheduleHardTimeout()
+
         fun showRuntimeSplash() {
+            if (completed.get()) return
+            if (activity.isFinishing || activity.isDestroyed) {
+                completeOnce("activity_unavailable")
+                return
+            }
             if (::updates.isInitialized) {
                 updates.checkBeforeSplash(activity) {
-                    runtime.showSplash(activity, onComplete)
+                    if (completed.get()) return@checkBeforeSplash
+                    runCatching {
+                        runtime.showSplash(activity) {
+                            completeOnce("runtime_complete")
+                        }
+                    }.onFailure {
+                        SDKTelemetry.recordNonFatal(it, mapOf("operation" to "show_splash_runtime"))
+                        completeOnce("runtime_error")
+                    }
                 }
             } else {
-                runtime.showSplash(activity, onComplete)
+                runCatching {
+                    runtime.showSplash(activity) {
+                        completeOnce("runtime_complete")
+                    }
+                }.onFailure {
+                    SDKTelemetry.recordNonFatal(it, mapOf("operation" to "show_splash_runtime"))
+                    completeOnce("runtime_error")
+                }
             }
         }
 
         fun runWhenReady() {
+            if (completed.get()) return
             val waitedMs = System.currentTimeMillis() - startedAt
+            if (activity.isFinishing || activity.isDestroyed) {
+                completeOnce("activity_unavailable_before_ready")
+                return
+            }
             if ((bootstrapFinished && config.configVersion > 0) || (!bootstrapInFlight && config.configVersion > 0) || waitedMs >= 4000L) {
                 showRuntimeSplash()
                 return
@@ -1133,8 +1188,15 @@ object ITWingSDK {
     }
 
     private fun readyListener(onReady: () -> Unit): SDKInitListener {
+        val delivered = AtomicBoolean(false)
+        fun deliverOnce() {
+            if (delivered.compareAndSet(false, true)) {
+                onReady()
+            }
+        }
         return object : SDKInitListener {
-            override fun onReady() = onReady()
+            override fun onReady() = deliverOnce()
+            override fun onError(error: String) = deliverOnce()
         }
     }
 

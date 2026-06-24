@@ -74,8 +74,14 @@ class ConfigRepository(
 
     fun activeOfferId(): String? = store.activeOfferId()
 
+    fun activeFormattedPrice(): String? = store.activeFormattedPrice()
+
     fun saveActivePlan(productId: String?, basePlanId: String?, offerId: String?) {
         store.saveActivePlan(productId, basePlanId, offerId)
+    }
+
+    fun saveActivePlanPrice(formattedPrice: String?) {
+        store.saveActivePlanPrice(formattedPrice)
     }
 
     fun savePlayOwnership(productIds: Set<String>, removesAds: Boolean) {
@@ -138,6 +144,7 @@ class ConfigRepository(
         orderId: String? = null,
         purchaseSignature: String? = null,
         purchaseOriginalJson: String? = null,
+        formattedPrice: String? = null,
     ): JSONObject = signedPost(
         "/subscriptions/verify",
         JSONObject()
@@ -152,6 +159,7 @@ class ConfigRepository(
                 if (!orderId.isNullOrBlank()) put("order_id", orderId)
                 if (!purchaseSignature.isNullOrBlank()) put("purchase_signature", purchaseSignature)
                 if (!purchaseOriginalJson.isNullOrBlank()) put("purchase_original_json", purchaseOriginalJson)
+                if (!formattedPrice.isNullOrBlank()) put("formatted_price", formattedPrice)
             },
     ).also { updateEntitlementFromResponse(it) }
 
@@ -291,12 +299,27 @@ class ConfigRepository(
         val productId = data.optCleanString("product_id") ?: activePurchase?.optCleanString("product_id")
         val basePlanId = data.optCleanString("base_plan_id") ?: activePurchase?.optCleanString("base_plan_id")
         val offerId = data.optCleanString("offer_id") ?: activePurchase?.optCleanString("offer_id")
+        val formattedPrice = data.optCleanString("formatted_price")
+            ?: activePurchase?.optCleanString("formatted_price")
+            ?: formattedPriceFromParts(data)
+            ?: activePurchase?.let { formattedPriceFromParts(it) }
         if (active && !productId.isNullOrBlank()) {
             store.saveActivePlan(productId, basePlanId, offerId)
+            if (!formattedPrice.isNullOrBlank()) {
+                store.saveActivePlanPrice(formattedPrice)
+            }
         } else if (!active) {
             store.saveActivePlan(null, null, null)
+            store.saveActivePlanPrice(null)
         }
         store.saveEntitlement(active, removesAds, expiresAt)
+    }
+
+    private fun formattedPriceFromParts(data: JSONObject): String? {
+        if (!data.has("price") || data.isNull("price")) return null
+        val currency = data.optCleanString("currency") ?: "USD"
+        val amount = data.optDouble("price").takeIf { !it.isNaN() } ?: return null
+        return "$currency ${"%.2f".format(java.util.Locale.US, amount)}"
     }
 
     private suspend fun postConfig(path: String, lastVersion: Int?): ITWingConfig =

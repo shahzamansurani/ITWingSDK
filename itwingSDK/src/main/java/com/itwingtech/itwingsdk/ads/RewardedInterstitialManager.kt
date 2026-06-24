@@ -59,6 +59,9 @@ class RewardedInterstitialManager(
         onReward: () -> Unit,
         onComplete: () -> Unit = {},
     ) {
+        if (!activity.isUsable()) {
+            return
+        }
         val config = configProvider()
         if (!config.ads.globalEnabled) {
             AdFailureDialog.show(activity, config.adPrimaryColor(), "Rewarded interstitial ads are disabled for this app.")
@@ -180,6 +183,10 @@ class RewardedInterstitialManager(
         }
 
         runOnMain {
+            if (!activity.isUsable()) {
+                FullscreenAdState.end(fullscreenOwner)
+                return@runOnMain
+            }
             runCatching {
                 ad.show(activity) {
                     AdEventTracker.log("ad_reward_earned", placement)
@@ -227,6 +234,10 @@ class RewardedInterstitialManager(
         loadingDialog.show(lottieUrl)
 
         fun poll() {
+            if (!activity.isUsable()) {
+                loadingDialog.dismiss()
+                return
+            }
             val ad = pollPreloadedAd(placementName)
             if (ad != null) {
                 loadingDialog.dismiss()
@@ -276,4 +287,6 @@ class RewardedInterstitialManager(
         preloaderKeys.remove(placementName)?.let { RewardedInterstitialAdPreloader.destroy(it) }
         load(activity, placementName)
     }
+
+    private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed
 }

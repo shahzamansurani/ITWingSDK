@@ -40,6 +40,10 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
 
     @MainThread
     fun load(activity: Activity, container: ViewGroup, placementName: String, bannerType: BannerType? = null, shimmerView: View? = null) {
+        if (!activity.isUsable() || !container.isAttachedToWindow) {
+            destroy(container)
+            return
+        }
         val config = configProvider()
         if (!config.ads.globalEnabled) {
             destroy(container)
@@ -166,6 +170,10 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                     ) {
 
                         activity.runOnUiThread {
+                            if (!activity.isUsable() || !container.isAttachedToWindow) {
+                                runCatching { ad.destroy() }
+                                return@runOnUiThread
+                            }
 
                             currentBannerAd = ad
 
@@ -218,6 +226,9 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                     ) {
 
                         activity.runOnUiThread {
+                            if (!activity.isUsable() || !container.isAttachedToWindow) {
+                                return@runOnUiThread
+                            }
 
                             stopShimmer(
                                 loadingView
@@ -944,4 +955,6 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             }
 
         }.getOrDefault(fallback)
+
+    private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed
 }

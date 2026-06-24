@@ -2,10 +2,14 @@ package com.itwingtech.itwingsdk.ads
 
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.view.ViewGroup
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import java.lang.ref.WeakReference
+import java.util.Collections
+import java.util.WeakHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 
@@ -19,6 +23,8 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
     private val nativeLoader by lazy { NativeLoader(configProvider) }
     private val bannerContainers = CopyOnWriteArrayList<WeakReference<ViewGroup>>()
     private val nativeContainers = CopyOnWriteArrayList<WeakReference<ViewGroup>>()
+    private val bannerRecords = Collections.synchronizedMap(WeakHashMap<ViewGroup, BannerRecord>())
+    private val nativeRecords = Collections.synchronizedMap(WeakHashMap<ViewGroup, NativeRecord>())
     /**
      * Interstitial
      */
@@ -130,6 +136,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
      */
     fun loadBanner(activity: Activity, container: ViewGroup, placement: String, bannerType: BannerType? = null) {
         rememberContainer(bannerContainers, container)
+        bannerRecords[container] = BannerRecord(activity, placement, bannerType)
         if (adsSuppressed()) {
             trackSuppressed("banner", placement)
             destroyBanner(container)
@@ -190,6 +197,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         respectInlineSafetyGate: Boolean,
     ) {
         rememberContainer(nativeContainers, container)
+        nativeRecords[container] = NativeRecord(activity, placement, nativeType)
         if (adsSuppressed()) {
             trackSuppressed("native", placement)
             destroyNative(container)
@@ -232,6 +240,49 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         nativeLoader.destroy(container)
     }
 
+    internal fun hideInlineAdsForDialog(activity: Activity): () -> Unit {
+        val hiddenBanners = synchronized(bannerRecords) {
+            bannerRecords.entries.mapNotNull { (container, record) ->
+                if (container.context.findActivity() === activity && container.isAttachedToWindow) {
+                    destroyBanner(container)
+                    container to record
+                } else {
+                    null
+                }
+            }
+        }
+        val hiddenNatives = synchronized(nativeRecords) {
+            nativeRecords.entries.mapNotNull { (container, record) ->
+                if (container.context.findActivity() === activity && container.isAttachedToWindow) {
+                    destroyNative(container)
+                    container to record
+                } else {
+                    null
+                }
+            }
+        }
+        if (hiddenBanners.isNotEmpty() || hiddenNatives.isNotEmpty()) {
+            SDKTelemetry.track(
+                "inline_ads_hidden_for_sdk_dialog",
+                mapOf("banners" to hiddenBanners.size, "natives" to hiddenNatives.size),
+            )
+        }
+        return {
+            hiddenBanners.forEach { (container, record) ->
+                val owner = container.context.findActivity()
+                if (owner != null && !owner.isFinishing && !owner.isDestroyed && container.isAttachedToWindow) {
+                    loadBanner(owner, container, record.placement, record.bannerType)
+                }
+            }
+            hiddenNatives.forEach { (container, record) ->
+                val owner = container.context.findActivity()
+                if (owner != null && !owner.isFinishing && !owner.isDestroyed && container.isAttachedToWindow) {
+                    loadNative(owner, container, record.placement, record.nativeType)
+                }
+            }
+        }
+    }
+
     /**
      * SDK Cleanup
      */
@@ -258,6 +309,35 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         if (containers.none { it.get() === container }) {
             containers.add(WeakReference(container))
         }
+    }
+
+    private data class BannerRecord(
+        val activityRef: WeakReference<Activity>,
+        val placement: String,
+        val bannerType: BannerType?,
+    ) {
+        constructor(activity: Activity, placement: String, bannerType: BannerType?) :
+            this(WeakReference(activity), placement, bannerType)
+    }
+
+    private data class NativeRecord(
+        val activityRef: WeakReference<Activity>,
+        val placement: String,
+        val nativeType: NativeType?,
+    ) {
+        constructor(activity: Activity, placement: String, nativeType: NativeType?) :
+            this(WeakReference(activity), placement, nativeType)
+    }
+
+    private fun Context.findActivity(): Activity? {
+        var current: Context? = this
+        while (current is ContextWrapper) {
+            if (current is Activity) return current
+            val base = current.baseContext
+            if (base === current) break
+            current = base
+        }
+        return current as? Activity
     }
 
     fun preloadAll(activity: Activity){

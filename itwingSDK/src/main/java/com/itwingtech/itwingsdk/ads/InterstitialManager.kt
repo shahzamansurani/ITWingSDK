@@ -64,6 +64,10 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     }
 
     fun show(activity: Activity, placementName: String, onComplete: () -> Unit = {}, ) {
+        if (!activity.isUsable()) {
+            safeCallback(onComplete)
+            return
+        }
         val config = configProvider()
         if (!config.ads.globalEnabled) {
             safeCallback(onComplete)
@@ -165,6 +169,11 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         }
 
         runOnMain {
+            if (!activity.isUsable()) {
+                FullscreenAdState.end(fullscreenOwner)
+                completion.complete()
+                return@runOnMain
+            }
             runCatching {
                 ad.show(activity)
             }.onFailure {
@@ -220,6 +229,11 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         loadingDialog.show(lottieUrl)
 
         fun poll() {
+            if (!activity.isUsable()) {
+                loadingDialog.dismiss()
+                safeCallback(onComplete)
+                return
+            }
             val ad = loadedAds.remove(placementName) ?: pollPreloadedAd(placementName)
             if (ad != null) {
                 loadingDialog.dismiss()
@@ -252,5 +266,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             else -> false
         }
     }
+
+    private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed
 
 }

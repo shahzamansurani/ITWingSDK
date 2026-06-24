@@ -386,7 +386,9 @@ class SubscriptionManager(
                 billingPeriod = product.billingPeriod,
                 price = product.price,
                 currency = product.currency,
-                formattedPrice = formattedPlayPrice(product),
+                formattedPrice = repository.activeFormattedPrice()
+                    ?: formattedPlayPrice(product)
+                    ?: formattedConfiguredPrice(product),
                 active = repository.isEntitlementActive(),
                 removesAds = repository.entitlementRemovesAds(),
                 expiresAt = repository.entitlementExpiresAt(),
@@ -557,6 +559,7 @@ class SubscriptionManager(
                     orderId = purchase.orderId,
                     purchaseSignature = purchase.signature,
                     purchaseOriginalJson = purchase.originalJson,
+                    formattedPrice = adminProduct?.let { formattedPlayPrice(it) ?: formattedConfiguredPrice(it) },
                 )
             }
             result.onSuccess {
@@ -695,6 +698,12 @@ class SubscriptionManager(
         }.getOrNull()?.takeIf(String::isNotBlank)
     }
 
+    private fun formattedConfiguredPrice(product: SubscriptionProductConfig): String? {
+        val price = product.price ?: return null
+        val amount = "%.2f".format(java.util.Locale.US, price)
+        return product.currency?.takeIf { it.isNotBlank() }?.let { "$it $amount" } ?: amount
+    }
+
     private fun queryPurchases(client: BillingClient, productType: String, onComplete: (Boolean, List<Purchase>) -> Unit) {
         client.queryPurchasesAsync(
             QueryPurchasesParams.newBuilder().setProductType(productType).build(),
@@ -721,7 +730,14 @@ class SubscriptionManager(
         }
         if (nonConsumableIds.isEmpty()) return
         product?.let {
-            repositoryProvider()?.saveActivePlan(it.productId.trim(), it.basePlanId, it.offerId)
+            val repository = repositoryProvider()
+            val existingProduct = repository?.activeProductId()
+            val existingBasePlan = repository?.activeBasePlanId()
+            val planChanged = existingProduct != it.productId.trim() || existingBasePlan != it.basePlanId
+            repository?.saveActivePlan(it.productId.trim(), it.basePlanId, it.offerId)
+            if (repository != null && (planChanged || repository.activeFormattedPrice().isNullOrBlank())) {
+                repository.saveActivePlanPrice(formattedPlayPrice(it) ?: formattedConfiguredPrice(it))
+            }
         }
         savePlayOwnership(ownedProductIds() + nonConsumableIds)
     }

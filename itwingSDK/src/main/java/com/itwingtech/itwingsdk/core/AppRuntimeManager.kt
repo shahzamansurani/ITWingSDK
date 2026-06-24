@@ -7,6 +7,7 @@ import android.os.Looper
 import com.itwingtech.itwingsdk.ads.AdManager
 import com.itwingtech.itwingsdk.ads.FullscreenAdState
 import com.itwingtech.itwingsdk.utils.safeCallback
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal class AppRuntimeManager(
     private val configProvider: () -> ITWingConfig,
@@ -15,31 +16,57 @@ internal class AppRuntimeManager(
     private val mainHandler = Handler(Looper.getMainLooper())
 
     fun showSplash(activity: Activity, onComplete: () -> Unit) {
-        val config = runCatching { configProvider() }.getOrNull() ?: run {
+        val completed = AtomicBoolean(false)
+        fun completeOnce() {
+            if (!completed.compareAndSet(false, true)) return
             safeCallback(onComplete)
+        }
+        fun scheduleRuntimeTimeout(delayMs: Long = 12_000L) {
+            mainHandler.postDelayed({
+                if (completed.get()) return@postDelayed
+                if (FullscreenAdState.isActive()) {
+                    scheduleRuntimeTimeout(1_000L)
+                } else {
+                    completeOnce()
+                }
+            }, delayMs)
+        }
+        scheduleRuntimeTimeout()
+
+        if (activity.isFinishing || activity.isDestroyed) {
+            completeOnce()
+            return
+        }
+
+        val config = runCatching { configProvider() }.getOrNull() ?: run {
+            completeOnce()
             return
         }
         val status = config.app["status"].safeString() ?: "active"
         val maintenance = config.app["maintenance"].safeBoolean(false)
 
         if (maintenance || status != "active") {
-            showStateDialog(activity, status, onComplete)
+            showStateDialog(activity, status, ::completeOnce)
             return
         }
 
         val delayMs = splashDelayMs(config)
         val splashDelayOwner = FullscreenAdState.tryBegin("sdk_splash", "delay")
         mainHandler.postDelayed({
-            runCatching { showSplashAd(activity, config, splashDelayOwner, onComplete) }
+            runCatching { showSplashAd(activity, config, splashDelayOwner, ::completeOnce) }
                 .onFailure {
                     FullscreenAdState.end(splashDelayOwner)
-                    safeCallback(onComplete)
+                    completeOnce()
                 }
         }, delayMs)
     }
 
     private fun showSplashAd(activity: Activity, config: ITWingConfig, splashDelayOwner: String?, onComplete: () -> Unit) {
         FullscreenAdState.end(splashDelayOwner)
+        if (activity.isFinishing || activity.isDestroyed) {
+            safeCallback(onComplete)
+            return
+        }
         val ads = adManagerProvider()
         if (ads == null || !config.ads.globalEnabled) {
             safeCallback(onComplete)
@@ -97,6 +124,10 @@ internal class AppRuntimeManager(
 
         mainHandler.post {
             runCatching {
+                if (activity.isFinishing || activity.isDestroyed) {
+                    safeCallback(onComplete)
+                    return@post
+                }
                 AlertDialog.Builder(activity)
                     .setTitle(title)
                     .setMessage(message)
