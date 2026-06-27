@@ -17,6 +17,7 @@ internal class AppRuntimeManager(
 
     fun showSplash(activity: Activity, onComplete: () -> Unit) {
         val completed = AtomicBoolean(false)
+        val adFlowStarted = AtomicBoolean(false)
         fun completeOnce() {
             if (!completed.compareAndSet(false, true)) return
             safeCallback(onComplete)
@@ -24,7 +25,7 @@ internal class AppRuntimeManager(
         fun scheduleRuntimeTimeout(delayMs: Long = 12_000L) {
             mainHandler.postDelayed({
                 if (completed.get()) return@postDelayed
-                if (FullscreenAdState.isActive()) {
+                if (FullscreenAdState.isActive() || adFlowStarted.get()) {
                     scheduleRuntimeTimeout(1_000L)
                 } else {
                     completeOnce()
@@ -53,6 +54,7 @@ internal class AppRuntimeManager(
         val delayMs = splashDelayMs(config)
         val splashDelayOwner = FullscreenAdState.tryBegin("sdk_splash", "delay")
         mainHandler.postDelayed({
+            adFlowStarted.set(true)
             runCatching { showSplashAd(activity, config, splashDelayOwner, ::completeOnce) }
                 .onFailure {
                     FullscreenAdState.end(splashDelayOwner)
@@ -145,8 +147,12 @@ internal class AppRuntimeManager(
 
     private fun splashDelayMs(config: ITWingConfig): Long {
         val splash = config.app.safeValue("splash").safeMap()
-        val seconds = splash.safeValue("seconds").safeLong(7L)
-        return seconds.coerceIn(0L, 10L) * 1000L
+        val seconds = listOf(
+            splash.safeValue("seconds"),
+            config.app.safeValue("splash_seconds"),
+            config.app.safeValue("splashSeconds"),
+        ).firstNotNullOfOrNull { it.safeLongOrNull() } ?: 7L
+        return seconds.coerceIn(0L, 15L) * 1000L
     }
 
     private fun splashFormat(config: ITWingConfig): String {
@@ -173,10 +179,14 @@ internal class AppRuntimeManager(
     }
 
     private fun Any?.safeLong(defaultValue: Long): Long {
+        return safeLongOrNull() ?: defaultValue
+    }
+
+    private fun Any?.safeLongOrNull(): Long? {
         return when (val value = normalizedValue()) {
             is Number -> value.toLong()
-            is String -> value.toLongOrNull() ?: value.toDoubleOrNull()?.toLong() ?: defaultValue
-            else -> defaultValue
+            is String -> value.toLongOrNull() ?: value.toDoubleOrNull()?.toLong()
+            else -> null
         }
     }
 

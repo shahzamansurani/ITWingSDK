@@ -233,7 +233,23 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
             destroyNative(container)
             return
         }
-        nativeLoader.load(activity = activity, container = container, placementName = placement, nativeTypeOverride = nativeType)
+        runCatching {
+            nativeLoader.load(
+                activity = activity,
+                container = container,
+                placementName = placement,
+                nativeTypeOverride = nativeType,
+            )
+        }.onFailure { throwable ->
+            SDKTelemetry.track(
+                "native_load_exception",
+                mapOf(
+                    "placement" to placement,
+                    "error" to (throwable.message ?: throwable::class.java.simpleName),
+                ),
+            )
+            destroyNative(container)
+        }
     }
 
     fun destroyNative(container: ViewGroup) {
@@ -277,7 +293,18 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
             hiddenNatives.forEach { (container, record) ->
                 val owner = container.context.findActivity()
                 if (owner != null && !owner.isFinishing && !owner.isDestroyed && container.isAttachedToWindow) {
-                    loadNative(owner, container, record.placement, record.nativeType)
+                    runCatching {
+                        loadNative(owner, container, record.placement, record.nativeType)
+                    }.onFailure { throwable ->
+                        SDKTelemetry.track(
+                            "native_restore_exception",
+                            mapOf(
+                                "placement" to record.placement,
+                                "error" to (throwable.message ?: throwable::class.java.simpleName),
+                            ),
+                        )
+                        destroyNative(container)
+                    }
                 }
             }
         }
@@ -341,10 +368,11 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
     }
 
     fun preloadAll(activity: Activity){
+        preloadStartup(activity)
+    }
+
+    fun preloadStartup(activity: Activity) {
         preloadInterstitials(activity)
-        preloadRewardedAds(activity)
-        preloadRewardedInterstitials(activity)
-        preloadAppOpen(activity)
     }
 
     fun preloadInterstitials(activity: Activity) {

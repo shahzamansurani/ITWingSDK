@@ -2,9 +2,11 @@ package com.itwingtech.itwingsdk.core
 
 import android.app.Activity
 import android.app.Application
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
@@ -22,6 +24,11 @@ import com.itwingtech.itwingsdk.data.ConfigRepository
 import com.itwingtech.itwingsdk.ui.ITWingActionDialog
 import com.itwingtech.itwingsdk.ui.ITWingLoadingDialog
 import com.itwingtech.itwingsdk.updates.InAppUpdateManager
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.itwingtech.itwingsdk.flow.ITWingFlowOnboardingActivity
+import com.itwingtech.itwingsdk.flow.ITWingFlowSplashActivity
+import com.itwingtech.itwingsdk.flow.ITWingFlowTermsActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,13 +41,18 @@ import java.lang.ref.WeakReference
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import androidx.core.net.toUri
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingResult
 import com.itwingtech.itwingsdk.ads.FullscreenAdState
+import com.itwingtech.itwingsdk.data.EncryptedConfigStore
 import com.itwingtech.itwingsdk.utils.safeCallback
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import java.util.concurrent.atomic.AtomicBoolean
+import androidx.core.graphics.toColorInt
 
 object ITWingSDK {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -51,33 +63,50 @@ object ITWingSDK {
         configProvider = { config },
         adManagerProvider = { ads },
     )
+
     @Volatile
     private var mobileAdsInitialized = false
+
     @Volatile
     private var startupPreloadDone = false
+
+    @Volatile
+    private var startupMediaPreloadVersion = -1
+
     @Volatile
     private var bootstrapFinished = false
+
     @Volatile
     private var bootstrapInFlight = false
+
     @Volatile
     private var lastError: String? = "not_initialized"
+
     @Volatile
     private var connectionState: String = "not_initialized"
+
     @Volatile
     private var lifecycleTrackingRegistered = false
+
     @Volatile
     private var autoApplyResponsiveLayout = false
+
     @Volatile
     private var foregroundActivityCount = 0
+
     @Volatile
     private var foregroundStartedAtMs = 0L
     private val readyCallbacks = CopyOnWriteArrayList<(Boolean) -> Unit>()
     private val initListeners = CopyOnWriteArrayList<SDKInitListener>()
 
-    val ads: AdManager = AdManager(configProvider = { config }, suppressAdsProvider = { ::subscriptions.isInitialized && subscriptions.isAdFree() })
+    val ads: AdManager = AdManager(
+        configProvider = { config },
+        suppressAdsProvider = { ::subscriptions.isInitialized && subscriptions.isAdFree() })
     lateinit var analytics: AnalyticsClient private set
     lateinit var updates: InAppUpdateManager private set
     lateinit var subscriptions: SubscriptionManager private set
+
+    internal fun currentConfig(): ITWingConfig = config
 
     @JvmStatic
     fun initialize(activity: Activity, apiKey: String, onReady: () -> Unit) {
@@ -85,7 +114,222 @@ object ITWingSDK {
     }
 
     @JvmStatic
-    fun initialize(activity: Activity, apiKey: String, options: ITWingOptions, onReady: () -> Unit) {
+    @JvmOverloads
+    fun startAppFlow(
+        activity: Activity,
+        apiKey: String,
+        mainActivity: Class<out Activity>,
+        sdkOptions: ITWingOptions = ITWingOptions(autoApplyResponsiveLayout = true),
+        flowOptions: ITWingAppFlowOptions = ITWingAppFlowOptions(),
+        finishCurrent: Boolean = true,
+        listener: SDKInitListener? = null,
+        listner: SDKInitListener? = null,
+    ) {
+        val externalListener = listener ?: listner
+        val sessionId = ITWingAppFlowRegistry.put(
+            ITWingAppFlowSession(
+                apiKey = apiKey,
+                sdkOptions = sdkOptions,
+                flowOptions = flowOptions,
+                mainActivityName = mainActivity.name,
+                listener = externalListener,
+            ),
+        )
+        activity.startActivity(
+            Intent(activity, ITWingFlowSplashActivity::class.java)
+                .putExtra(ITWingFlowSplashActivity.EXTRA_SESSION_ID, sessionId),
+        )
+        if (finishCurrent) {
+            activity.finish()
+        }
+    }
+
+    @JvmStatic
+    fun startAppFlow(
+        activity: Activity,
+        apiKey: String,
+        mainActivity: Class<out Activity>,
+        splash_bg: ImageView? = null,
+        splash_title: TextView? = null,
+        splash_sub_title: TextView? = null,
+        splash_lottie_anim: View? = null,
+        splash_bg_color: View? = null,
+        splash_logo: ImageView? = null,
+        sdkOptions: ITWingOptions = ITWingOptions(autoApplyResponsiveLayout = true),
+        flowOptions: ITWingAppFlowOptions = ITWingAppFlowOptions(),
+        finishCurrent: Boolean = true,
+        listener: SDKInitListener? = null,
+        listner: SDKInitListener? = null,
+    ) {
+        val externalListener = listener ?: listner
+        val sessionId = ITWingAppFlowRegistry.put(
+            ITWingAppFlowSession(
+                apiKey = apiKey,
+                sdkOptions = sdkOptions,
+                flowOptions = flowOptions,
+                mainActivityName = mainActivity.name,
+                listener = externalListener,
+            ),
+        )
+        val completed = AtomicBoolean(false)
+
+        fun open(target: Intent) {
+            if (!completed.compareAndSet(false, true)) return
+            if (activity.isFinishing || activity.isDestroyed) {
+                ITWingAppFlowRegistry.remove(sessionId)
+                return
+            }
+            target.putExtra(ITWingFlowSplashActivity.EXTRA_SESSION_ID, sessionId)
+            activity.startActivity(target)
+            if (target.component?.className == mainActivity.name) {
+                ITWingAppFlowRegistry.remove(sessionId)
+            }
+            if (finishCurrent) {
+                activity.finish()
+            }
+        }
+
+        fun openMain() = open(Intent(activity, mainActivity))
+
+        fun openNext() {
+            val prefs = activity.getSharedPreferences("itwing_app_flow", Activity.MODE_PRIVATE)
+            val termsAccepted = prefs.getBoolean("terms_accepted", false)
+            when {
+                flowOptions.showOnboarding && !termsAccepted ->
+                    open(Intent(activity, ITWingFlowOnboardingActivity::class.java))
+
+                flowOptions.requireTerms && !termsAccepted ->
+                    open(Intent(activity, ITWingFlowTermsActivity::class.java))
+
+                else -> openMain()
+            }
+        }
+
+        fun continueAfterUpdateAndDelay() {
+            val delay = getSplashDelayMs(7000L)
+            val continueAction = { mainHandler.postDelayed({ openNext() }, delay) }
+            runCatching {
+                if (::updates.isInitialized) updates.checkBeforeSplash(activity) { continueAction() } else continueAction()
+            }.onFailure { continueAction() }
+        }
+
+        fun continueWithSplashAdOrDelay() {
+            when (getSplashAdFormat("none").lowercase()) {
+                "none", "no_ad", "disabled" -> continueAfterUpdateAndDelay()
+                else -> showSplash(activity) { openNext() }
+            }
+        }
+
+        fun renderVisibleSplashFromCache() {
+            makeSplashFullscreen(activity)
+            loadCachedConfigForStartup(activity)
+            applyHostSplashBranding(
+                activity = activity,
+                splashBackground = splash_bg,
+                splashTitle = splash_title,
+                splashSubtitle = splash_sub_title,
+                splashLottie = splash_lottie_anim,
+                splashBackgroundColor = splash_bg_color,
+                splashLogo = splash_logo,
+                flowOptions = flowOptions,
+            )
+        }
+
+        fun prefetchOnly() {
+            prefetchStartupMedia(activity)
+        }
+
+        renderVisibleSplashFromCache()
+        initialize(activity, apiKey, sdkOptions, object : SDKInitListener {
+            override fun onConfigLoaded(config: ITWingConfig) {
+                prefetchOnly()
+                externalListener?.onConfigLoaded(config)
+            }
+
+            override fun onReady() {
+                prefetchOnly()
+                externalListener?.onReady()
+                continueWithSplashAdOrDelay()
+            }
+
+            override fun onError(error: String) {
+                externalListener?.onError(error)
+                continueAfterUpdateAndDelay()
+            }
+
+            override fun onAdsReady() {
+                externalListener?.onAdsReady()
+            }
+
+            override fun onNotificationsReady() {
+                externalListener?.onNotificationsReady()
+            }
+
+            override fun onBillingReady() {
+                externalListener?.onBillingReady()
+            }
+
+            override fun onAnalyticsReady() {
+                externalListener?.onAnalyticsReady()
+            }
+
+            override fun onOfflineMode(reason: String) {
+                externalListener?.onOfflineMode(reason)
+            }
+
+            override fun onRetry(reason: String) {
+                externalListener?.onRetry(reason)
+            }
+        })
+    }
+
+    @JvmStatic
+    @JvmOverloads
+    fun startAppFlow(
+        activity: Activity,
+        apiKey: String,
+        endpoint: String,
+        autoApplyResponsiveLayout: Boolean = true,
+        mainActivity: Class<out Activity>,
+        splash_bg: ImageView? = null,
+        splash_title: TextView? = null,
+        splash_sub_title: TextView? = null,
+        splash_lottie_anim: View? = null,
+        splash_bg_color: View? = null,
+        splash_logo: ImageView? = null,
+        flowOptions: ITWingAppFlowOptions = ITWingAppFlowOptions(),
+        finishCurrent: Boolean = true,
+        listener: SDKInitListener? = null,
+        listner: SDKInitListener? = null,
+    ) {
+        startAppFlow(
+            activity = activity,
+            apiKey = apiKey,
+            mainActivity = mainActivity,
+            splash_bg = splash_bg,
+            splash_title = splash_title,
+            splash_sub_title = splash_sub_title,
+            splash_lottie_anim = splash_lottie_anim,
+            splash_bg_color = splash_bg_color,
+            splash_logo = splash_logo,
+            sdkOptions = ITWingOptions(
+                endpoint = endpoint,
+                autoApplyResponsiveLayout = autoApplyResponsiveLayout,
+            ),
+            flowOptions = flowOptions,
+            finishCurrent = finishCurrent,
+            listener = listener,
+            listner = listner,
+        )
+    }
+
+    @JvmStatic
+    fun initialize(
+        activity: Activity,
+        apiKey: String,
+        options: ITWingOptions,
+        onReady: () -> Unit
+    ) {
         initialize(activity, apiKey, options, readyListener(onReady))
     }
 
@@ -96,7 +340,12 @@ object ITWingSDK {
 
     @JvmStatic
     @JvmOverloads
-    fun initialize(activity: Activity, apiKey: String, options: ITWingOptions = ITWingOptions(), listener: SDKInitListener? = null) {
+    fun initialize(
+        activity: Activity,
+        apiKey: String,
+        options: ITWingOptions = ITWingOptions(),
+        listener: SDKInitListener? = null
+    ) {
         listener?.let { initListeners.add(it) }
         autoApplyResponsiveLayout = options.autoApplyResponsiveLayout
         if (autoApplyResponsiveLayout) {
@@ -170,12 +419,11 @@ object ITWingSDK {
             if (config.configVersion > 0) {
                 FirebaseRuntimeManager.configure(activity.applicationContext, config.firebase)
                 SDKTelemetry.track(
-                    "firebase_configured",
+                    "fcm_configured",
                     mapOf(
                         "enabled" to config.firebase.enabled,
-                        "analytics_enabled" to config.firebase.analyticsEnabled,
-                        "crashlytics_enabled" to config.firebase.crashlyticsEnabled,
-                        "auth_enabled" to config.firebase.authEnabled,
+                        "project_id" to config.firebase.projectId,
+                        "sender_id_present" to !config.firebase.gcmSenderId.isNullOrBlank(),
                     ),
                 )
                 NotificationRuntimeManager.configure(activity, config, repository)
@@ -224,12 +472,11 @@ object ITWingSDK {
                 notifyListeners { it.onConfigLoaded(remote) }
                 FirebaseRuntimeManager.configure(activity.applicationContext, config.firebase)
                 SDKTelemetry.track(
-                    "firebase_configured",
+                    "fcm_configured",
                     mapOf(
                         "enabled" to config.firebase.enabled,
-                        "analytics_enabled" to config.firebase.analyticsEnabled,
-                        "crashlytics_enabled" to config.firebase.crashlyticsEnabled,
-                        "auth_enabled" to config.firebase.authEnabled,
+                        "project_id" to config.firebase.projectId,
+                        "sender_id_present" to !config.firebase.gcmSenderId.isNullOrBlank(),
                     ),
                 )
                 NotificationRuntimeManager.configure(activity, config, repository)
@@ -260,7 +507,10 @@ object ITWingSDK {
                 bootstrapFinished = true
                 bootstrapInFlight = false
                 notifyReady(cachedConfigAvailable)
-                SDKTelemetry.track("sdk_bootstrap_failed", mapOf("message" to message, "network_failure" to networkFailure))
+                SDKTelemetry.track(
+                    "sdk_bootstrap_failed",
+                    mapOf("message" to message, "network_failure" to networkFailure)
+                )
                 SDKTelemetry.recordNonFatal(it, mapOf("state" to connectionState))
                 if (cachedConfigAvailable) {
                     notifyListeners { listener -> listener.onOfflineMode(message) }
@@ -284,19 +534,180 @@ object ITWingSDK {
         /*
          * IMPORTANT:
          *
-         * Only preload interstitials.
-         *
-         * Rewarded:
-         * load contextually.
-         *
-         * App Open:
-         * load on foreground.
-         *
-         * Rewarded Interstitial:
-         * load contextually.
+         * Do not blanket-preload every full-screen format on SDK startup.
+         * That creates AdMob requests for ads the user may never see, which
+         * lowers match/show rate. Startup preload is now limited to placements
+         * explicitly marked by admin metadata with preload_on_start=true.
          */
-        ads.preloadAll(activity)
+        ads.preloadStartup(activity)
     }
+
+    private fun applyHostSplashBranding(
+        activity: Activity,
+        splashBackground: ImageView?,
+        splashTitle: TextView?,
+        splashSubtitle: TextView?,
+        splashLottie: View?,
+        splashBackgroundColor: View?,
+        splashLogo: ImageView?,
+        flowOptions: ITWingAppFlowOptions,
+    ) {
+        if (activity.isFinishing || activity.isDestroyed) return
+        val primary = appPrimaryColorInt()
+        val splashBackgroundColorInt = config.app["splash_background_color"]
+            .asNonBlankString()
+            ?.let { runCatching { it.toColorInt() }.getOrNull() }
+            ?: primary
+        splashBackgroundColor?.setBackgroundColor(splashBackgroundColorInt)
+        splashTitle?.text = flowOptions.splashTitle
+            ?: config.app["splash_title"].asNonBlankString()
+                    ?: getAppTitle(
+                activity.applicationInfo.loadLabel(activity.packageManager).toString()
+            )
+        splashSubtitle?.text = flowOptions.splashSubtitle
+            ?: config.app["splash_subtitle"].asNonBlankString()
+                    ?: splashSubtitle?.text
+
+        val style = (flowOptions.splashStyle
+            ?: config.app["splash_style"].asNonBlankString()
+            ?: config.app["splash_type"].asNonBlankString()
+            ?: "default").lowercase()
+        val fullBackgroundUrl = config.app["splash_background_url"].asNonBlankString()
+        val centerImageUrl = config.app["splash_center_image_url"].asNonBlankString()
+            ?: config.app["splash_image_url"].asNonBlankString()
+        val logoUrl = getSplashLogoUrl()?.toString()
+
+        splashBackground?.let { view ->
+            when {
+                flowOptions.splashBackground != 0 -> view.setImageResource(flowOptions.splashBackground)
+                style in setOf(
+                    "full_background",
+                    "background",
+                    "fullscreen_background"
+                ) && !fullBackgroundUrl.isNullOrBlank() ->
+                    loadCachedSplashImage(activity, view, fullBackgroundUrl)
+            }
+        }
+
+        splashLogo?.let { view ->
+            if (flowOptions.splashLogo != 0) {
+                view.setImageResource(flowOptions.splashLogo)
+            } else {
+                val url = if (style in setOf("center_image", "image", "logo_only")) centerImageUrl
+                    ?: logoUrl else logoUrl
+                if (!url.isNullOrBlank()) {
+                    loadCachedSplashImage(activity, view, url)
+                }
+            }
+        }
+
+        val lottieUrl = flowOptions.splashLottieUrl
+            ?: config.app["loading_lottie_url"].asNonBlankString()
+            ?: config.app["splash_lottie_url"].asNonBlankString()
+        if (!lottieUrl.isNullOrBlank()) {
+            runCatching {
+                splashLottie?.javaClass
+                    ?.methods
+                    ?.firstOrNull { it.name == "setAnimationFromUrl" && it.parameterTypes.size == 1 && it.parameterTypes[0] == String::class.java }
+                    ?.invoke(splashLottie, lottieUrl)
+                splashLottie?.javaClass
+                    ?.methods
+                    ?.firstOrNull { it.name == "playAnimation" && it.parameterTypes.isEmpty() }
+                    ?.invoke(splashLottie)
+            }
+        }
+    }
+
+    private fun loadCachedConfigForStartup(activity: Activity) {
+        val cached = runCatching {
+            EncryptedConfigStore(activity.applicationContext).load()
+        }.getOrNull() ?: return
+
+        if (cached.configVersion > 0) {
+            config = cached
+        }
+    }
+
+    private fun makeSplashFullscreen(activity: Activity) {
+        if (activity.isFinishing || activity.isDestroyed) return
+        runCatching {
+            WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+            WindowInsetsControllerCompat(activity.window, activity.window.decorView)
+                .hide(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    private fun loadCachedSplashImage(activity: Activity, view: ImageView, url: String) {
+        runCatching {
+            Glide.with(activity.applicationContext)
+                .load(url)
+                .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                .onlyRetrieveFromCache(true)
+                .dontAnimate()
+                .into(view)
+        }
+    }
+
+    private fun prefetchStartupMedia(activity: Activity) {
+        val version = config.configVersion
+        if (version > 0 && startupMediaPreloadVersion == version) return
+        startupMediaPreloadVersion = version
+        val urls = linkedSetOf<String>()
+        fun add(value: Any?) {
+            val url = value.asNonBlankString() ?: return
+            if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
+                urls.add(url)
+            }
+        }
+        fun scan(value: Any?) {
+            when (value) {
+                is Map<*, *> -> value.values.forEach(::scan)
+                is List<*> -> value.forEach(::scan)
+                is Array<*> -> value.forEach(::scan)
+                else -> add(value)
+            }
+        }
+        listOf(
+            "icon_url",
+            "launcher_icon_url",
+            "splash_logo_url",
+            "splash_background_url",
+            "splash_center_image_url",
+            "loading_lottie_url",
+        ).forEach { add(config.app[it]) }
+        scan(config.app)
+        scan(config.remoteConfig)
+        (config.app["onboarding_pages"] as? List<*>)?.forEach { page ->
+            (page as? Map<*, *>)?.let {
+                add(it["image_url"])
+                add(it["image"])
+            }
+        }
+        config.ads.customAds.forEach { ad ->
+            add(ad.imageUrl)
+            add(ad.videoUrl)
+            add(ad.mediaUrl)
+            add(ad.metadata["image_url"])
+            add(ad.metadata["video_url"])
+            add(ad.metadata["media_url"])
+            (ad.metadata["brand"] as? Map<*, *>)?.let { add(it["logo_url"]) }
+        }
+        config.ads.placements.mapNotNull { it.customAd }.forEach { ad ->
+            add(ad.imageUrl)
+            add(ad.videoUrl)
+            add(ad.mediaUrl)
+            (ad.metadata["brand"] as? Map<*, *>)?.let { add(it["logo_url"]) }
+        }
+        urls.take(80).forEach { url ->
+            runCatching {
+                Glide.with(activity.applicationContext)
+                    .load(url)
+                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                    .preload()
+            }
+        }
+    }
+
 
     private fun initializeMobileAds(activity: Activity, onInitialized: () -> Unit = {}) {
         if (mobileAdsInitialized) {
@@ -304,7 +715,10 @@ object ITWingSDK {
             return
         }
         val appId = config.ads.admobAppId?.takeIf { it.isNotBlank() } ?: run {
-            SDKTelemetry.track("mobile_ads_initialize_skipped", mapOf("reason" to "missing_admob_app_id"))
+            SDKTelemetry.track(
+                "mobile_ads_initialize_skipped",
+                mapOf("reason" to "missing_admob_app_id")
+            )
             onInitialized()
             return
         }
@@ -352,7 +766,9 @@ object ITWingSDK {
     }
 
     @JvmStatic
-    fun isReady(): Boolean { return config.configVersion > 0 }
+    fun isReady(): Boolean {
+        return config.configVersion > 0
+    }
 
     @JvmStatic
     fun lastError(): String? = lastError
@@ -430,13 +846,20 @@ object ITWingSDK {
 
     @JvmStatic
     fun getRemoteConfig(key: String): Map<String, Any?> {
-        return config.remoteConfig[key] as? Map<String, Any?> ?: emptyMap()
+        return config.remoteConfig[key].asStringKeyMap()
     }
 
     @JvmStatic
     fun getRemoteModule(name: String): Map<String, Any?> {
         val modules = config.remoteConfig["modules"] as? Map<*, *> ?: return emptyMap()
-        return modules[name] as? Map<String, Any?> ?: emptyMap()
+        return modules[name].asStringKeyMap()
+    }
+
+    private fun Any?.asStringKeyMap(): Map<String, Any?> {
+        val source = this as? Map<*, *> ?: return emptyMap()
+        return source.mapNotNull { (key, value) ->
+            (key as? String)?.let { it to value }
+        }.toMap()
     }
 
     @JvmStatic
@@ -538,14 +961,16 @@ object ITWingSDK {
     }
 
     @JvmStatic
-    fun getAppTitle(defaultValue: String = ""): String { return config.app["title"] as? String ?: config.app["name"] as? String ?: defaultValue }
+    fun getAppTitle(defaultValue: String = ""): String {
+        return config.app["title"] as? String ?: config.app["name"] as? String ?: defaultValue
+    }
 
     @JvmStatic
     fun getAppUrl(kind: String): String? {
         val legal = config.app["legal"] as? Map<*, *>
-        fun legalUrl(type: String): String? = (legal?.get(type) as? Map<*, *>)?.get("url") as? String
-        return when (kind)
-        {
+        fun legalUrl(type: String): String? =
+            (legal?.get(type) as? Map<*, *>)?.get("url") as? String
+        return when (kind) {
             "privacy" -> config.app["privacy_policy_url"] as? String ?: legalUrl("privacy_policy")
             "terms" -> config.app["terms_url"] as? String ?: legalUrl("terms")
             "disclaimer" -> config.app["disclaimer_url"] as? String ?: legalUrl("disclaimer")
@@ -566,7 +991,9 @@ object ITWingSDK {
     }
 
     @JvmStatic
-    fun isMaintenanceMode(): Boolean { return config.app["maintenance"] as? Boolean ?: false }
+    fun isMaintenanceMode(): Boolean {
+        return config.app["maintenance"] as? Boolean ?: false
+    }
 
     @JvmStatic
     fun getAppStatus(defaultValue: String = "active"): String {
@@ -598,15 +1025,24 @@ object ITWingSDK {
 
     @JvmStatic
     fun getSplashDelayMs(defaultValue: Long = 7000L): Long {
-        val splash = config.app["splash"] as? Map<*, *> ?: return defaultValue
-        val seconds = splash["seconds"] as? Number ?: return defaultValue
-        return seconds.toLong().coerceIn(0L, 10L) * 1000L
+        val splash = config.app["splash"] as? Map<*, *>
+        val seconds = listOf(
+            splash?.get("seconds"),
+            config.app["splash_seconds"],
+            config.app["splashSeconds"],
+        ).firstNotNullOfOrNull { it.toLongOrNullCompat() } ?: return defaultValue
+        return seconds.coerceIn(0L, 15L) * 1000L
     }
 
     @JvmStatic
     fun getSplashAdFormat(defaultValue: String = "none"): String {
-        val splash = config.app["splash"] as? Map<*, *> ?: return defaultValue
-        return splash["ad_format"] as? String ?: defaultValue
+        val splash = config.app["splash"] as? Map<*, *>
+        return listOf(
+            splash?.get("ad_format"),
+            splash?.get("adFormat"),
+            config.app["splash_ad_format"],
+            config.app["splashAdFormat"],
+        ).firstNotNullOfOrNull { it.asNonBlankString() } ?: defaultValue
     }
 
     @JvmStatic
@@ -622,7 +1058,12 @@ object ITWingSDK {
         }
 
     @JvmStatic
-    fun showRewarded(activity: Activity, placement: String, onReward: () -> Unit, onComplete: () -> Unit = {}) =
+    fun showRewarded(
+        activity: Activity,
+        placement: String,
+        onReward: () -> Unit,
+        onComplete: () -> Unit = {}
+    ) =
         runSdkCall("show_rewarded", mapOf("placement" to placement)) {
             ads.showRewarded(activity, placement, onReward, onComplete)
         }
@@ -634,7 +1075,12 @@ object ITWingSDK {
         }
 
     @JvmStatic
-    fun showRewardedInterstitial(activity: Activity, placement: String, onReward: () -> Unit = {}, onComplete: () -> Unit = {}) =
+    fun showRewardedInterstitial(
+        activity: Activity,
+        placement: String,
+        onReward: () -> Unit = {},
+        onComplete: () -> Unit = {}
+    ) =
         runSdkCall("show_rewarded_interstitial", mapOf("placement" to placement)) {
             ads.showRewardedInterstitial(activity, placement, onReward, onComplete)
         }
@@ -663,11 +1109,18 @@ object ITWingSDK {
     }
 
     @JvmStatic
-    fun trackCustomAdEvent(customAdId: String, eventType: String, metadata: Map<String, Any?> = emptyMap()) {
+    fun trackCustomAdEvent(
+        customAdId: String,
+        eventType: String,
+        metadata: Map<String, Any?> = emptyMap()
+    ) {
         scope.launch {
             val payload = JSONObject()
             metadata.forEach { (key, value) -> payload.put(key, value) }
-            analyticsOrNull()?.track("custom_ad_$eventType", metadata + mapOf("custom_ad_id" to customAdId))
+            analyticsOrNull()?.track(
+                "custom_ad_$eventType",
+                metadata + mapOf("custom_ad_id" to customAdId)
+            )
             runCatching { repository?.submitCustomAdEvent(customAdId, eventType, payload) }
         }
     }
@@ -676,15 +1129,20 @@ object ITWingSDK {
     fun showSplash(activity: Activity, onComplete: () -> Unit = {}) {
         val startedAt = System.currentTimeMillis()
         val completed = AtomicBoolean(false)
+        val runtimeStarted = AtomicBoolean(false)
         fun completeOnce(reason: String) {
             if (!completed.compareAndSet(false, true)) return
-            SDKTelemetry.track("splash_completed", mapOf("reason" to reason, "elapsed_ms" to (System.currentTimeMillis() - startedAt)))
+            SDKTelemetry.track(
+                "splash_completed",
+                mapOf("reason" to reason, "elapsed_ms" to (System.currentTimeMillis() - startedAt))
+            )
             safeCallback(onComplete)
         }
+
         fun scheduleHardTimeout(delayMs: Long = 15_000L) {
             mainHandler.postDelayed({
                 if (completed.get()) return@postDelayed
-                if (FullscreenAdState.isActive()) {
+                if (FullscreenAdState.isActive() || runtimeStarted.get()) {
                     scheduleHardTimeout(1_000L)
                 } else {
                     completeOnce("hard_timeout")
@@ -703,6 +1161,7 @@ object ITWingSDK {
                 updates.checkBeforeSplash(activity) {
                     if (completed.get()) return@checkBeforeSplash
                     runCatching {
+                        runtimeStarted.set(true)
                         runtime.showSplash(activity) {
                             completeOnce("runtime_complete")
                         }
@@ -713,6 +1172,7 @@ object ITWingSDK {
                 }
             } else {
                 runCatching {
+                    runtimeStarted.set(true)
                     runtime.showSplash(activity) {
                         completeOnce("runtime_complete")
                     }
@@ -740,7 +1200,10 @@ object ITWingSDK {
     }
 
     @JvmStatic
-    fun launchSubscriptionPurchase(activity: Activity, productId: String): com.android.billingclient.api.BillingResult {
+    fun launchSubscriptionPurchase(
+        activity: Activity,
+        productId: String
+    ): com.android.billingclient.api.BillingResult {
         if (::subscriptions.isInitialized) {
             subscriptions.launchPurchaseWhenReady(activity, productId) { }
             return com.android.billingclient.api.BillingResult.newBuilder()
@@ -749,7 +1212,7 @@ object ITWingSDK {
                 .build()
         }
 
-        return com.android.billingclient.api.BillingResult.newBuilder()
+        return BillingResult.newBuilder()
             .setResponseCode(com.android.billingclient.api.BillingClient.BillingResponseCode.SERVICE_DISCONNECTED)
             .setDebugMessage("Billing is not initialized yet.")
             .build()
@@ -759,14 +1222,18 @@ object ITWingSDK {
     fun launchSubscriptionPurchase(
         activity: Activity,
         productId: String,
-        onResult: ((com.android.billingclient.api.BillingResult) -> Unit)?,
+        onResult: ((BillingResult) -> Unit)?,
     ) {
         if (::subscriptions.isInitialized) {
-            subscriptions.launchPurchaseWhenReady(activity, productId) { result -> onResult?.invoke(result) }
+            subscriptions.launchPurchaseWhenReady(activity, productId) { result ->
+                onResult?.invoke(
+                    result
+                )
+            }
         } else {
             onResult?.invoke(
-                com.android.billingclient.api.BillingResult.newBuilder()
-                    .setResponseCode(com.android.billingclient.api.BillingClient.BillingResponseCode.SERVICE_DISCONNECTED)
+                BillingResult.newBuilder()
+                    .setResponseCode(BillingClient.BillingResponseCode.SERVICE_DISCONNECTED)
                     .setDebugMessage("Billing is not initialized yet.")
                     .build()
             )
@@ -774,13 +1241,16 @@ object ITWingSDK {
     }
 
     @JvmStatic
-    fun showPurchaseDialog(activity: Activity, onResult: ((com.android.billingclient.api.BillingResult) -> Unit)? = null) {
+    fun showPurchaseDialog(
+        activity: Activity,
+        onResult: ((BillingResult) -> Unit)? = null
+    ) {
         if (::subscriptions.isInitialized) {
             subscriptions.showPurchaseDialog(activity) { result -> onResult?.invoke(result) }
         } else {
             onResult?.invoke(
-                com.android.billingclient.api.BillingResult.newBuilder()
-                    .setResponseCode(com.android.billingclient.api.BillingClient.BillingResponseCode.SERVICE_DISCONNECTED)
+                BillingResult.newBuilder()
+                    .setResponseCode(BillingClient.BillingResponseCode.SERVICE_DISCONNECTED)
                     .setDebugMessage("Billing is not initialized yet.")
                     .build()
             )
@@ -890,12 +1360,15 @@ object ITWingSDK {
                 BillingClient.BillingResponseCode.OK -> {
                     if (isAdFree()) "Purchase active" else "Purchase is pending. It will activate after Google Play confirms it."
                 }
+
                 BillingClient.BillingResponseCode.USER_CANCELED -> "Purchase cancelled"
                 BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> activeText
                 BillingClient.BillingResponseCode.ITEM_UNAVAILABLE,
                 BillingClient.BillingResponseCode.BILLING_UNAVAILABLE -> "Purchase is unavailable right now"
+
                 BillingClient.BillingResponseCode.SERVICE_DISCONNECTED,
                 BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE -> "Google Play Billing is not available right now"
+
                 else -> result.debugMessage.takeIf { it.isNotBlank() } ?: "Purchase failed"
             }
         }
@@ -971,8 +1444,9 @@ object ITWingSDK {
         }
     }
 
+    @Deprecated("ITWingSDK no longer includes Firebase Auth. The Firebase dependency is now limited to FCM push notifications.")
     @JvmStatic
-    fun firebaseAuth(): com.google.firebase.auth.FirebaseAuth? = FirebaseRuntimeManager.auth()
+    fun firebaseAuth(): Any? = null
 
     private fun notifyReady(success: Boolean) {
         val callbacks = readyCallbacks.toList()
@@ -1036,7 +1510,10 @@ object ITWingSDK {
                         )
                     }
                     ads.updateForegroundActivity(activity)
-                    NotificationRuntimeManager.reportOpened(activity.intent?.getStringExtra("itwing_notification_id"))
+                    activity.intent?.getStringExtra("itwing_notification_id")?.takeIf { it.isNotBlank() }?.let { notificationId ->
+                        NotificationRuntimeManager.reportOpened(notificationId)
+                        activity.intent?.removeExtra("itwing_notification_id")
+                    }
                     NotificationRuntimeManager.syncNow()
                     if (::updates.isInitialized) {
                         updates.onResume(activity)
@@ -1177,13 +1654,21 @@ object ITWingSDK {
         initListeners.forEach { listener -> mainHandler.post { runCatching { callback(listener) } } }
     }
 
-    private fun analyticsOrNull(): AnalyticsClient? = if (::analytics.isInitialized) analytics else null
+    private fun analyticsOrNull(): AnalyticsClient? =
+        if (::analytics.isInitialized) analytics else null
 
-    private fun runSdkCall(operation: String, properties: Map<String, Any?> = emptyMap(), block: () -> Unit) {
+    private fun runSdkCall(
+        operation: String,
+        properties: Map<String, Any?> = emptyMap(),
+        block: () -> Unit
+    ) {
         SDKTelemetry.track("sdk_call_requested", mapOf("operation" to operation) + properties)
         runCatching { block() }.onFailure {
             SDKTelemetry.recordNonFatal(it, mapOf("operation" to operation) + properties)
-            SDKTelemetry.track("sdk_call_failed", mapOf("operation" to operation, "message" to (it.message ?: "unknown")) + properties)
+            SDKTelemetry.track(
+                "sdk_call_failed",
+                mapOf("operation" to operation, "message" to (it.message ?: "unknown")) + properties
+            )
         }
     }
 
@@ -1223,40 +1708,40 @@ object ITWingSDK {
 
         val flat = linkedMapOf<String, Any?>(
             "enabled" to (
-                config.app["host_dialog_enabled"]
-                    ?: config.remoteConfig["host_dialog_enabled"]
-                    ?: config.features["host_dialog_enabled"]
-                ),
+                    config.app["host_dialog_enabled"]
+                        ?: config.remoteConfig["host_dialog_enabled"]
+                        ?: config.features["host_dialog_enabled"]
+                    ),
             "title" to (
-                config.app["host_dialog_title"]
-                    ?: config.remoteConfig["host_dialog_title"]
-                    ?: config.features["host_dialog_title"]
-                ),
+                    config.app["host_dialog_title"]
+                        ?: config.remoteConfig["host_dialog_title"]
+                        ?: config.features["host_dialog_title"]
+                    ),
             "description" to (
-                config.app["host_dialog_description"]
-                    ?: config.remoteConfig["host_dialog_description"]
-                    ?: config.features["host_dialog_description"]
-                ),
+                    config.app["host_dialog_description"]
+                        ?: config.remoteConfig["host_dialog_description"]
+                        ?: config.features["host_dialog_description"]
+                    ),
             "positive_text" to (
-                config.app["host_dialog_positive_text"]
-                    ?: config.remoteConfig["host_dialog_positive_text"]
-                    ?: config.features["host_dialog_positive_text"]
-                ),
+                    config.app["host_dialog_positive_text"]
+                        ?: config.remoteConfig["host_dialog_positive_text"]
+                        ?: config.features["host_dialog_positive_text"]
+                    ),
             "negative_text" to (
-                config.app["host_dialog_negative_text"]
-                    ?: config.remoteConfig["host_dialog_negative_text"]
-                    ?: config.features["host_dialog_negative_text"]
-                ),
+                    config.app["host_dialog_negative_text"]
+                        ?: config.remoteConfig["host_dialog_negative_text"]
+                        ?: config.features["host_dialog_negative_text"]
+                    ),
             "native_placement" to (
-                config.app["host_dialog_native_placement"]
-                    ?: config.remoteConfig["host_dialog_native_placement"]
-                    ?: config.features["host_dialog_native_placement"]
-                ),
+                    config.app["host_dialog_native_placement"]
+                        ?: config.remoteConfig["host_dialog_native_placement"]
+                        ?: config.features["host_dialog_native_placement"]
+                    ),
             "native_type" to (
-                config.app["host_dialog_native_type"]
-                    ?: config.remoteConfig["host_dialog_native_type"]
-                    ?: config.features["host_dialog_native_type"]
-                ),
+                    config.app["host_dialog_native_type"]
+                        ?: config.remoteConfig["host_dialog_native_type"]
+                        ?: config.features["host_dialog_native_type"]
+                    ),
         )
         return flat.filterValues { it != null }
     }
@@ -1290,14 +1775,18 @@ object ITWingSDK {
         val value = this?.trim() ?: return null
         return value.takeUnless {
             it.isBlank() ||
-                it.equals("null", ignoreCase = true) ||
-                it.equals("undefined", ignoreCase = true)
+                    it.equals("null", ignoreCase = true) ||
+                    it.equals("undefined", ignoreCase = true)
         }
     }
 
     private fun String?.normalizeBaseUrl(): String? {
         val value = cleanConfigString() ?: return null
-        if (!value.startsWith("http://", ignoreCase = true) && !value.startsWith("https://", ignoreCase = true)) {
+        if (!value.startsWith("http://", ignoreCase = true) && !value.startsWith(
+                "https://",
+                ignoreCase = true
+            )
+        ) {
             return null
         }
         return if (value.endsWith('/')) value else "$value/"
@@ -1305,9 +1794,9 @@ object ITWingSDK {
 
     private fun Throwable.isNetworkFailure(): Boolean {
         return this is UnknownHostException ||
-            this is SocketTimeoutException ||
-            message?.contains("network_dns_unavailable", ignoreCase = true) == true ||
-            cause?.isNetworkFailure() == true
+                this is SocketTimeoutException ||
+                message?.contains("network_dns_unavailable", ignoreCase = true) == true ||
+                cause?.isNetworkFailure() == true
     }
 
     private fun Throwable.toSdkErrorMessage(): String {
@@ -1316,17 +1805,43 @@ object ITWingSDK {
             raw.contains("network_dns_unavailable", ignoreCase = true) -> raw
             this is SocketTimeoutException || cause is SocketTimeoutException ->
                 "network_timeout: SDK config request timed out. Cached config will be used when available."
+
             else -> raw
         }
     }
 
-    private fun String.toUriOrNull(): Uri? = takeIf { it.isNotBlank() }?.let { runCatching { it.toUri() }.getOrNull() }
+    private fun String.toUriOrNull(): Uri? =
+        takeIf { it.isNotBlank() }?.let { runCatching { it.toUri() }.getOrNull() }
+
+    private fun Any?.asNonBlankString(): String? {
+        return when (this) {
+            null -> null
+            is String -> trim()
+            else -> toString().trim()
+        }?.takeUnless {
+            it.isBlank() ||
+                    it.equals("null", ignoreCase = true) ||
+                    it.equals("undefined", ignoreCase = true)
+        }
+    }
+
+    private fun Any?.toLongOrNullCompat(): Long? {
+        return when (this) {
+            is Number -> toLong()
+            is String -> trim().toLongOrNull() ?: trim().toDoubleOrNull()?.toLong()
+            else -> null
+        }
+    }
 
     private fun Any?.asBoolean(defaultValue: Boolean): Boolean {
         return when (this) {
             is Boolean -> this
             is Number -> toInt() != 0
-            is String -> equals("true", ignoreCase = true) || this == "1" || equals("yes", ignoreCase = true)
+            is String -> equals("true", ignoreCase = true) || this == "1" || equals(
+                "yes",
+                ignoreCase = true
+            )
+
             else -> defaultValue
         }
     }

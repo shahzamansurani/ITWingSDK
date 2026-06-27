@@ -1,18 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:fillViewport="true"
-    tools:context=".MainActivity">
+    android:layout_height="match_parent">
+
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:padding="12dp">
+
+        <com.itwingtech.itwingsdk.ads.ITWingBannerView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:ITWingBannerPlacement="banner_top" />
 
         <TextView
             android:id="@+id/titleText"
@@ -62,8 +66,7 @@
         <com.itwingtech.itwingsdk.billing.ITWingPremiumView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            app:ITWingPremiumShowRestore="true" />
+            android:layout_marginTop="12dp" />
 
         <Button
             android:id="@+id/refreshConfig"
@@ -117,19 +120,11 @@
             android:textSize="18sp"
             android:textStyle="bold" />
 
-        <com.itwingtech.itwingsdk.ads.ITWingBannerView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            app:ITWingBannerPlacement="home_banner"
-            app:ITWingBannerType="adaptive" />
 
         <com.itwingtech.itwingsdk.ads.ITWingBannerView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            app:ITWingBannerPlacement="bottom_collapsible"
-            app:ITWingBannerType="collapsible_bottom" />
+            app:ITWingBannerPlacement="banner_adaptive" />
 
         <TextView
             android:layout_width="match_parent"
@@ -144,8 +139,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            app:ITWingBannerPlacement="custom_banner"
-            app:ITWingBannerType="adaptive" />
+            app:ITWingBannerPlacement="custom_adaptive_banner" />
 
         <TextView
             android:layout_width="match_parent"
@@ -156,21 +150,17 @@
             android:textSize="18sp"
             android:textStyle="bold" />
 
-        <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            app:ITWingNativeAdViewPlacement="native_small"
-            app:ITWingNativeAdViewType="small" />
+                <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    app:ITWingNativeAdViewPlacement="native_small" />
 
-        <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            app:ITWingNativeAdViewPlacement="native_large"
-            app:ITWingNativeAdViewType="large" />
-
-
+                <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    app:ITWingNativeAdViewPlacement="native_large" />
 
         <TextView
             android:layout_width="match_parent"
@@ -309,4 +299,4 @@
             android:text="Sync Fallback Notification Token" />
 
     </LinearLayout>
-</ScrollView>
+</androidx.core.widget.NestedScrollView>

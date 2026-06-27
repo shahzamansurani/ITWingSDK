@@ -58,15 +58,11 @@ class NativeLoader(
             configProvider()
 
         if (!config.ads.globalEnabled) {
-
             destroy(container)
-
             return
         }
 
-        val placement =
-            config.ads.placements.firstOrNull {
-
+        val placement = config.ads.placements.firstOrNull {
                 it.name == placementName &&
                         it.enabled &&
                         it.format == "native"
@@ -76,6 +72,7 @@ class NativeLoader(
 
                 return
             }
+        AdEventTracker.log("ad_requested", placement)
 
         val resolvedNativeType =
             resolveNativeType(
@@ -187,6 +184,7 @@ class NativeLoader(
                                 nativeAds.remove(container)?.destroy()
                                 nativeAds[container] = nativeAd
                             }
+                            AdEventTracker.log("ad_loaded", placement)
 
                             @LayoutRes
                             val layoutRes =
@@ -246,6 +244,11 @@ class NativeLoader(
 
                             container.visibility =
                                 View.GONE
+                            AdEventTracker.log(
+                                "ad_load_failed",
+                                placement,
+                                mapOf("message" to adError.message),
+                            )
                         }
                     }
                 }
@@ -259,6 +262,7 @@ class NativeLoader(
 
             container.visibility =
                 View.GONE
+            AdEventTracker.log("ad_load_failed", placement, mapOf("message" to "native_exception"))
         }
     }
 

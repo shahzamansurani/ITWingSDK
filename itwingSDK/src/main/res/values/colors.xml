@@ -9,4 +9,6 @@
     <color name="colorAccent">#0438b5</color>
     <color name="shimmer_placeholder_color">#8C9A8C</color>
     <color name="gray_transparent">#80000000</color>
+
+    <color name="buttonColor">#F3F4F8</color>
 </resources>

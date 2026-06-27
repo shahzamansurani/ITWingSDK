@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/itwing_flow_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:id="@+id/itwing_flow_terms_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@id/itwing_flow_banner_container"
+        android:gravity="top"
+        android:orientation="vertical"
+        android:padding="@dimen/_10sdp">
+
+        <WebView
+            android:id="@+id/itwing_flow_terms_web"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:scrollbars="none" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.AppCompatCheckBox
+                android:id="@+id/itwing_flow_terms_check"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:gravity="center"
+                android:padding="@dimen/_5sdp"
+                android:text="@string/itwing_flow_accept_terms"
+                android:textColor="#333333"
+                app:buttonTint="@color/itwing_flow_tint_selector" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/itwing_flow_terms_accept"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/_45sdp"
+                android:background="@drawable/start_bg"
+                android:gravity="center"
+                android:text="@string/itwing_flow_accept"
+                android:textColor="@color/white"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <com.itwingtech.itwingsdk.ads.ITWingBannerView
+        android:id="@+id/itwing_flow_banner_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        app:ITWingBannerPlacement="terms_banner_placement" />
+
+</RelativeLayout>

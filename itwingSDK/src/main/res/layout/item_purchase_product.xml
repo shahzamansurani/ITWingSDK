@@ -27,6 +27,16 @@
         android:textStyle="bold" />
 
     <TextView
+        android:id="@+id/itwing_purchase_product_offer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="4dp"
+        android:textColor="#16A34A"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <TextView
         android:id="@+id/itwing_purchase_product_period"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

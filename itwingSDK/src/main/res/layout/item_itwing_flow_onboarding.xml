@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:paddingVertical="@dimen/_5sdp">
+
+    <LinearLayout
+        android:id="@+id/page_data"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_alignParentTop="true"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:id="@+id/itwing_flow_page_media_container"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/_190sdp"
+            android:layout_marginBottom="@dimen/_5sdp">
+
+            <ImageView
+                android:id="@+id/itwing_flow_page_image"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:src="@drawable/itwing_flow_intro_default_1" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/itwing_flow_page_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="@dimen/_3sdp"
+            android:fontFamily="@font/itwing_flow_proxima_nova"
+            android:gravity="center"
+            android:text="Title"
+            android:textColor="#333333"
+            android:textSize="@dimen/_25ssp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/itwing_flow_page_description"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="@dimen/_3sdp"
+            android:fontFamily="@font/itwing_flow_proxima_nova"
+            android:gravity="center"
+            android:text="Description"
+            android:textColor="#333333"
+            android:textSize="@dimen/_11ssp" />
+
+    </LinearLayout>
+</RelativeLayout>

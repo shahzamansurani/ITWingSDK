@@ -388,15 +388,10 @@ class ConfigRepository(
                     ),
                     firebase = FirebaseConfig(
                         enabled = firebase?.optBoolean("enabled", false) ?: false,
-                        analyticsEnabled = firebase?.optBoolean("analytics_enabled", false) ?: false,
-                        crashlyticsEnabled = firebase?.optBoolean("crashlytics_enabled", false) ?: false,
-                        authEnabled = firebase?.optBoolean("auth_enabled", false) ?: false,
-                        roiCampaignsEnabled = firebase?.optBoolean("roi_campaigns_enabled", false) ?: false,
                         projectId = firebase?.optCleanString("project_id"),
                         googleAppId = firebase?.optCleanString("google_app_id"),
                         apiKey = firebase?.optCleanString("api_key"),
                         gcmSenderId = firebase?.optCleanString("gcm_sender_id"),
-                        storageBucket = firebase?.optCleanString("storage_bucket"),
                         metadata = firebase?.optJSONObject("metadata")?.toMap() ?: emptyMap(),
                     ),
                     apiProviders = parseApiProviders(data.optJSONObject("api_providers")),
@@ -500,7 +495,18 @@ class ConfigRepository(
             when (val value = opt(key)) {
                 JSONObject.NULL -> null
                 is JSONObject -> value.toMap()
-                is org.json.JSONArray -> (0 until value.length()).map { value.opt(it) }
+                is org.json.JSONArray -> value.toList()
+                else -> value
+            }
+        }
+    }
+
+    private fun org.json.JSONArray.toList(): List<Any?> {
+        return (0 until length()).map { index ->
+            when (val value = opt(index)) {
+                JSONObject.NULL -> null
+                is JSONObject -> value.toMap()
+                is org.json.JSONArray -> value.toList()
                 else -> value
             }
         }

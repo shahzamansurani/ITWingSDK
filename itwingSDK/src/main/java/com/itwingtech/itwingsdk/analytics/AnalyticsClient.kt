@@ -1,6 +1,5 @@
 package com.itwingtech.itwingsdk.analytics
 
-import com.itwingtech.itwingsdk.core.FirebaseRuntimeManager
 import com.itwingtech.itwingsdk.data.ConfigRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +23,6 @@ class AnalyticsClient(private val repository: ConfigRepository) {
             .put("properties", JSONObject(safeProperties))
 
         runCatching { repository.enqueueAnalyticsEvent(event) }
-        runCatching { FirebaseRuntimeManager.logEvent(name, safeProperties) }
         scheduleFlush()
     }
 

@@ -6,6 +6,7 @@ import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.FirebaseRuntimeManager
 import com.itwingtech.itwingsdk.core.NotificationRuntimeManager
 
+@Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
 class ITWingFirebaseMessagingService : FirebaseMessagingService() {
     override fun onCreate() {
         super.onCreate()

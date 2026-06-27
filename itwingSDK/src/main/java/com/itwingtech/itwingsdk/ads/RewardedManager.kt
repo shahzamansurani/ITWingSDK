@@ -3,6 +3,7 @@ package com.itwingtech.itwingsdk.ads
 import android.app.Activity
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import com.google.android.libraries.ads.mobile.sdk.common.AdRequest
 import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
 import com.google.android.libraries.ads.mobile.sdk.common.PreloadConfiguration
@@ -22,7 +23,9 @@ class RewardedManager(
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val preloaderKeys = ConcurrentHashMap<String, String>()
+    private val lastLoadAttemptAt = ConcurrentHashMap<String, Long>()
     private val customRenderer = CustomFullscreenAdRenderer()
+    private val minLoadIntervalMs = 20_000L
 
     fun preloadAll(activity: Activity) {
         val config = configProvider()
@@ -37,10 +40,10 @@ class RewardedManager(
     }
 
     fun preload(activity: Activity, placementName: String) {
-        load(activity, placementName)
+        load(activity, placementName, forceRequest = false)
     }
 
-    fun load(activity: Activity, placementName: String) {
+    fun load(activity: Activity, placementName: String, forceRequest: Boolean = false) {
         val config = configProvider()
         if (!config.ads.globalEnabled) return
 
@@ -54,6 +57,10 @@ class RewardedManager(
         }
 
         val unit = placement.units.firstOrNull { it.network == "admob" } ?: return
+        if (!forceRequest && !canStartLoad(placementName, placement)) return
+        if (forceRequest) {
+            lastLoadAttemptAt[placementName] = SystemClock.elapsedRealtime()
+        }
         val request = AdRequest.Builder(unit.adUnitId).build()
         startPreloader(placementName, unit.adUnitId, request)
     }
@@ -109,7 +116,7 @@ class RewardedManager(
                 }, onComplete = {
                     AdEventTracker.log("ad_dismissed", placement)
                     InlineAdSafetyGate.arm("rewarded", placement.name)
-                    preload(activity, placementName)
+                    preloadAfterShowIfEnabled(activity, placementName, placement)
                     if (customRewardEarned.get()) {
                         safeCallback(onReward)
                         safeCallback(onComplete)
@@ -127,7 +134,7 @@ class RewardedManager(
 
             val ad = pollPreloadedAd(placementName)
             if (ad == null) {
-                load(activity, placementName)
+                load(activity, placementName, forceRequest = true)
                 waitForAdAndShow(activity, placementName, onReward, onComplete)
                 return@show
             }
@@ -166,7 +173,7 @@ class RewardedManager(
             override fun onAdDismissedFullScreenContent() {
                 AdEventTracker.log("ad_dismissed", placement)
                 InlineAdSafetyGate.arm("rewarded", placement.name)
-                preload(activity, placementName)
+                preloadAfterShowIfEnabled(activity, placementName, placement)
                 FullscreenAdState.end(fullscreenOwner)
                 if (rewardEarned.get()) {
                     safeCallback(onReward)
@@ -218,7 +225,12 @@ class RewardedManager(
 
     private fun pollPreloadedAd(placementName: String): RewardedAd? {
         val key = preloaderKeys[placementName] ?: return null
-        return runCatching { RewardedAdPreloader.pollAd(key) }.getOrNull()
+        val ad = runCatching { RewardedAdPreloader.pollAd(key) }.getOrNull()
+        if (ad != null) {
+            preloaderKeys.remove(placementName)
+            runCatching { RewardedAdPreloader.destroy(key) }
+        }
+        return ad
     }
 
     private fun waitForAdAndShow(
@@ -286,7 +298,29 @@ class RewardedManager(
 
     private fun restartPreloader(activity: Activity, placementName: String) {
         preloaderKeys.remove(placementName)?.let { RewardedAdPreloader.destroy(it) }
-        load(activity, placementName)
+        lastLoadAttemptAt.remove(placementName)
+        load(activity, placementName, forceRequest = true)
+    }
+
+    private fun preloadAfterShowIfEnabled(
+        activity: Activity,
+        placementName: String,
+        placement: AdPlacementConfig,
+    ) {
+        if (placement.metadata["preload_after_show"].isTruthy()) {
+            preload(activity, placementName)
+        }
+    }
+
+    private fun canStartLoad(placementName: String, placement: AdPlacementConfig): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        val previous = lastLoadAttemptAt[placementName] ?: 0L
+        if (now - previous < minLoadIntervalMs) {
+            AdEventTracker.log("ad_load_throttled", placement, mapOf("cooldown_ms" to minLoadIntervalMs))
+            return false
+        }
+        lastLoadAttemptAt[placementName] = now
+        return true
     }
 
     private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed

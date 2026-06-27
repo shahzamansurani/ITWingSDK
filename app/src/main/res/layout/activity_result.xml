@@ -48,8 +48,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        app:ITWingBannerPlacement="home_banner"
-        app:ITWingBannerType="adaptive" />
+        app:ITWingBannerPlacement="banner_adaptive" />
 
     <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
         android:layout_width="match_parent"

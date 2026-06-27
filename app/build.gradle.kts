@@ -3,7 +3,6 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.google.services)
 }
 
 val localProps = Properties().apply {
@@ -28,22 +27,11 @@ android {
 
     defaultConfig {
         applicationId = "com.itwingtech.itwingsdk.example"
-        minSdk = 28
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField(
-            "String",
-            "ITWING_SDK_KEY",
-            "\"${configuredValue("ITWING_SDK_KEY", "itw_test_example_android_sdk_key_change_me_1234567890")}\"",
-        )
-        buildConfigField(
-            "String",
-            "ITWING_SDK_ENDPOINT",
-            "\"${configuredValue("ITWING_SDK_ENDPOINT", "https://sdk.itwingtech.com/api/sdk/v1")}\"",
-        )
     }
 
     buildTypes {

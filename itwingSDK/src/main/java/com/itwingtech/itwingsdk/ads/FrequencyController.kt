@@ -15,7 +15,8 @@ class FrequencyController {
 
         if (countTrigger) {
             val interval = placement.triggerInterval?.coerceAtLeast(1) ?: 1
-            val currentCount = triggerCounts[placement.name] ?: 0
+            val key = frequencyKey(placement)
+            val currentCount = triggerCounts[key] ?: 0
             /*
              * First click always shows
              */
@@ -24,7 +25,7 @@ class FrequencyController {
             /*
              * Increment AFTER evaluation
              */
-            triggerCounts[placement.name] = currentCount + 1
+            triggerCounts[key] = currentCount + 1
             if (!shouldShow) {
                 return false
             }
@@ -34,21 +35,30 @@ class FrequencyController {
 
         val cooldown = placement.cooldownSeconds?.times(1000L) ?: 0L
 
-        val last = lastShownAt[placement.name] ?: 0L
+        val key = frequencyKey(placement)
+        val last = lastShownAt[key] ?: 0L
         if (cooldown > 0 && now - last < cooldown) {
             return false
         }
 
         val cap = placement.sessionCap
 
-        if (cap != null && (shownInSession[placement.name] ?: 0) >= cap) {
+        if (cap != null && (shownInSession[key] ?: 0) >= cap) {
             return false
         }
         return true
     }
 
     fun markShown(placement: AdPlacementConfig) {
-        shownInSession[placement.name] = (shownInSession[placement.name] ?: 0) + 1
-        lastShownAt[placement.name] = System.currentTimeMillis()
+        val key = frequencyKey(placement)
+        shownInSession[key] = (shownInSession[key] ?: 0) + 1
+        lastShownAt[key] = System.currentTimeMillis()
+    }
+
+    private fun frequencyKey(placement: AdPlacementConfig): String {
+        return when (placement.format.lowercase()) {
+            "interstitial" -> "format:interstitial"
+            else -> "placement:${placement.name}"
+        }
     }
 }

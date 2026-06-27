@@ -32,539 +32,325 @@ import com.itwingtech.itwingsdk.core.CustomAdConfig
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.utils.SDKMediaView
+import java.util.WeakHashMap
 import kotlin.math.roundToInt
 
 class BannerLoader(private val configProvider: () -> ITWingConfig) {
-    private var currentBannerAd: BannerAd? = null
-    private var currentAdView: AdView? = null
+
+    private val bannerAds = WeakHashMap<ViewGroup, BannerAd>()
+    private val adViews = WeakHashMap<ViewGroup, AdView>()
+    private val loadTokens = WeakHashMap<ViewGroup, Int>()
 
     @MainThread
-    fun load(activity: Activity, container: ViewGroup, placementName: String, bannerType: BannerType? = null, shimmerView: View? = null) {
+    fun load(
+        activity: Activity,
+        container: ViewGroup,
+        placementName: String,
+        bannerType: BannerType? = null,
+        shimmerView: View? = null
+    ) {
         if (!activity.isUsable() || !container.isAttachedToWindow) {
             destroy(container)
             return
         }
+
+        val token = nextToken(container)
+
         val config = configProvider()
+
         if (!config.ads.globalEnabled) {
             destroy(container)
             return
         }
+
         val placement = config.ads.placements.firstOrNull {
-                it.name == placementName && it.enabled && it.format == "banner"
-            } ?: run {
-                destroy(container)
-                return
-            }
+            it.name == placementName && it.enabled && it.format == "banner"
+        } ?: run {
+            destroy(container)
+            return
+        }
+
+        AdEventTracker.log("ad_requested", placement)
 
         val loadingView = shimmerView ?: createDefaultShimmer(activity, container)
 
-        loadingView?.let {
-            container.removeAllViews()
-            container.addView(it)
-            it.visibility = View.VISIBLE
+        showShimmer(container, loadingView)
 
-            (it as? ShimmerFrameLayout)
-                ?.startShimmer()
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Custom Banner
-        |--------------------------------------------------------------------------
-        */
-
-        val customAd =
-            selectedCustomAd(
-                config,
-                placement
-            )
+        val customAd = selectedCustomAd(config, placement)
 
         if (customAd != null) {
-
             preloadCustomBanner(
                 activity = activity,
                 container = container,
                 ad = customAd,
-                loadingView = loadingView
+                loadingView = loadingView,
+                token = token
             )
-
             return
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | AdMob
-        |--------------------------------------------------------------------------
-        */
-
-        val unit = placement.units.firstOrNull { it.network == "admob"
-            } ?: run { stopShimmer(loadingView)
-                destroy(container)
-                return
+        val unit = placement.units.firstOrNull { it.network == "admob" } ?: run {
+            if (isCurrentLoad(container, token)) {
+                stopShimmer(loadingView)
+                container.visibility = View.GONE
             }
+            return
+        }
 
         val resolvedBannerType = resolveBannerType(placement, bannerType)
 
         try {
-            try {
-                currentBannerAd?.destroy()
-                currentAdView?.destroy()
-            } catch (_: Exception) {
-            }
-
-            currentBannerAd = null
-            currentAdView = null
-
-            /*
-            |--------------------------------------------------------------------------
-            | Keep shimmer visible
-            |--------------------------------------------------------------------------
-            */
+            destroyLoadedAd(container)
 
             val adView = AdView(activity)
 
-            currentAdView =
-                adView
+            synchronized(adViews) {
+                adViews[container] = adView
+            }
 
             val extras = Bundle()
 
             when (resolvedBannerType) {
-
-                BannerType.COLLAPSIBLE_TOP -> {
-
-                    extras.putString(
-                        "collapsible",
-                        "top"
-                    )
-                }
-
-                BannerType.COLLAPSIBLE_BOTTOM -> {
-
-                    extras.putString(
-                        "collapsible",
-                        "bottom"
-                    )
-                }
-
-                BannerType.ADAPTIVE -> {
-                }
+                BannerType.COLLAPSIBLE_TOP -> extras.putString("collapsible", "top")
+                BannerType.COLLAPSIBLE_BOTTOM -> extras.putString("collapsible", "bottom")
+                BannerType.ADAPTIVE -> Unit
             }
 
-            val request =
-                BannerAdRequest.Builder(
-                    adUnitId = unit.adUnitId,
-                    adSize = getAdaptiveAdSize(
-                        activity,
-                        container
-                    )
-                )
-                    .setGoogleExtrasBundle(extras)
-                    .build()
+            val request = BannerAdRequest.Builder(
+                adUnitId = unit.adUnitId,
+                adSize = getAdaptiveAdSize(activity, container)
+            )
+                .setGoogleExtrasBundle(extras)
+                .build()
 
             adView.loadAd(
                 request,
                 object : AdLoadCallback<BannerAd> {
 
-                    override fun onAdLoaded(
-                        ad: BannerAd
-                    ) {
-
+                    override fun onAdLoaded(ad: BannerAd) {
                         activity.runOnUiThread {
-                            if (!activity.isUsable() || !container.isAttachedToWindow) {
+                            if (
+                                !activity.isUsable() ||
+                                !container.isAttachedToWindow ||
+                                !isCurrentLoad(container, token)
+                            ) {
                                 runCatching { ad.destroy() }
                                 return@runOnUiThread
                             }
 
-                            currentBannerAd = ad
-
-                            adView.registerBannerAd(
-                                ad,
-                                activity
-                            )
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | Remove shimmer ONLY after loaded
-                            |--------------------------------------------------------------------------
-                            */
-
-                            container.removeAllViews()
-
-                            stopShimmer(
-                                loadingView
-                            )
-
-                            container.addView(adView)
-
-                            container.visibility =
-                                View.VISIBLE
-
-                            adView.alpha = 0f
-
-                            adView.animate()
-                                .alpha(1f)
-                                .setDuration(250)
-                                .start()
-
-                            ad.bannerAdRefreshCallback =
-                                object :
-                                    BannerAdRefreshCallback {
-
-                                    override fun onAdRefreshed() {
-                                    }
-
-                                    override fun onAdFailedToRefresh(
-                                        adError: LoadAdError
-                                    ) {
-                                    }
+                            synchronized(bannerAds) {
+                                bannerAds.remove(container)?.let { oldAd ->
+                                    runCatching { oldAd.destroy() }
                                 }
-                        }
-                    }
+                                bannerAds[container] = ad
+                            }
 
-                    override fun onAdFailedToLoad(
-                        adError: LoadAdError
-                    ) {
+                            AdEventTracker.log("ad_loaded", placement)
 
-                        activity.runOnUiThread {
-                            if (!activity.isUsable() || !container.isAttachedToWindow) {
+                            adView.registerBannerAd(ad, activity)
+
+                            val isSameAdView = synchronized(adViews) {
+                                adViews[container] === adView
+                            }
+
+                            if (!isSameAdView) {
+                                runCatching { ad.destroy() }
                                 return@runOnUiThread
                             }
 
-                            stopShimmer(
-                                loadingView
+                            replaceShimmerWithView(
+                                container = container,
+                                loadingView = loadingView,
+                                realView = adView
                             )
 
-                            container.visibility =
-                                View.GONE
+                            ad.bannerAdRefreshCallback = object : BannerAdRefreshCallback {
+                                override fun onAdRefreshed() {}
+
+                                override fun onAdFailedToRefresh(adError: LoadAdError) {}
+                            }
+                        }
+                    }
+
+                    override fun onAdFailedToLoad(adError: LoadAdError) {
+                        activity.runOnUiThread {
+                            if (
+                                !activity.isUsable() ||
+                                !container.isAttachedToWindow ||
+                                !isCurrentLoad(container, token)
+                            ) {
+                                return@runOnUiThread
+                            }
+
+                            stopShimmer(loadingView)
+                            container.visibility = View.GONE
+
+                            synchronized(adViews) {
+                                if (adViews[container] === adView) {
+                                    adViews.remove(container)
+                                }
+                            }
+
+                            runCatching { adView.destroy() }
+
+                            AdEventTracker.log(
+                                "ad_load_failed",
+                                placement,
+                                mapOf("message" to adError.message)
+                            )
                         }
                     }
                 }
             )
 
         } catch (_: Exception) {
-
-            stopShimmer(
-                loadingView
-            )
-
-            container.visibility =
-                View.GONE
+            if (isCurrentLoad(container, token)) {
+                stopShimmer(loadingView)
+                container.visibility = View.GONE
+                AdEventTracker.log(
+                    "ad_load_failed",
+                    placement,
+                    mapOf("message" to "banner_exception")
+                )
+            }
         }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Custom Banner
-    |--------------------------------------------------------------------------
-    */
+    private fun showShimmer(container: ViewGroup, loadingView: View?) {
+        container.visibility = View.VISIBLE
+        container.alpha = 1f
+        container.removeAllViews()
+
+        loadingView?.let { view ->
+            if (view.parent !== container) {
+                (view.parent as? ViewGroup)?.removeView(view)
+                container.addView(view)
+            }
+
+            view.visibility = View.VISIBLE
+            view.alpha = 1f
+
+            (view as? ShimmerFrameLayout)?.startShimmer()
+        }
+    }
+
+    private fun replaceShimmerWithView(
+        container: ViewGroup,
+        loadingView: View?,
+        realView: View
+    ) {
+        container.visibility = View.VISIBLE
+        container.alpha = 1f
+
+        if (realView.parent !== container) {
+            (realView.parent as? ViewGroup)?.removeView(realView)
+        }
+
+        container.removeAllViews()
+        container.addView(realView)
+
+        stopShimmer(loadingView)
+
+        realView.alpha = 0f
+        realView.animate()
+            .alpha(1f)
+            .setDuration(250)
+            .start()
+    }
+
     private fun renderCustomBanner(
         activity: Activity,
         container: ViewGroup,
-        ad: CustomAdConfig
+        ad: CustomAdConfig,
+        loadingView: View?
     ) {
+        destroyLoadedAd(container)
 
-        destroy(container)
+        val root = LayoutInflater.from(activity)
+            .inflate(R.layout.custom_banner, container, false)
 
-        val root =
-            LayoutInflater.from(activity)
-                .inflate(
-                    R.layout.custom_banner,
-                    container,
-                    false
-                )
+        val headlineView = root.findViewById<TextView>(R.id.ad_headline)
+        val bodyView = root.findViewById<TextView>(R.id.ad_body)
+        val advertiserView = root.findViewById<TextView>(R.id.ad_advertiser)
+        val ctaView = root.findViewById<Button>(R.id.ad_call_to_action)
+        val mediaView = root.findViewById<SDKMediaView>(R.id.ad_media)
+        val iconView = root.findViewById<ImageView>(R.id.ad_app_icon)
+        val ratingView = root.findViewById<RatingBar>(R.id.ad_stars)
+        val adTag = root.findViewById<TextView>(R.id.ad_ic)
 
-        /*
-        |--------------------------------------------------------------------------
-        | Views
-        |--------------------------------------------------------------------------
-        */
+        headlineView.text = ad.headline?.takeIf { it.isNotBlank() } ?: ad.name.ifBlank { "Sponsored" }
+        bodyView.text = ad.body?.takeIf { it.isNotBlank() } ?: "Promoted content"
+        advertiserView.text = ad.brandName() ?: "Sponsored"
+        ctaView.text = ad.cta?.takeIf { it.isNotBlank() } ?: "Install"
+        ratingView.rating = ad.brandRating()
+        adTag.text = ad.adIcon()
 
-        val headlineView =
-            root.findViewById<TextView>(
-                R.id.ad_headline
-            )
-
-        val bodyView =
-            root.findViewById<TextView>(
-                R.id.ad_body
-            )
-
-        val advertiserView =
-            root.findViewById<TextView>(
-                R.id.ad_advertiser
-            )
-
-        val ctaView =
-            root.findViewById<Button>(
-                R.id.ad_call_to_action
-            )
-
-        val mediaView =
-            root.findViewById<SDKMediaView>(
-                R.id.ad_media
-            )
-
-        val iconView =
-            root.findViewById<ImageView>(
-                R.id.ad_app_icon
-            )
-
-        val ratingView =
-            root.findViewById<RatingBar>(
-                R.id.ad_stars
-            )
-
-        val adTag =
-            root.findViewById<TextView>(
-                R.id.ad_ic
-            )
-
-        /*
-        |--------------------------------------------------------------------------
-        | Text
-        |--------------------------------------------------------------------------
-        */
-
-        headlineView.text =
-            ad.headline?.takeIf {
-                it.isNotBlank()
-            }
-                ?: ad.name.ifBlank {
-                    "Sponsored"
-                }
-
-        bodyView.text =
-            ad.body?.takeIf {
-                it.isNotBlank()
-            }
-                ?: "Promoted content"
-
-        advertiserView.text =
-            ad.brandName()
-                ?: "Sponsored"
-
-        ctaView.text =
-            ad.cta?.takeIf {
-                it.isNotBlank()
-            }
-                ?: "Install"
-
-        ratingView.rating =
-            ad.brandRating()
-
-        adTag.text =
-            ad.adIcon()
-
-        /*
-        |--------------------------------------------------------------------------
-        | CTA Color
-        |--------------------------------------------------------------------------
-        */
-
-        val ctaDrawable = ctaView.background?.mutate() as? GradientDrawable
-
-        ctaDrawable?.setColor(parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))
+        (ctaView.background?.mutate() as? GradientDrawable)?.setColor(
+            parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))
         )
 
-        /*
-        |--------------------------------------------------------------------------
-        | Ad Badge Color
-        |--------------------------------------------------------------------------
-        */
-
-        val adTagDrawable =
-            adTag.background
-                ?.mutate() as? GradientDrawable
-
-        adTagDrawable?.setColor(
-            parseColorSafe(
-                ad.primaryColor(),
-                Color.rgb(
-                    37,
-                    99,
-                    235
-                )
-            )
+        (adTag.background?.mutate() as? GradientDrawable)?.setColor(
+            parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))
         )
-
-        /*
-        |--------------------------------------------------------------------------
-        | Media
-        |--------------------------------------------------------------------------
-        */
 
         mediaView.apply {
-            render(
-                ad.mediaUrl(),
-                ad.isVideo()
-            )
-
+            render(ad.mediaUrl(), ad.isVideo())
             play()
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | App Icon
-        |--------------------------------------------------------------------------
-        */
-
         loadImage(
-            ad.brandLogoUrl()
-                ?: ad.imageUrl
-                ?: ad.mediaUrl(),
+            ad.brandLogoUrl() ?: ad.imageUrl ?: ad.mediaUrl(),
             iconView,
             activity
         )
 
-        /*
-        |--------------------------------------------------------------------------
-        | Click
-        |--------------------------------------------------------------------------
-        */
+        val clickListener = View.OnClickListener {
+            ITWingSDK.trackCustomAdClick(
+                ad.id,
+                mapOf("placement" to "banner")
+            )
 
-        val clickListener =
-            View.OnClickListener {
+            ad.targetUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                runCatching {
+                    mediaView.pauseForExternalNavigation()
 
-                ITWingSDK.trackCustomAdClick(
-                    ad.id,
-                    mapOf(
-                        "placement" to "banner"
+                    activity.startActivity(
+                        Intent(Intent.ACTION_VIEW, url.toUri())
                     )
-                )
 
-                ad.targetUrl
-                    ?.takeIf {
-                        it.isNotBlank()
-                    }
-                    ?.let { url ->
+                    activity.application.registerActivityLifecycleCallbacks(
+                        object : Application.ActivityLifecycleCallbacks {
+                            override fun onActivityResumed(resumedActivity: Activity) {
+                                if (resumedActivity == activity) {
+                                    mediaView.resumeFromExternalNavigation()
+                                    activity.application.unregisterActivityLifecycleCallbacks(this)
+                                }
+                            }
 
-                        runCatching {
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | Pause ONLY clicked media
-                            |--------------------------------------------------------------------------
-                            */
-
-                            mediaView.pauseForExternalNavigation()
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | Open Browser
-                            |--------------------------------------------------------------------------
-                            */
-
-                            activity.startActivity(
-                                Intent(
-                                    Intent.ACTION_VIEW,
-                                    url.toUri()
-                                )
-                            )
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | Resume ONLY clicked media
-                            |--------------------------------------------------------------------------
-                            */
-
-                            activity.application
-                                .registerActivityLifecycleCallbacks(
-                                    object : Application.ActivityLifecycleCallbacks {
-
-                                        override fun onActivityResumed(
-                                            resumedActivity: Activity
-                                        ) {
-
-                                            if (
-                                                resumedActivity ==
-                                                activity
-                                            ) {
-
-                                                mediaView.resumeFromExternalNavigation()
-
-                                                activity.application
-                                                    .unregisterActivityLifecycleCallbacks(
-                                                        this
-                                                    )
-                                            }
-                                        }
-
-                                        override fun onActivityCreated(
-                                            activity: Activity,
-                                            savedInstanceState: Bundle?
-                                        ) {
-                                        }
-
-                                        override fun onActivityStarted(
-                                            activity: Activity
-                                        ) {
-                                        }
-
-                                        override fun onActivityPaused(
-                                            activity: Activity
-                                        ) {
-                                        }
-
-                                        override fun onActivityStopped(
-                                            activity: Activity
-                                        ) {
-                                        }
-
-                                        override fun onActivitySaveInstanceState(
-                                            activity: Activity,
-                                            outState: Bundle
-                                        ) {
-                                        }
-
-                                        override fun onActivityDestroyed(
-                                            activity: Activity
-                                        ) {
-                                        }
-                                    }
-                                )
+                            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+                            override fun onActivityStarted(activity: Activity) {}
+                            override fun onActivityPaused(activity: Activity) {}
+                            override fun onActivityStopped(activity: Activity) {}
+                            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+                            override fun onActivityDestroyed(activity: Activity) {}
                         }
-                    }
+                    )
+                }
             }
+        }
 
-        root.setOnClickListener(
-            clickListener
+        root.setOnClickListener(clickListener)
+        ctaView.setOnClickListener(clickListener)
+
+        replaceShimmerWithView(
+            container = container,
+            loadingView = loadingView,
+            realView = root
         )
-
-        ctaView.setOnClickListener(
-            clickListener
-        )
-
-        /*
-        |--------------------------------------------------------------------------
-        | Render
-        |--------------------------------------------------------------------------
-        */
-
-        container.removeAllViews()
-
-        container.addView(root)
-
-        container.visibility =
-            View.VISIBLE
-
-        root.alpha = 0f
-
-        root.animate()
-            .alpha(1f)
-            .setDuration(250)
-            .start()
-
-        /*
-        |--------------------------------------------------------------------------
-        | Impression
-        |--------------------------------------------------------------------------
-        */
 
         ITWingSDK.trackCustomAdImpression(
             ad.id,
-            mapOf(
-                "placement" to "banner"
-            )
+            mapOf("placement" to "banner")
         )
     }
 
@@ -572,27 +358,28 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         activity: Activity,
         container: ViewGroup,
         ad: CustomAdConfig,
-        loadingView: View?
+        loadingView: View?,
+        token: Int
     ) {
-
-        val media =
-            ad.mediaUrl()
+        val media = ad.mediaUrl()
 
         if (media.isNullOrBlank()) {
-
             activity.runOnUiThread {
-
-                stopShimmer(
-                    loadingView
-                )
+                if (
+                    !activity.isUsable() ||
+                    !container.isAttachedToWindow ||
+                    !isCurrentLoad(container, token)
+                ) {
+                    return@runOnUiThread
+                }
 
                 renderCustomBanner(
-                    activity,
-                    container,
-                    ad
+                    activity = activity,
+                    container = container,
+                    ad = ad,
+                    loadingView = loadingView
                 )
             }
-
             return
         }
 
@@ -601,82 +388,50 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             .preload()
 
         container.postDelayed({
-
             activity.runOnUiThread {
+                if (
+                    !activity.isUsable() ||
+                    !container.isAttachedToWindow ||
+                    !isCurrentLoad(container, token)
+                ) {
+                    return@runOnUiThread
+                }
 
                 renderCustomBanner(
-                    activity,
-                    container,
-                    ad
+                    activity = activity,
+                    container = container,
+                    ad = ad,
+                    loadingView = loadingView
                 )
-
-                stopShimmer(
-                    loadingView
-                )
-
-                container.alpha = 0f
-
-                container.animate()
-                    .alpha(1f)
-                    .setDuration(250)
-                    .start()
             }
-
         }, 650)
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Helpers
-    |--------------------------------------------------------------------------
-    */
-
-    private fun stopShimmer(
-        loadingView: View?
-    ) {
-
-        (loadingView as? ShimmerFrameLayout)
-            ?.stopShimmer()
+    private fun stopShimmer(loadingView: View?) {
+        (loadingView as? ShimmerFrameLayout)?.stopShimmer()
 
         loadingView?.apply {
-
             visibility = View.GONE
-
-            (parent as? ViewGroup)
-                ?.removeView(this)
+            (parent as? ViewGroup)?.removeView(this)
         }
     }
 
-    private fun loadImage(
-        url: String?,
-        imageView: ImageView,
-        activity: Activity
-    ) {
-
+    private fun loadImage(url: String?, imageView: ImageView, activity: Activity) {
         if (url.isNullOrBlank()) {
-
-            imageView.visibility =
-                View.GONE
-
+            imageView.visibility = View.GONE
             return
         }
 
         activity.runOnUiThread {
-
             runCatching {
-
                 Glide.with(activity)
                     .load(url)
                     .fitCenter()
                     .into(imageView)
 
-                imageView.visibility =
-                    View.VISIBLE
-
+                imageView.visibility = View.VISIBLE
             }.onFailure {
-
-                imageView.visibility =
-                    View.GONE
+                imageView.visibility = View.GONE
             }
         }
     }
@@ -685,94 +440,83 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         config: ITWingConfig,
         placement: AdPlacementConfig
     ): CustomAdConfig? {
-
-        val source =
-            placement.metadata["source"]
-                ?.toString()
-                ?.lowercase()
+        val source = placement.metadata["source"]?.toString()?.lowercase()
 
         if (
             source != "custom" &&
             source != "custom_ad" &&
             placement.customAd == null
         ) {
-
             return null
         }
 
-        placement.customAd?.let {
-            return it
-        }
+        placement.customAd?.let { return it }
 
-        val requestedId =
-            placement.metadata["custom_ad_id"]
-                ?.toString()
-                ?.takeIf {
-                    it.isNotBlank()
-                }
+        val requestedId = placement.metadata["custom_ad_id"]
+            ?.toString()
+            ?.takeIf { it.isNotBlank() }
 
         return config.ads.customAds
             .filter {
-
                 it.format == "banner" ||
                         it.format == "image" ||
                         it.format == "html"
             }
             .filter {
-
-                requestedId == null ||
-                        it.id == requestedId
+                requestedId == null || it.id == requestedId
             }
-            .minByOrNull {
-                it.priority
-            }
+            .minByOrNull { it.priority }
     }
 
-    fun destroy(
-        container: ViewGroup? = null
-    ) {
+    fun destroy(container: ViewGroup? = null) {
+        if (container == null) {
+            synchronized(bannerAds) {
+                bannerAds.values.forEach { ad -> runCatching { ad.destroy() } }
+                bannerAds.clear()
+            }
 
-        try {
+            synchronized(adViews) {
+                adViews.values.forEach { view -> runCatching { view.destroy() } }
+                adViews.clear()
+            }
 
-            currentBannerAd?.destroy()
+            synchronized(loadTokens) {
+                loadTokens.clear()
+            }
 
-            currentAdView?.destroy()
-
-        } catch (_: Exception) {
+            return
         }
 
-        currentBannerAd = null
+        nextToken(container)
+        destroyLoadedAd(container)
 
-        currentAdView = null
-
-        container?.let {
-
+        container.let {
             releaseMediaViews(it)
-
             it.removeAllViews()
         }
     }
 
-    private fun releaseMediaViews(
-        parent: ViewGroup
-    ) {
+    private fun destroyLoadedAd(container: ViewGroup) {
+        synchronized(bannerAds) {
+            bannerAds.remove(container)?.let { ad ->
+                runCatching { ad.destroy() }
+            }
+        }
 
+        synchronized(adViews) {
+            adViews.remove(container)?.let { view ->
+                runCatching { view.destroy() }
+            }
+        }
+    }
+
+    private fun releaseMediaViews(parent: ViewGroup) {
         for (i in 0 until parent.childCount) {
-
-            val child =
-                parent.getChildAt(i)
+            val child = parent.getChildAt(i)
 
             when (child) {
-
-                is SDKMediaView -> {
-
-                    child.release()
-                }
-
-                is ViewGroup -> {
-
-                    releaseMediaViews(child)
-                }
+                is SDKMediaView -> child.release()
+                is ViewGroup -> releaseMediaViews(child)
             }
         }
     }
@@ -781,66 +525,42 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         activity: Activity,
         container: ViewGroup
     ): AdSize {
+        val displayMetrics: DisplayMetrics = activity.resources.displayMetrics
+        val density = displayMetrics.density
 
-        val displayMetrics: DisplayMetrics =
-            activity.resources.displayMetrics
-
-        val density =
-            displayMetrics.density
-
-        var adWidthPixels =
-            container.width.toFloat()
+        var adWidthPixels = container.width.toFloat()
 
         if (adWidthPixels <= 0f) {
-
-            adWidthPixels =
-                displayMetrics.widthPixels.toFloat()
+            adWidthPixels = displayMetrics.widthPixels.toFloat()
         }
 
-        val adWidth =
-            (adWidthPixels / density)
-                .roundToInt()
+        val adWidth = (adWidthPixels / density).roundToInt()
 
-        return AdSize
-            .getLandscapeAnchoredAdaptiveBannerAdSize(
-                activity,
-                adWidth
-            )
+        return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
+            activity,
+            adWidth
+        )
     }
 
     private fun resolveBannerType(
         placement: AdPlacementConfig,
-        override: BannerType?,
+        override: BannerType?
     ): BannerType {
+        if (override != null) return override
 
-        if (override != null) {
-            return override
-        }
-
-        val value =
-            (
-                    placement.metadata["banner_type"]
-                        ?: placement.metadata["collapsible_position"]
-                    )
-                ?.toString()
-                ?.lowercase()
+        val value = (
+                placement.metadata["banner_type"]
+                    ?: placement.metadata["collapsible_position"]
+                )
+            ?.toString()
+            ?.lowercase()
 
         return when (value) {
-
-            "top" ->
-                BannerType.COLLAPSIBLE_TOP
-
-            "bottom" ->
-                BannerType.COLLAPSIBLE_BOTTOM
-
-            "collapsible_top" ->
-                BannerType.COLLAPSIBLE_TOP
-
-            "collapsible_bottom" ->
-                BannerType.COLLAPSIBLE_BOTTOM
-
-            else ->
-                BannerType.ADAPTIVE
+            "top" -> BannerType.COLLAPSIBLE_TOP
+            "bottom" -> BannerType.COLLAPSIBLE_BOTTOM
+            "collapsible_top" -> BannerType.COLLAPSIBLE_TOP
+            "collapsible_bottom" -> BannerType.COLLAPSIBLE_BOTTOM
+            else -> BannerType.ADAPTIVE
         }
     }
 
@@ -848,113 +568,1045 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         activity: Activity,
         container: ViewGroup
     ): View? {
-
         return runCatching {
-
             LayoutInflater.from(activity)
-                .inflate(
-                    R.layout.banner_shimmer,
-                    container,
-                    false
-                )
-
+                .inflate(R.layout.banner_shimmer, container, false)
         }.getOrNull()
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | CustomAdConfig Helpers
-    |--------------------------------------------------------------------------
-    */
+    private fun nextToken(container: ViewGroup): Int {
+        return synchronized(loadTokens) {
+            val next = (loadTokens[container] ?: 0) + 1
+            loadTokens[container] = next
+            next
+        }
+    }
+
+    private fun isCurrentLoad(container: ViewGroup, token: Int): Boolean {
+        return synchronized(loadTokens) {
+            loadTokens[container] == token
+        }
+    }
 
     private fun CustomAdConfig.mediaUrl(): String? =
-        mediaUrl?.takeIf {
-            it.isNotBlank()
-        }
-            ?: videoUrl?.takeIf {
-                it.isNotBlank()
-            }
-            ?: imageUrl?.takeIf {
-                it.isNotBlank()
-            }
+        mediaUrl?.takeIf { it.isNotBlank() }
+            ?: videoUrl?.takeIf { it.isNotBlank() }
+            ?: imageUrl?.takeIf { it.isNotBlank() }
 
     private fun CustomAdConfig.isVideo(): Boolean =
-        mediaType.equals(
-            "video",
-            ignoreCase = true
-        ) || (
-                !videoUrl.isNullOrBlank() &&
-                        mediaUrl == videoUrl
-                )
+        mediaType.equals("video", ignoreCase = true) ||
+                (!videoUrl.isNullOrBlank() && mediaUrl == videoUrl)
 
     private fun CustomAdConfig.primaryColor(): String? =
         (metadata["ad_primary_color"] as? String)?.takeIf { it.isNotBlank() }
-            ?: ((metadata["brand"] as? Map<*, *>)?.get("primary_color") as? String)?.takeIf { it.isNotBlank() }
+            ?: ((metadata["brand"] as? Map<*, *>)?.get("primary_color") as? String)
+                ?.takeIf { it.isNotBlank() }
             ?: ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
             ?: ITWingSDK.getColor("primary_color").takeIf { it.isNotBlank() }
 
-    private fun CustomAdConfig.brandName(): String? = (metadata["brand"] as? Map<*, *>)?.get("name") as? String ?: campaignGroup
+    private fun CustomAdConfig.brandName(): String? =
+        (metadata["brand"] as? Map<*, *>)?.get("name") as? String ?: campaignGroup
 
     private fun CustomAdConfig.brandRating(): Float {
-
-        val value =
-            metadata["brand_rating"]
-                ?: (
-                        metadata["brand"]
-                                as? Map<*, *>
-                        )?.get("rating")
+        val value = metadata["brand_rating"]
+            ?: (metadata["brand"] as? Map<*, *>)?.get("rating")
 
         return when (value) {
-
-            is Number ->
-                value.toFloat()
-
-            is String ->
-                value.toFloatOrNull()
-
-            else ->
-                null
-        }?.coerceIn(0f, 5f)
-            ?: 4.5f
+            is Number -> value.toFloat()
+            is String -> value.toFloatOrNull()
+            else -> null
+        }?.coerceIn(0f, 5f) ?: 4.5f
     }
 
     private fun CustomAdConfig.brandLogoUrl(): String? {
-
-        val brand =
-            metadata["brand"]
-                    as? Map<*, *>
-                ?: return null
-
-        return brand["logo_url"]
-                as? String
+        val brand = metadata["brand"] as? Map<*, *> ?: return null
+        return brand["logo_url"] as? String
     }
 
     private fun CustomAdConfig.adIcon(): String =
-        (
-                metadata["ad_icon"]
-                        as? String
-                )?.takeIf {
-                it.isNotBlank()
-            }
-            ?: "AD"
+        (metadata["ad_icon"] as? String)?.takeIf { it.isNotBlank() } ?: "AD"
 
-    private fun parseColorSafe(
-        value: String?,
-        fallback: Int
-    ): Int =
-
+    private fun parseColorSafe(value: String?, fallback: Int): Int =
         runCatching {
-
-            if (value.isNullOrBlank()) {
-
-                fallback
-
-            } else {
-
-                value.toColorInt()
-            }
-
+            if (value.isNullOrBlank()) fallback else value.toColorInt()
         }.getOrDefault(fallback)
 
     private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed
 }
+
+//package com.itwingtech.itwingsdk.ads
+//
+//import android.app.Activity
+//import android.app.Application
+//import android.content.Intent
+//import android.graphics.Color
+//import android.graphics.drawable.GradientDrawable
+//import android.os.Bundle
+//import android.util.DisplayMetrics
+//import android.view.LayoutInflater
+//import android.view.View
+//import android.view.ViewGroup
+//import android.widget.Button
+//import android.widget.ImageView
+//import android.widget.RatingBar
+//import android.widget.TextView
+//import androidx.annotation.MainThread
+//import androidx.core.graphics.toColorInt
+//import androidx.core.net.toUri
+//import com.bumptech.glide.Glide
+//import com.facebook.shimmer.ShimmerFrameLayout
+//import com.google.android.libraries.ads.mobile.sdk.banner.AdSize
+//import com.google.android.libraries.ads.mobile.sdk.banner.AdView
+//import com.google.android.libraries.ads.mobile.sdk.banner.BannerAd
+//import com.google.android.libraries.ads.mobile.sdk.banner.BannerAdRefreshCallback
+//import com.google.android.libraries.ads.mobile.sdk.banner.BannerAdRequest
+//import com.google.android.libraries.ads.mobile.sdk.common.AdLoadCallback
+//import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
+//import com.itwingtech.itwingsdk.R
+//import com.itwingtech.itwingsdk.core.AdPlacementConfig
+//import com.itwingtech.itwingsdk.core.CustomAdConfig
+//import com.itwingtech.itwingsdk.core.ITWingConfig
+//import com.itwingtech.itwingsdk.core.ITWingSDK
+//import com.itwingtech.itwingsdk.utils.SDKMediaView
+//import kotlin.math.roundToInt
+//import java.util.WeakHashMap
+//
+//class BannerLoader(private val configProvider: () -> ITWingConfig) {
+//    private val bannerAds = WeakHashMap<ViewGroup, BannerAd>()
+//    private val adViews = WeakHashMap<ViewGroup, AdView>()
+//
+//    @MainThread
+//    fun load(activity: Activity, container: ViewGroup, placementName: String, bannerType: BannerType? = null, shimmerView: View? = null) {
+//        if (!activity.isUsable() || !container.isAttachedToWindow) {
+//            destroy(container)
+//            return
+//        }
+//        val config = configProvider()
+//        if (!config.ads.globalEnabled) {
+//            destroy(container)
+//            return
+//        }
+//        val placement = config.ads.placements.firstOrNull {
+//                it.name == placementName && it.enabled && it.format == "banner"
+//            } ?: run {
+//                destroy(container)
+//                return
+//            }
+//        AdEventTracker.log("ad_requested", placement)
+//
+//        val loadingView = shimmerView ?: createDefaultShimmer(activity, container)
+//
+//        loadingView?.let {
+//            container.removeAllViews()
+//            container.addView(it)
+//            it.visibility = View.VISIBLE
+//
+//            (it as? ShimmerFrameLayout)
+//                ?.startShimmer()
+//        }
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Custom Banner
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        val customAd =
+//            selectedCustomAd(
+//                config,
+//                placement
+//            )
+//
+//        if (customAd != null) {
+//
+//            preloadCustomBanner(
+//                activity = activity,
+//                container = container,
+//                ad = customAd,
+//                loadingView = loadingView
+//            )
+//
+//            return
+//        }
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | AdMob
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        val unit = placement.units.firstOrNull { it.network == "admob"
+//            } ?: run { stopShimmer(loadingView)
+//                destroy(container)
+//                return
+//            }
+//
+//        val resolvedBannerType = resolveBannerType(placement, bannerType)
+//
+//        try {
+//            destroyLoadedAd(container)
+//
+//            /*
+//            |--------------------------------------------------------------------------
+//            | Keep shimmer visible
+//            |--------------------------------------------------------------------------
+//            */
+//
+//            val adView = AdView(activity)
+//            synchronized(adViews) {
+//                adViews[container] = adView
+//            }
+//
+//            val extras = Bundle()
+//
+//            when (resolvedBannerType) {
+//
+//                BannerType.COLLAPSIBLE_TOP -> {
+//
+//                    extras.putString(
+//                        "collapsible",
+//                        "top"
+//                    )
+//                }
+//
+//                BannerType.COLLAPSIBLE_BOTTOM -> {
+//
+//                    extras.putString(
+//                        "collapsible",
+//                        "bottom"
+//                    )
+//                }
+//
+//                BannerType.ADAPTIVE -> {
+//                }
+//            }
+//
+//            val request =
+//                BannerAdRequest.Builder(
+//                    adUnitId = unit.adUnitId,
+//                    adSize = getAdaptiveAdSize(
+//                        activity,
+//                        container
+//                    )
+//                )
+//                    .setGoogleExtrasBundle(extras)
+//                    .build()
+//
+//            adView.loadAd(
+//                request,
+//                object : AdLoadCallback<BannerAd> {
+//
+//                    override fun onAdLoaded(
+//                        ad: BannerAd
+//                    ) {
+//
+//                        activity.runOnUiThread {
+//                            if (!activity.isUsable() || !container.isAttachedToWindow) {
+//                                runCatching { ad.destroy() }
+//                                return@runOnUiThread
+//                            }
+//
+//                            synchronized(bannerAds) {
+//                                bannerAds.remove(container)?.destroy()
+//                                bannerAds[container] = ad
+//                            }
+//                            AdEventTracker.log("ad_loaded", placement)
+//
+//                            adView.registerBannerAd(
+//                                ad,
+//                                activity
+//                            )
+//
+//                            /*
+//                            |--------------------------------------------------------------------------
+//                            | Remove shimmer ONLY after loaded
+//                            |--------------------------------------------------------------------------
+//                            */
+//
+//                            container.removeAllViews()
+//
+//                            stopShimmer(
+//                                loadingView
+//                            )
+//
+//                            if (adViews[container] === adView) {
+//                                container.addView(adView)
+//                            }
+//
+//                            container.visibility =
+//                                View.VISIBLE
+//
+//                            adView.alpha = 0f
+//
+//                            adView.animate()
+//                                .alpha(1f)
+//                                .setDuration(250)
+//                                .start()
+//
+//                            ad.bannerAdRefreshCallback =
+//                                object :
+//                                    BannerAdRefreshCallback {
+//
+//                                    override fun onAdRefreshed() {
+//                                    }
+//
+//                                    override fun onAdFailedToRefresh(
+//                                        adError: LoadAdError
+//                                    ) {
+//                                    }
+//                                }
+//                        }
+//                    }
+//
+//                    override fun onAdFailedToLoad(
+//                        adError: LoadAdError
+//                    ) {
+//
+//                        activity.runOnUiThread {
+//                            if (!activity.isUsable() || !container.isAttachedToWindow) {
+//                                return@runOnUiThread
+//                            }
+//
+//                            stopShimmer(
+//                                loadingView
+//                            )
+//
+//                            container.visibility =
+//                                View.GONE
+//                            AdEventTracker.log(
+//                                "ad_load_failed",
+//                                placement,
+//                                mapOf("message" to adError.message),
+//                            )
+//                        }
+//                    }
+//                }
+//            )
+//
+//        } catch (_: Exception) {
+//
+//            stopShimmer(
+//                loadingView
+//            )
+//
+//            container.visibility =
+//                View.GONE
+//            AdEventTracker.log("ad_load_failed", placement, mapOf("message" to "banner_exception"))
+//        }
+//    }
+//
+//    /*
+//    |--------------------------------------------------------------------------
+//    | Custom Banner
+//    |--------------------------------------------------------------------------
+//    */
+//    private fun renderCustomBanner(
+//        activity: Activity,
+//        container: ViewGroup,
+//        ad: CustomAdConfig
+//    ) {
+//
+//        destroy(container)
+//
+//        val root =
+//            LayoutInflater.from(activity)
+//                .inflate(
+//                    R.layout.custom_banner,
+//                    container,
+//                    false
+//                )
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Views
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        val headlineView =
+//            root.findViewById<TextView>(
+//                R.id.ad_headline
+//            )
+//
+//        val bodyView =
+//            root.findViewById<TextView>(
+//                R.id.ad_body
+//            )
+//
+//        val advertiserView =
+//            root.findViewById<TextView>(
+//                R.id.ad_advertiser
+//            )
+//
+//        val ctaView =
+//            root.findViewById<Button>(
+//                R.id.ad_call_to_action
+//            )
+//
+//        val mediaView =
+//            root.findViewById<SDKMediaView>(
+//                R.id.ad_media
+//            )
+//
+//        val iconView =
+//            root.findViewById<ImageView>(
+//                R.id.ad_app_icon
+//            )
+//
+//        val ratingView =
+//            root.findViewById<RatingBar>(
+//                R.id.ad_stars
+//            )
+//
+//        val adTag =
+//            root.findViewById<TextView>(
+//                R.id.ad_ic
+//            )
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Text
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        headlineView.text =
+//            ad.headline?.takeIf {
+//                it.isNotBlank()
+//            }
+//                ?: ad.name.ifBlank {
+//                    "Sponsored"
+//                }
+//
+//        bodyView.text =
+//            ad.body?.takeIf {
+//                it.isNotBlank()
+//            }
+//                ?: "Promoted content"
+//
+//        advertiserView.text =
+//            ad.brandName()
+//                ?: "Sponsored"
+//
+//        ctaView.text =
+//            ad.cta?.takeIf {
+//                it.isNotBlank()
+//            }
+//                ?: "Install"
+//
+//        ratingView.rating =
+//            ad.brandRating()
+//
+//        adTag.text =
+//            ad.adIcon()
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | CTA Color
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        val ctaDrawable = ctaView.background?.mutate() as? GradientDrawable
+//
+//        ctaDrawable?.setColor(parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))
+//        )
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Ad Badge Color
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        val adTagDrawable =
+//            adTag.background
+//                ?.mutate() as? GradientDrawable
+//
+//        adTagDrawable?.setColor(
+//            parseColorSafe(
+//                ad.primaryColor(),
+//                Color.rgb(
+//                    37,
+//                    99,
+//                    235
+//                )
+//            )
+//        )
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Media
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        mediaView.apply {
+//            render(
+//                ad.mediaUrl(),
+//                ad.isVideo()
+//            )
+//
+//            play()
+//        }
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | App Icon
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        loadImage(
+//            ad.brandLogoUrl()
+//                ?: ad.imageUrl
+//                ?: ad.mediaUrl(),
+//            iconView,
+//            activity
+//        )
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Click
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        val clickListener =
+//            View.OnClickListener {
+//
+//                ITWingSDK.trackCustomAdClick(
+//                    ad.id,
+//                    mapOf(
+//                        "placement" to "banner"
+//                    )
+//                )
+//
+//                ad.targetUrl
+//                    ?.takeIf {
+//                        it.isNotBlank()
+//                    }
+//                    ?.let { url ->
+//
+//                        runCatching {
+//
+//                            /*
+//                            |--------------------------------------------------------------------------
+//                            | Pause ONLY clicked media
+//                            |--------------------------------------------------------------------------
+//                            */
+//
+//                            mediaView.pauseForExternalNavigation()
+//
+//                            /*
+//                            |--------------------------------------------------------------------------
+//                            | Open Browser
+//                            |--------------------------------------------------------------------------
+//                            */
+//
+//                            activity.startActivity(
+//                                Intent(
+//                                    Intent.ACTION_VIEW,
+//                                    url.toUri()
+//                                )
+//                            )
+//
+//                            /*
+//                            |--------------------------------------------------------------------------
+//                            | Resume ONLY clicked media
+//                            |--------------------------------------------------------------------------
+//                            */
+//
+//                            activity.application
+//                                .registerActivityLifecycleCallbacks(
+//                                    object : Application.ActivityLifecycleCallbacks {
+//
+//                                        override fun onActivityResumed(
+//                                            resumedActivity: Activity
+//                                        ) {
+//
+//                                            if (
+//                                                resumedActivity ==
+//                                                activity
+//                                            ) {
+//
+//                                                mediaView.resumeFromExternalNavigation()
+//
+//                                                activity.application
+//                                                    .unregisterActivityLifecycleCallbacks(
+//                                                        this
+//                                                    )
+//                                            }
+//                                        }
+//
+//                                        override fun onActivityCreated(
+//                                            activity: Activity,
+//                                            savedInstanceState: Bundle?
+//                                        ) {
+//                                        }
+//
+//                                        override fun onActivityStarted(
+//                                            activity: Activity
+//                                        ) {
+//                                        }
+//
+//                                        override fun onActivityPaused(
+//                                            activity: Activity
+//                                        ) {
+//                                        }
+//
+//                                        override fun onActivityStopped(
+//                                            activity: Activity
+//                                        ) {
+//                                        }
+//
+//                                        override fun onActivitySaveInstanceState(
+//                                            activity: Activity,
+//                                            outState: Bundle
+//                                        ) {
+//                                        }
+//
+//                                        override fun onActivityDestroyed(
+//                                            activity: Activity
+//                                        ) {
+//                                        }
+//                                    }
+//                                )
+//                        }
+//                    }
+//            }
+//
+//        root.setOnClickListener(
+//            clickListener
+//        )
+//
+//        ctaView.setOnClickListener(
+//            clickListener
+//        )
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Render
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        container.removeAllViews()
+//
+//        container.addView(root)
+//
+//        container.visibility =
+//            View.VISIBLE
+//
+//        root.alpha = 0f
+//
+//        root.animate()
+//            .alpha(1f)
+//            .setDuration(250)
+//            .start()
+//
+//        /*
+//        |--------------------------------------------------------------------------
+//        | Impression
+//        |--------------------------------------------------------------------------
+//        */
+//
+//        ITWingSDK.trackCustomAdImpression(
+//            ad.id,
+//            mapOf(
+//                "placement" to "banner"
+//            )
+//        )
+//    }
+//
+//    private fun preloadCustomBanner(
+//        activity: Activity,
+//        container: ViewGroup,
+//        ad: CustomAdConfig,
+//        loadingView: View?
+//    ) {
+//
+//        val media =
+//            ad.mediaUrl()
+//
+//        if (media.isNullOrBlank()) {
+//
+//            activity.runOnUiThread {
+//
+//                stopShimmer(
+//                    loadingView
+//                )
+//
+//                renderCustomBanner(
+//                    activity,
+//                    container,
+//                    ad
+//                )
+//            }
+//
+//            return
+//        }
+//
+//        Glide.with(activity.applicationContext)
+//            .load(media)
+//            .preload()
+//
+//        container.postDelayed({
+//
+//            activity.runOnUiThread {
+//
+//                renderCustomBanner(
+//                    activity,
+//                    container,
+//                    ad
+//                )
+//
+//                stopShimmer(
+//                    loadingView
+//                )
+//
+//                container.alpha = 0f
+//
+//                container.animate()
+//                    .alpha(1f)
+//                    .setDuration(250)
+//                    .start()
+//            }
+//
+//        }, 650)
+//    }
+//
+//    /*
+//    |--------------------------------------------------------------------------
+//    | Helpers
+//    |--------------------------------------------------------------------------
+//    */
+//
+//    private fun stopShimmer(
+//        loadingView: View?
+//    ) {
+//
+//        (loadingView as? ShimmerFrameLayout)
+//            ?.stopShimmer()
+//
+//        loadingView?.apply {
+//
+//            visibility = View.GONE
+//
+//            (parent as? ViewGroup)
+//                ?.removeView(this)
+//        }
+//    }
+//
+//    private fun loadImage(
+//        url: String?,
+//        imageView: ImageView,
+//        activity: Activity
+//    ) {
+//
+//        if (url.isNullOrBlank()) {
+//
+//            imageView.visibility =
+//                View.GONE
+//
+//            return
+//        }
+//
+//        activity.runOnUiThread {
+//
+//            runCatching {
+//
+//                Glide.with(activity)
+//                    .load(url)
+//                    .fitCenter()
+//                    .into(imageView)
+//
+//                imageView.visibility =
+//                    View.VISIBLE
+//
+//            }.onFailure {
+//
+//                imageView.visibility =
+//                    View.GONE
+//            }
+//        }
+//    }
+//
+//    private fun selectedCustomAd(
+//        config: ITWingConfig,
+//        placement: AdPlacementConfig
+//    ): CustomAdConfig? {
+//
+//        val source =
+//            placement.metadata["source"]
+//                ?.toString()
+//                ?.lowercase()
+//
+//        if (
+//            source != "custom" &&
+//            source != "custom_ad" &&
+//            placement.customAd == null
+//        ) {
+//
+//            return null
+//        }
+//
+//        placement.customAd?.let {
+//            return it
+//        }
+//
+//        val requestedId =
+//            placement.metadata["custom_ad_id"]
+//                ?.toString()
+//                ?.takeIf {
+//                    it.isNotBlank()
+//                }
+//
+//        return config.ads.customAds
+//            .filter {
+//
+//                it.format == "banner" ||
+//                        it.format == "image" ||
+//                        it.format == "html"
+//            }
+//            .filter {
+//
+//                requestedId == null ||
+//                        it.id == requestedId
+//            }
+//            .minByOrNull {
+//                it.priority
+//            }
+//    }
+//
+//    fun destroy(
+//        container: ViewGroup? = null
+//    ) {
+//        if (container == null) {
+//            synchronized(bannerAds) {
+//                bannerAds.values.forEach { ad -> runCatching { ad.destroy() } }
+//                bannerAds.clear()
+//            }
+//            synchronized(adViews) {
+//                adViews.values.forEach { view -> runCatching { view.destroy() } }
+//                adViews.clear()
+//            }
+//            return
+//        }
+//
+//        destroyLoadedAd(container)
+//
+//        container.let {
+//
+//            releaseMediaViews(it)
+//
+//            it.removeAllViews()
+//        }
+//    }
+//
+//    private fun destroyLoadedAd(container: ViewGroup) {
+//        synchronized(bannerAds) {
+//            bannerAds.remove(container)?.let { ad -> runCatching { ad.destroy() } }
+//        }
+//        synchronized(adViews) {
+//            adViews.remove(container)?.let { view -> runCatching { view.destroy() } }
+//        }
+//    }
+//
+//    private fun releaseMediaViews(
+//        parent: ViewGroup
+//    ) {
+//
+//        for (i in 0 until parent.childCount) {
+//
+//            val child =
+//                parent.getChildAt(i)
+//
+//            when (child) {
+//
+//                is SDKMediaView -> {
+//
+//                    child.release()
+//                }
+//
+//                is ViewGroup -> {
+//
+//                    releaseMediaViews(child)
+//                }
+//            }
+//        }
+//    }
+//
+//    private fun getAdaptiveAdSize(
+//        activity: Activity,
+//        container: ViewGroup
+//    ): AdSize {
+//
+//        val displayMetrics: DisplayMetrics =
+//            activity.resources.displayMetrics
+//
+//        val density =
+//            displayMetrics.density
+//
+//        var adWidthPixels =
+//            container.width.toFloat()
+//
+//        if (adWidthPixels <= 0f) {
+//
+//            adWidthPixels =
+//                displayMetrics.widthPixels.toFloat()
+//        }
+//
+//        val adWidth =
+//            (adWidthPixels / density)
+//                .roundToInt()
+//
+//        return AdSize
+//            .getCurrentOrientationAnchoredAdaptiveBannerAdSize(
+//                activity,
+//                adWidth
+//            )
+//    }
+//
+//    private fun resolveBannerType(
+//        placement: AdPlacementConfig,
+//        override: BannerType?,
+//    ): BannerType {
+//
+//        if (override != null) {
+//            return override
+//        }
+//
+//        val value =
+//            (
+//                    placement.metadata["banner_type"]
+//                        ?: placement.metadata["collapsible_position"]
+//                    )
+//                ?.toString()
+//                ?.lowercase()
+//
+//        return when (value) {
+//
+//            "top" ->
+//                BannerType.COLLAPSIBLE_TOP
+//
+//            "bottom" ->
+//                BannerType.COLLAPSIBLE_BOTTOM
+//
+//            "collapsible_top" ->
+//                BannerType.COLLAPSIBLE_TOP
+//
+//            "collapsible_bottom" ->
+//                BannerType.COLLAPSIBLE_BOTTOM
+//
+//            else ->
+//                BannerType.ADAPTIVE
+//        }
+//    }
+//
+//    private fun createDefaultShimmer(
+//        activity: Activity,
+//        container: ViewGroup
+//    ): View? {
+//
+//        return runCatching {
+//
+//            LayoutInflater.from(activity)
+//                .inflate(
+//                    R.layout.banner_shimmer,
+//                    container,
+//                    false
+//                )
+//
+//        }.getOrNull()
+//    }
+//
+//    /*
+//    |--------------------------------------------------------------------------
+//    | CustomAdConfig Helpers
+//    |--------------------------------------------------------------------------
+//    */
+//
+//    private fun CustomAdConfig.mediaUrl(): String? =
+//        mediaUrl?.takeIf {
+//            it.isNotBlank()
+//        }
+//            ?: videoUrl?.takeIf {
+//                it.isNotBlank()
+//            }
+//            ?: imageUrl?.takeIf {
+//                it.isNotBlank()
+//            }
+//
+//    private fun CustomAdConfig.isVideo(): Boolean =
+//        mediaType.equals(
+//            "video",
+//            ignoreCase = true
+//        ) || (
+//                !videoUrl.isNullOrBlank() &&
+//                        mediaUrl == videoUrl
+//                )
+//
+//    private fun CustomAdConfig.primaryColor(): String? =
+//        (metadata["ad_primary_color"] as? String)?.takeIf { it.isNotBlank() }
+//            ?: ((metadata["brand"] as? Map<*, *>)?.get("primary_color") as? String)?.takeIf { it.isNotBlank() }
+//            ?: ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
+//            ?: ITWingSDK.getColor("primary_color").takeIf { it.isNotBlank() }
+//
+//    private fun CustomAdConfig.brandName(): String? = (metadata["brand"] as? Map<*, *>)?.get("name") as? String ?: campaignGroup
+//
+//    private fun CustomAdConfig.brandRating(): Float {
+//
+//        val value =
+//            metadata["brand_rating"]
+//                ?: (
+//                        metadata["brand"]
+//                                as? Map<*, *>
+//                        )?.get("rating")
+//
+//        return when (value) {
+//
+//            is Number ->
+//                value.toFloat()
+//
+//            is String ->
+//                value.toFloatOrNull()
+//
+//            else ->
+//                null
+//        }?.coerceIn(0f, 5f)
+//            ?: 4.5f
+//    }
+//
+//    private fun CustomAdConfig.brandLogoUrl(): String? {
+//
+//        val brand =
+//            metadata["brand"]
+//                    as? Map<*, *>
+//                ?: return null
+//
+//        return brand["logo_url"]
+//                as? String
+//    }
+//
+//    private fun CustomAdConfig.adIcon(): String =
+//        (
+//                metadata["ad_icon"]
+//                        as? String
+//                )?.takeIf {
+//                it.isNotBlank()
+//            }
+//            ?: "AD"
+//
+//    private fun parseColorSafe(
+//        value: String?,
+//        fallback: Int
+//    ): Int =
+//
+//        runCatching {
+//
+//            if (value.isNullOrBlank()) {
+//
+//                fallback
+//
+//            } else {
+//
+//                value.toColorInt()
+//            }
+//
+//        }.getOrDefault(fallback)
+//
+//    private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed
+//}

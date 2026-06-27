@@ -161,15 +161,10 @@ data class SubscriptionPlanInfo(
 
 data class FirebaseConfig(
     val enabled: Boolean = false,
-    val analyticsEnabled: Boolean = false,
-    val crashlyticsEnabled: Boolean = false,
-    val authEnabled: Boolean = false,
-    val roiCampaignsEnabled: Boolean = false,
     val projectId: String? = null,
     val googleAppId: String? = null,
     val apiKey: String? = null,
     val gcmSenderId: String? = null,
-    val storageBucket: String? = null,
     val metadata: Map<String, Any?> = emptyMap(),
 )
 

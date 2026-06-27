@@ -379,14 +379,16 @@ class SubscriptionManager(
             val repository = repositoryProvider() ?: return null
             val activeProductId = repository.activeProductId()?.trim().orEmpty()
             val activeBasePlanId = repository.activeBasePlanId()?.trim()
+            val activeOfferId = repository.activeOfferId()?.trim()
             val ownedIds = repository.ownedProductIds().map(String::trim).filter(String::isNotBlank).toSet()
             val products = configProvider().subscriptions.products
-            val product = products.firstOrNull { configured ->
-                configured.productId.trim() == activeProductId &&
-                    (activeBasePlanId.isNullOrBlank() || configured.basePlanId == activeBasePlanId)
-            } ?: products.firstOrNull { configured ->
-                configured.productId.trim() in ownedIds
-            } ?: return null
+            val product = configuredActiveProduct(
+                products = products,
+                activeProductId = activeProductId,
+                activeBasePlanId = activeBasePlanId,
+                activeOfferId = activeOfferId,
+                ownedIds = ownedIds,
+            ) ?: return null
             SubscriptionPlanInfo(
                 productId = product.productId.trim(),
                 basePlanId = product.basePlanId,
@@ -407,6 +409,33 @@ class SubscriptionManager(
             lastBillingMessage = error.message
             SDKTelemetry.recordNonFatal(error, mapOf("operation" to "current_subscription"))
         }.getOrNull()
+    }
+
+    private fun configuredActiveProduct(
+        products: List<SubscriptionProductConfig>,
+        activeProductId: String,
+        activeBasePlanId: String?,
+        activeOfferId: String?,
+        ownedIds: Set<String>,
+    ): SubscriptionProductConfig? {
+        val activeMatches = products.filter { it.productId.trim() == activeProductId }
+        if (activeMatches.isNotEmpty()) {
+            if (!activeBasePlanId.isNullOrBlank()) {
+                if (!activeOfferId.isNullOrBlank()) {
+                    activeMatches.firstOrNull {
+                        it.basePlanId == activeBasePlanId && it.offerId == activeOfferId
+                    }?.let { return it }
+                }
+                activeMatches.firstOrNull { it.basePlanId == activeBasePlanId }?.let { return it }
+            }
+            if (!activeOfferId.isNullOrBlank()) {
+                activeMatches.firstOrNull { it.offerId == activeOfferId }?.let { return it }
+            }
+            if (activeMatches.size == 1) return activeMatches.first()
+        }
+
+        val ownedMatches = products.filter { it.productId.trim() in ownedIds }
+        return ownedMatches.singleOrNull()
     }
 
     fun diagnostics(): Map<String, Any?> = mapOf(
@@ -534,12 +563,20 @@ class SubscriptionManager(
             return
         }
         purchase.products.forEach { activePurchases[it.trim()] = purchase }
-        val adminProduct = pendingProductSelections.remove(productId.trim())
-            ?: configProvider().subscriptions.products.firstOrNull {
-                it.productId.trim() == productId.trim() &&
-                    (repositoryProvider()?.activeBasePlanId().isNullOrBlank() || it.basePlanId == repositoryProvider()?.activeBasePlanId())
+        val pendingProduct = pendingProductSelections.remove(productId.trim())
+        val repository = repositoryProvider()
+        val activeBasePlan = repository?.activeBasePlanId()?.takeIf(String::isNotBlank)
+        val adminProduct = pendingProduct
+            ?: activeBasePlan?.let { basePlan ->
+                configProvider().subscriptions.products.firstOrNull {
+                    it.productId.trim() == productId.trim() && it.basePlanId == basePlan
+                }
             }
-            ?: configProvider().subscriptions.products.firstOrNull { it.productId.trim() == productId.trim() }
+            ?: if (repository?.activeProductId()?.trim() == productId.trim() && activeBasePlan.isNullOrBlank()) {
+                null
+            } else {
+                configProvider().subscriptions.products.firstOrNull { it.productId.trim() == productId.trim() }
+            }
         val productType = adminProduct?.billingProductType() ?: ProductType.SUBS
         val signatureVerified = GooglePlaySignatureValidator.verify(
             googlePlayLicenseKey(),

@@ -46,4 +46,14 @@
     <string name="premium_subscription">Subscription</string>
     <string name="premium_one_time">One-time purchase</string>
     <string name="premium_screen_closing">Purchase is unavailable while this screen is closing</string>
+    <string name="itwing_flow_app_logo">App logo</string>
+    <string name="itwing_flow_back">Back</string>
+    <string name="itwing_flow_next">Next</string>
+    <string name="itwing_flow_finish">Finish</string>
+    <string name="itwing_flow_accept">Accept</string>
+    <string name="itwing_flow_accept_terms">I accept the Terms of Use</string>
+    <string name="itwing_flow_accept_required">Please accept the Terms of Use</string>
+    <string name="itwing_flow_loading">Loading app configuration</string>
+    <string name="app_name">IT Wing Technologies</string>
+    <string name="splash_desc">This is IT Wing Official SDK</string>
 </resources>

@@ -3,6 +3,7 @@ package com.itwingtech.itwingsdk.ads
 import android.app.Activity
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -17,6 +18,7 @@ import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.utils.runOnMain
 import com.itwingtech.itwingsdk.utils.safeCallback
 import java.lang.ref.WeakReference
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 class AppOpenManager(
@@ -28,14 +30,16 @@ class AppOpenManager(
     private val automaticStarted = AtomicBoolean(false)
     private var loadedPlacement: String? = null
     private var appOpenAd: AppOpenAd? = null
+    private var appOpenLoadedAtMs: Long = 0L
     private var foregroundActivity: WeakReference<Activity>? = null
+    private val lastLoadAttemptAt = ConcurrentHashMap<String, Long>()
     private val customRenderer = CustomFullscreenAdRenderer()
+    private val minLoadIntervalMs = 30_000L
 
     fun startAutomatic(activity: Activity) {
         updateForegroundActivity(activity)
         safeCallback {
             if (!automaticStarted.compareAndSet(false, true)) {
-                preloadAll(activity)
                 return@safeCallback
             }
 
@@ -65,8 +69,6 @@ class AppOpenManager(
                         }
                     },
                 )
-
-            preloadAll(activity)
         }
     }
 
@@ -76,11 +78,16 @@ class AppOpenManager(
 
     fun preloadAll(activity: Activity) {
         val placement = automaticPlacement() ?: return
+        if (!placement.metadata.safeValue("preload_on_start").isTruthy()) return
         preload(activity, placement.name)
     }
 
 
     fun preload(activity: Activity, placementName: String) {
+        load(activity, placementName, forceRequest = false)
+    }
+
+    private fun load(activity: Activity, placementName: String, forceRequest: Boolean) {
         val config = configProvider()
         if (!config.ads.globalEnabled || loading.get() || appOpenAd != null) {
             return
@@ -102,6 +109,10 @@ class AppOpenManager(
         val unit = placement.units.firstOrNull {
             it.network == "admob"
         } ?: return
+        if (!forceRequest && !canStartLoad(placementName, placement)) return
+        if (forceRequest) {
+            lastLoadAttemptAt[placementName] = SystemClock.elapsedRealtime()
+        }
         loading.set(true)
         AppOpenAd.load(
             AdRequest.Builder(unit.adUnitId).build(),
@@ -109,6 +120,7 @@ class AppOpenManager(
                 override fun onAdLoaded(ad: AppOpenAd) {
                     loading.set(false)
                     appOpenAd = ad
+                    appOpenLoadedAtMs = SystemClock.elapsedRealtime()
                     loadedPlacement = placementName
                 }
 
@@ -159,7 +171,7 @@ class AppOpenManager(
             val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
                 InlineAdSafetyGate.arm("app_open", placement.name)
-                preload(activity, placementName)
+                preloadAfterShowIfEnabled(activity, placementName, placement)
                 safeCallback(onComplete)
             })
             if (shown) {
@@ -172,9 +184,9 @@ class AppOpenManager(
             return
         }
 
-        val ad = appOpenAd
+        val ad = validAppOpenAd()
         if (ad == null) {
-            preload(activity, placementName)
+            load(activity, placementName, forceRequest = true)
             if (waitForLoad) {
                 waitForAdAndShow(activity, placementName, onComplete)
             } else {
@@ -188,6 +200,7 @@ class AppOpenManager(
 
     fun clear() {
         appOpenAd = null
+        appOpenLoadedAtMs = 0L
         loadedPlacement = null
         loading.set(false)
     }
@@ -226,6 +239,7 @@ class AppOpenManager(
             return
         }
         appOpenAd = null
+        appOpenLoadedAtMs = 0L
         loadedPlacement = null
         ad.adEventCallback =
             object : AppOpenAdEventCallback {
@@ -237,14 +251,13 @@ class AppOpenManager(
                 override fun onAdDismissedFullScreenContent() {
                     AdEventTracker.log("ad_dismissed", placement)
                     InlineAdSafetyGate.arm("app_open", placement.name)
-                    preload(activity, placementName)
+                    preloadAfterShowIfEnabled(activity, placementName, placement)
                     FullscreenAdState.end(fullscreenOwner)
                     completion.complete()
                 }
 
                 override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
                     AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
-                    preload(activity, placementName)
                     FullscreenAdState.end(fullscreenOwner)
                     completion.complete()
                 }
@@ -260,11 +273,34 @@ class AppOpenManager(
                 ad.show(activity)
             }.onFailure {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
-                preload(activity, placementName)
                 FullscreenAdState.end(fullscreenOwner)
                 completion.complete()
             }
         }
+    }
+
+    private fun preloadAfterShowIfEnabled(
+        activity: Activity,
+        placementName: String,
+        placement: com.itwingtech.itwingsdk.core.AdPlacementConfig,
+    ) {
+        if (placement.metadata.safeValue("preload_after_show").isTruthy()) {
+            preload(activity, placementName)
+        }
+    }
+
+    private fun canStartLoad(
+        placementName: String,
+        placement: com.itwingtech.itwingsdk.core.AdPlacementConfig,
+    ): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        val previous = lastLoadAttemptAt[placementName] ?: 0L
+        if (now - previous < minLoadIntervalMs) {
+            AdEventTracker.log("ad_load_throttled", placement, mapOf("cooldown_ms" to minLoadIntervalMs))
+            return false
+        }
+        lastLoadAttemptAt[placementName] = now
+        return true
     }
 
     private fun waitForAdAndShow(activity: Activity, placementName: String, onComplete: () -> Unit) {
@@ -281,7 +317,7 @@ class AppOpenManager(
                 safeCallback(onComplete)
                 return
             }
-            val ad = appOpenAd
+            val ad = validAppOpenAd()
             if (ad != null) {
                 loadingDialog.dismiss()
                 val placement = configProvider().ads.placements.firstOrNull {
@@ -305,6 +341,26 @@ class AppOpenManager(
         }
 
         mainHandler.postDelayed({ poll() }, 150L)
+    }
+
+    private fun validAppOpenAd(): AppOpenAd? {
+        val ad = appOpenAd ?: return null
+        val ageMs = SystemClock.elapsedRealtime() - appOpenLoadedAtMs
+        if (ageMs in 0 until APP_OPEN_MAX_AGE_MS) {
+            return ad
+        }
+        clearExpiredAppOpenAd()
+        return null
+    }
+
+    private fun clearExpiredAppOpenAd() {
+        if (appOpenAd == null) return
+        val ageMs = SystemClock.elapsedRealtime() - appOpenLoadedAtMs
+        if (ageMs >= APP_OPEN_MAX_AGE_MS || ageMs < 0) {
+            appOpenAd = null
+            appOpenLoadedAtMs = 0L
+            loadedPlacement = null
+        }
     }
 
     private fun Any?.isEnabledByDefault(): Boolean {
@@ -357,5 +413,19 @@ class AppOpenManager(
         }.getOrNull()
     }
 
+    private fun Any?.isTruthy(): Boolean {
+        return when (val value = normalizedValue()) {
+            is Boolean -> value
+            is String -> value.equals("true", ignoreCase = true) ||
+                value == "1" ||
+                value.equals("yes", ignoreCase = true) ||
+                value.equals("on", ignoreCase = true)
+            is Number -> value.toInt() != 0
+            else -> false
+        }
+    }
+
     private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed
 }
+
+private const val APP_OPEN_MAX_AGE_MS = 4L * 60L * 60L * 1000L

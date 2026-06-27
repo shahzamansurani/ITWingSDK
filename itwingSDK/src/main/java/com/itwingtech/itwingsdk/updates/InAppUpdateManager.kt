@@ -202,9 +202,10 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
                 }
 
                 info.installStatus() == InstallStatus.DOWNLOADED -> {
+                    pendingAfterUpdateFlow = null
+                    preSplashCheckInFlight.set(false)
                     completeFlexibleUpdate(appUpdateManager)
                     onResult?.invoke("Downloaded flexible update is being completed.")
-                    onNoFlow?.invoke()
                 }
 
                 info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE && staleEnough && priorityEnough -> {
@@ -269,8 +270,9 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
                 }
 
                 info.installStatus() == InstallStatus.DOWNLOADED -> {
+                    pendingAfterUpdateFlow = null
+                    preSplashCheckInFlight.set(false)
                     completeFlexibleUpdate(appUpdateManager)
-                    completePendingUpdateContinuation()
                 }
 
                 else -> {
@@ -387,7 +389,8 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
             .addOnSuccessListener {
                 flowInProgress.set(false)
                 endActiveFullscreenOwner()
-                completePendingUpdateContinuation()
+                pendingAfterUpdateFlow = null
+                preSplashCheckInFlight.set(false)
                 SDKTelemetry.track("in_app_update_completed")
             }
             .addOnFailureListener {

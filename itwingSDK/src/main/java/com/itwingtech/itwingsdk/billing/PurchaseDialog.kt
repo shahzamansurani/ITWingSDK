@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.android.billingclient.api.BillingClient
@@ -52,6 +53,7 @@ internal object PurchaseDialog {
         val status = content.findViewById<TextView>(R.id.itwing_purchase_status)
         val restoreButton = content.findViewById<MaterialButton>(R.id.itwing_purchase_restore)
         val cancelButton = content.findViewById<MaterialButton>(R.id.itwing_purchase_cancel)
+        val closeButton = content.findViewById<ImageButton>(R.id.itwing_purchase_close)
         val resultDelivered = AtomicBoolean(false)
 
         fun deliverResult(result: BillingResult) {
@@ -96,10 +98,15 @@ internal object PurchaseDialog {
             )
 
             row.findViewById<TextView>(R.id.itwing_purchase_product_name).text =
-                details?.title?.takeIf { it.isNotBlank() } ?: product.name.ifBlank { product.productId }
+                product.displayName(details)
             row.findViewById<TextView>(R.id.itwing_purchase_product_price).apply {
                 text = product.displayPrice(details)
                 setTextColor(primaryColor)
+            }
+            row.findViewById<TextView>(R.id.itwing_purchase_product_offer).apply {
+                val offerText = product.offerText(details)
+                visibility = if (offerText.isNullOrBlank()) View.GONE else View.VISIBLE
+                text = offerText.orEmpty()
             }
             row.findViewById<TextView>(R.id.itwing_purchase_product_period).text =
                 if (productType == BillingClient.ProductType.INAPP) {
@@ -202,6 +209,10 @@ internal object PurchaseDialog {
                 deliverCancellation()
                 dialog.dismiss()
             }
+            closeButton.setOnClickListener {
+                deliverCancellation()
+                dialog.dismiss()
+            }
         }
         runCatching {
             dialog.show()
@@ -211,9 +222,42 @@ internal object PurchaseDialog {
     }
 
     private fun SubscriptionProductConfig.displayPrice(details: ProductDetails?): String {
-        return googleFormattedPrice(details, this)
+        return googleCurrentFormattedPrice(details, this)
+            ?: googleFormattedPrice(details, this)
             ?: formattedConfiguredPrice()
             ?: "See price in Google Play"
+    }
+
+    private fun SubscriptionProductConfig.displayName(details: ProductDetails?): String {
+        val adminName = name.trim().takeIf { it.isNotBlank() }
+        if (adminName != null) return adminName
+        val playName = runCatching { details?.name }.getOrNull()?.takeIf { it.isNotBlank() }
+        if (playName != null) return playName
+        return details?.title
+            ?.substringBefore("(", details.title)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: productId.trim()
+    }
+
+    private fun SubscriptionProductConfig.offerText(details: ProductDetails?): String? {
+        val label = metadata.stringValue("offer_label")
+            ?: metadata.stringValue("discount_label")
+            ?: metadata.stringValue("promo_label")
+        val original = metadata.stringValue("formatted_original_price")
+            ?: metadata.stringValue("original_price")
+            ?: metadata.stringValue("old_price")
+            ?: metadata.stringValue("regular_price")
+            ?: metadata.stringValue("compare_at_price")
+        val current = googleCurrentFormattedPrice(details, this)
+        val recurring = googleFormattedPrice(details, this)
+        if (!current.isNullOrBlank() && !recurring.isNullOrBlank() && current != recurring) {
+            return "${label ?: "Intro offer"}: $current, then $recurring"
+        }
+        if (!original.isNullOrBlank()) {
+            return "${label ?: "Limited offer"}: was $original"
+        }
+        return label
     }
 
     private fun SubscriptionProductConfig.formattedConfiguredPrice(): String? {
@@ -239,6 +283,28 @@ internal object PurchaseDialog {
             .format(Instant.parse(value))
     }.getOrDefault(value)
 
+    private fun googleCurrentFormattedPrice(details: ProductDetails?, product: SubscriptionProductConfig): String? {
+        if (details == null) return null
+        return details.subscriptionOfferDetails
+            ?.firstOrNull { offer ->
+                (product.basePlanId.isNullOrBlank() || offer.basePlanId == product.basePlanId) &&
+                    (product.offerId.isNullOrBlank() || offer.offerId == product.offerId)
+            }
+            ?.pricingPhases
+            ?.pricingPhaseList
+            ?.firstOrNull()
+            ?.formattedPrice
+            ?.takeIf { it.isNotBlank() }
+            ?: details.subscriptionOfferDetails
+            ?.firstOrNull { offer -> product.basePlanId.isNullOrBlank() || offer.basePlanId == product.basePlanId }
+            ?.pricingPhases
+            ?.pricingPhaseList
+            ?.firstOrNull()
+            ?.formattedPrice
+            ?.takeIf { it.isNotBlank() }
+            ?: oneTimeFormattedPrice(details)
+    }
+
     private fun googleFormattedPrice(details: ProductDetails?, product: SubscriptionProductConfig): String? {
         if (details == null) return null
         return details.subscriptionOfferDetails
@@ -258,15 +324,20 @@ internal object PurchaseDialog {
             ?.lastOrNull()
             ?.formattedPrice
             ?.takeIf { it.isNotBlank() }
-            ?: runCatching {
-            val oneTime = details.javaClass.methods
-                .firstOrNull { it.name == "getOneTimePurchaseOfferDetails" }
-                ?.invoke(details)
-            oneTime?.javaClass?.methods
-                ?.firstOrNull { it.name == "getFormattedPrice" }
-                ?.invoke(oneTime) as? String
-            }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: oneTimeFormattedPrice(details)
     }
+
+    private fun oneTimeFormattedPrice(details: ProductDetails): String? = runCatching {
+        val oneTime = details.javaClass.methods
+            .firstOrNull { it.name == "getOneTimePurchaseOfferDetails" }
+            ?.invoke(details)
+        oneTime?.javaClass?.methods
+            ?.firstOrNull { it.name == "getFormattedPrice" }
+            ?.invoke(oneTime) as? String
+    }.getOrNull()?.takeIf { it.isNotBlank() }
+
+    private fun Map<String, Any?>.stringValue(key: String): String? =
+        this[key]?.toString()?.trim()?.takeIf { it.isNotBlank() }
 
     private fun ProductDetails.subscriptionPeriodLabel(product: SubscriptionProductConfig): String? {
         val phase = subscriptionOfferDetails

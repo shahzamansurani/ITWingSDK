@@ -3,6 +3,7 @@ package com.itwingtech.itwingsdk.ads
 import android.app.Activity
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import com.google.android.libraries.ads.mobile.sdk.common.AdRequest
 import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
 import com.google.android.libraries.ads.mobile.sdk.common.PreloadConfiguration
@@ -18,7 +19,9 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     private val mainHandler = Handler(Looper.getMainLooper())
     private val loadedAds = ConcurrentHashMap<String, InterstitialAd>()
     private val preloaderKeys = ConcurrentHashMap<String, String>()
+    private val lastLoadAttemptAt = ConcurrentHashMap<String, Long>()
     private val customRenderer = CustomFullscreenAdRenderer()
+    private val minLoadIntervalMs = 20_000L
 
     fun preloadAll(activity: Activity) {
         val config = configProvider()
@@ -34,10 +37,10 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     }
 
     fun preload(activity: Activity, placementName: String) {
-        load(activity, placementName)
+        load(activity, placementName, forceRequest = false)
     }
 
-    fun load(activity: Activity, placementName: String) {
+    fun load(activity: Activity, placementName: String, forceRequest: Boolean = false) {
         val config = configProvider()
         if (!config.ads.globalEnabled) return
         val placement = config.ads.placements.firstOrNull {
@@ -57,6 +60,12 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
 
         if (loadedAds.containsKey(placementName)) {
             return
+        }
+        if (!forceRequest && !canStartLoad(placementName, placement)) {
+            return
+        }
+        if (forceRequest) {
+            lastLoadAttemptAt[placementName] = SystemClock.elapsedRealtime()
         }
 
         val request = AdRequest.Builder(unit.adUnitId).build()
@@ -96,7 +105,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
                 InlineAdSafetyGate.arm("interstitial", placement.name)
-                preload(activity, placementName)
+                preloadAfterShowIfEnabled(activity, placementName, placement)
                 safeCallback(onComplete)
             })
             if (!shown) {
@@ -112,7 +121,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         val ad = loadedAds.remove(placementName) ?: pollPreloadedAd(placementName)
 
         if (ad == null) {
-            load(activity, placementName)
+            load(activity, placementName, forceRequest = true)
             waitForAdAndShow(activity, placementName, onComplete)
             return
         }
@@ -144,7 +153,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 loadedAds.remove(placementName)
                 AdEventTracker.log("ad_dismissed", placement)
                 InlineAdSafetyGate.arm("interstitial", placement.name)
-                preload(activity, placementName)
+                preloadAfterShowIfEnabled(activity, placementName, placement)
                 FullscreenAdState.end(fullscreenOwner)
                 completion.complete()
             }
@@ -154,7 +163,6 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             ) {
                 loadedAds.remove(placementName)
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
-                preload(activity, placementName)
                 FullscreenAdState.end(fullscreenOwner)
                 completion.complete()
             }
@@ -178,7 +186,6 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 ad.show(activity)
             }.onFailure {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
-                preload(activity, placementName)
                 FullscreenAdState.end(fullscreenOwner)
                 completion.complete()
             }
@@ -215,9 +222,38 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         }
     }
 
+    private fun preloadAfterShowIfEnabled(
+        activity: Activity,
+        placementName: String,
+        placement: com.itwingtech.itwingsdk.core.AdPlacementConfig,
+    ) {
+        if (placement.metadata["preload_after_show"].isTruthy()) {
+            preload(activity, placementName)
+        }
+    }
+
+    private fun canStartLoad(
+        placementName: String,
+        placement: com.itwingtech.itwingsdk.core.AdPlacementConfig,
+    ): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        val previous = lastLoadAttemptAt[placementName] ?: 0L
+        if (now - previous < minLoadIntervalMs) {
+            AdEventTracker.log("ad_load_throttled", placement, mapOf("cooldown_ms" to minLoadIntervalMs))
+            return false
+        }
+        lastLoadAttemptAt[placementName] = now
+        return true
+    }
+
     private fun pollPreloadedAd(placementName: String): InterstitialAd? {
         val key = preloaderKeys[placementName] ?: return null
-        return runCatching { InterstitialAdPreloader.pollAd(key) }.getOrNull()
+        val ad = runCatching { InterstitialAdPreloader.pollAd(key) }.getOrNull()
+        if (ad != null) {
+            preloaderKeys.remove(placementName)
+            runCatching { InterstitialAdPreloader.destroy(key) }
+        }
+        return ad
     }
 
     private fun waitForAdAndShow(activity: Activity, placementName: String, onComplete: () -> Unit) {
@@ -249,6 +285,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             }
             if (System.currentTimeMillis() - startedAt >= timeoutMs) {
                 loadingDialog.dismiss()
+                clearPreloader(placementName)
                 safeCallback(onComplete)
                 return
             }
@@ -256,6 +293,12 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         }
 
         mainHandler.postDelayed({ poll() }, 150L)
+    }
+
+    private fun clearPreloader(placementName: String) {
+        preloaderKeys.remove(placementName)?.let { key ->
+            runCatching { InterstitialAdPreloader.destroy(key) }
+        }
     }
 
     private fun Any?.isTruthy(): Boolean {

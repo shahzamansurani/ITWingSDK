@@ -3,7 +3,6 @@ package com.itwingtech.itwingsdk.analytics
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import com.itwingtech.itwingsdk.core.FirebaseRuntimeManager
 import com.itwingtech.itwingsdk.data.ConfigRepository
 import org.json.JSONObject
 import java.time.Instant
@@ -48,14 +47,12 @@ internal object SDKTelemetry {
             return
         }
 
-        runCatching { FirebaseRuntimeManager.logEvent(name, enriched) }
         enqueueDirect(name, enriched)
     }
 
     fun recordNonFatal(throwable: Throwable, properties: Map<String, Any?> = emptyMap()) {
         val enriched = defaultProperties() + properties + throwableProperties(throwable)
         track("sdk_non_fatal_error", enriched)
-        FirebaseRuntimeManager.recordNonFatal(throwable, enriched)
     }
 
     private fun installCrashHandler() {
@@ -68,7 +65,6 @@ internal object SDKTelemetry {
                 "sdk_in_stack" to throwable.stackTraceToString().contains("com.itwingtech.itwingsdk"),
             )
             enqueueDirect("app_crash", properties)
-            runCatching { FirebaseRuntimeManager.recordNonFatal(throwable, properties) }
             previous?.uncaughtException(thread, throwable)
                 ?: run { android.os.Process.killProcess(android.os.Process.myPid()) }
         }
@@ -94,10 +90,6 @@ internal object SDKTelemetry {
                     lastStallReportedAt = now
                     val properties = mapOf("stalled_ms" to stalledFor)
                     track("main_thread_stall", properties)
-                    FirebaseRuntimeManager.recordNonFatal(
-                        IllegalStateException("Main thread did not respond for ${stalledFor}ms"),
-                        defaultProperties() + properties,
-                    )
                 }
             }
         }, "ITWingSDK-MainThreadWatchdog").apply {

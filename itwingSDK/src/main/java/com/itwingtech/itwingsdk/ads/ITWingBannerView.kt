@@ -39,6 +39,9 @@ class ITWingBannerView @JvmOverloads constructor(
     private var isLoadPosted =
         false
 
+    private var readyRetryRegistered =
+        false
+
     private val bannerContainer =
         RelativeLayout(context).apply {
 
@@ -253,6 +256,11 @@ class ITWingBannerView @JvmOverloads constructor(
                     return@post
                 }
 
+                if (width <= 0) {
+                    postDelayed({ postLoadBanner() }, 150)
+                    return@post
+                }
+
                 val activity =
                     context.findActivitySafe()
                         ?: return@post
@@ -265,10 +273,19 @@ class ITWingBannerView @JvmOverloads constructor(
 
                     ITWingSDK.ads.loadBanner(
                         activity = activity,
-                        container = this,
+                        container = bannerContainer,
                         placement = placementName,
                         bannerType = bannerType
                     )
+                }
+
+                if (!readyRetryRegistered) {
+                    readyRetryRegistered = true
+                    ITWingSDK.onReady {
+                        if (!isDestroyed && isAttachedToWindow) {
+                            postDelayed({ postLoadBanner() }, 100)
+                        }
+                    }
                 }
             }
         }
@@ -281,7 +298,7 @@ class ITWingBannerView @JvmOverloads constructor(
         runCatching {
 
             ITWingSDK.ads.destroyBanner(
-                this
+                bannerContainer
             )
         }
 

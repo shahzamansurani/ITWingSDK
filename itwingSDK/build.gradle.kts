@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 val sdkPublicationGroup = providers.gradleProperty("group")
     .orElse("com.github.shahzamansurani")
 val sdkPublicationVersion = providers.gradleProperty("version")
-    .orElse("v1.18")
+    .orElse("v1.20")
 
 plugins {
     alias(libs.plugins.android.library)
@@ -17,7 +17,7 @@ android {
     }
 
     defaultConfig {
-        minSdk = 28
+        minSdk = 26
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
@@ -70,30 +70,30 @@ afterEvaluate {
 
 dependencies {
     testImplementation(libs.junit)
-    implementation("androidx.lifecycle:lifecycle-process:2.11.0")
-    implementation("androidx.security:security-crypto:1.1.0")
-    implementation("com.squareup.okhttp3:okhttp:5.4.0")
-    implementation("com.google.code.gson:gson:2.14.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
-    implementation("com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.2.1")
-    implementation("androidx.core:core-ktx:1.18.0")
+    implementation(libs.androidx.lifecycle.process)
+    implementation(libs.androidx.security.crypto)
+    implementation(libs.okhttp)
+    implementation(libs.gson)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.ads.mobile.sdk)
+    implementation(libs.androidx.activity.ktx)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.viewpager2)
 
-    implementation("com.intuit.sdp:sdp-android:1.1.1")
-    implementation("com.intuit.ssp:ssp-android:1.1.1")
-    implementation("com.airbnb.android:lottie:6.7.1")
-    implementation("com.google.android.play:app-update:2.1.0")
-    implementation("com.google.android.play:app-update-ktx:2.1.0")
-    implementation("com.facebook.shimmer:shimmer:0.5.0")
-    implementation("com.google.android.material:material:1.14.0")
-    implementation("com.github.bumptech.glide:glide:5.0.7")
-    api("com.android.billingclient:billing-ktx:9.1.0")
-    implementation("com.android.installreferrer:installreferrer:2.2")
-    api(platform("com.google.firebase:firebase-bom:34.15.0"))
-    implementation("com.google.firebase:firebase-analytics")
-    api("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-messaging")
+    implementation(libs.sdp.android)
+    implementation(libs.ssp.android)
+    api(libs.lottie)
+    implementation(libs.app.update)
+    implementation(libs.app.update.ktx)
+    implementation(libs.shimmer)
+    implementation(libs.material)
+    implementation(libs.glide)
+    api(libs.billing.ktx)
+    implementation(libs.installreferrer)
+//    implementation(platform("com.google.firebase:firebase-bom:34.15.0"))
+    implementation(libs.firebase.messaging)
 
-    api("androidx.media3:media3-exoplayer:1.10.1")
-    api("androidx.media3:media3-ui:1.10.1")
+    api(libs.androidx.media3.exoplayer)
+    api(libs.androidx.media3.ui)
 
 }

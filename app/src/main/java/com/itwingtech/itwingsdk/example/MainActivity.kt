@@ -3,6 +3,8 @@ package com.itwingtech.itwingsdk.example
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -10,15 +12,20 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.itwingtech.itwingsdk.core.ITWingAppFlowOptions
+import com.itwingtech.itwingsdk.core.ITWingOptions
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.example.databinding.ActivityMainBinding
+import java.net.URL
 import kotlin.getValue
 
 class MainActivity : AppCompatActivity() {
     private val binding by lazy { ActivityMainBinding.inflate(layoutInflater) }
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        binding.notificationText.text = "Notification permission: ${if (granted) "granted" else "denied"}"
-    }
+            binding.notificationText.text =
+                "Notification permission: ${if (granted) "granted" else "denied"}"
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
@@ -26,9 +33,10 @@ class MainActivity : AppCompatActivity() {
         bindSdkExamples()
         renderSdkState()
 
+
+
         ITWingSDK.onReady {
             renderSdkState()
-            Toast.makeText(this, "SDK ready", Toast.LENGTH_SHORT).show()
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -141,18 +149,43 @@ class MainActivity : AppCompatActivity() {
         binding.apiText.text = buildString {
             appendLine("Logo: ${ITWingSDK.getLogoUri() ?: "not configured"}")
             appendLine("Primary color: ${ITWingSDK.getColor("primary", "#2563eb")}")
-            appendLine("API proxy endpoint: ${ITWingSDK.getApiProxyEndpoint("exchange_rates", "not configured")}")
-            appendLine("API proxy base URL: ${ITWingSDK.getApiProxyBaseUrl("exchange_rates", "not configured")}")
-            append("Direct API base URL: ${ITWingSDK.getApiBaseUrl("exchange_rates", "not configured")}")
+            appendLine(
+                "API proxy endpoint: ${
+                    ITWingSDK.getApiProxyEndpoint(
+                        "exchange_rates",
+                        "not configured"
+                    )
+                }"
+            )
+            appendLine(
+                "API proxy base URL: ${
+                    ITWingSDK.getApiProxyBaseUrl(
+                        "exchange_rates",
+                        "not configured"
+                    )
+                }"
+            )
+            append(
+                "Direct API base URL: ${
+                    ITWingSDK.getApiBaseUrl(
+                        "exchange_rates",
+                        "not configured"
+                    )
+                }"
+            )
         }
-        binding.firebaseText.text = "Firebase Auth available: ${ITWingSDK.firebaseAuth() != null}"
-        binding.notificationText.text = "Billing: ${ITWingSDK.billingDiagnostics()} | Ad free: ${ITWingSDK.isAdFree()}"
+        binding.firebaseText.text = "FCM push bridge: configured from admin; no host google-services plugin required"
+        binding.notificationText.text =
+            "Billing: ${ITWingSDK.billingDiagnostics()} | Ad free: ${ITWingSDK.isAdFree()}"
     }
 
     private fun showInterstitialAndNavigate(placement: String) {
         ITWingSDK.analytics.track("example_interstitial_requested", mapOf("placement" to placement))
         ITWingSDK.showInterstitial(this, placement) {
-            ITWingSDK.analytics.track("example_interstitial_callback", mapOf("placement" to placement))
+            ITWingSDK.analytics.track(
+                "example_interstitial_callback",
+                mapOf("placement" to placement)
+            )
             openResult("Interstitial: $placement")
         }
     }
@@ -169,7 +202,10 @@ class MainActivity : AppCompatActivity() {
                 ITWingSDK.analytics.track("example_reward_earned", mapOf("placement" to placement))
             },
             onComplete = {
-                ITWingSDK.analytics.track("example_rewarded_callback", mapOf("placement" to placement, "rewarded" to rewarded))
+                ITWingSDK.analytics.track(
+                    "example_rewarded_callback",
+                    mapOf("placement" to placement, "rewarded" to rewarded)
+                )
                 openResult("Rewarded: $placement", rewarded)
             },
         )
@@ -177,17 +213,26 @@ class MainActivity : AppCompatActivity() {
 
     private fun showRewardedInterstitialAndNavigate(placement: String) {
         var rewarded = false
-        ITWingSDK.analytics.track("example_rewarded_interstitial_requested", mapOf("placement" to placement))
+        ITWingSDK.analytics.track(
+            "example_rewarded_interstitial_requested",
+            mapOf("placement" to placement)
+        )
         ITWingSDK.showRewardedInterstitial(
             activity = this,
             placement = placement,
             onReward = {
                 rewarded = true
                 toast("Reward earned")
-                ITWingSDK.analytics.track("example_rewarded_interstitial_reward", mapOf("placement" to placement))
+                ITWingSDK.analytics.track(
+                    "example_rewarded_interstitial_reward",
+                    mapOf("placement" to placement)
+                )
             },
             onComplete = {
-                ITWingSDK.analytics.track("example_rewarded_interstitial_callback", mapOf("placement" to placement, "rewarded" to rewarded))
+                ITWingSDK.analytics.track(
+                    "example_rewarded_interstitial_callback",
+                    mapOf("placement" to placement, "rewarded" to rewarded)
+                )
                 openResult("Rewarded interstitial: $placement", rewarded)
             },
         )
