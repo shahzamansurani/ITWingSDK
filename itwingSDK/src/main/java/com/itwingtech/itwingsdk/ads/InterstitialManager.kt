@@ -104,7 +104,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         if (customRenderer.canRender(placement)) {
             val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
-                InlineAdSafetyGate.arm("interstitial", placement.name)
+                armInlineSafetyIfNeeded(placement)
                 preloadAfterShowIfEnabled(activity, placementName, placement)
                 safeCallback(onComplete)
             })
@@ -152,7 +152,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             override fun onAdDismissedFullScreenContent() {
                 loadedAds.remove(placementName)
                 AdEventTracker.log("ad_dismissed", placement)
-                InlineAdSafetyGate.arm("interstitial", placement.name)
+                armInlineSafetyIfNeeded(placement)
                 preloadAfterShowIfEnabled(activity, placementName, placement)
                 FullscreenAdState.end(fullscreenOwner)
                 completion.complete()
@@ -299,6 +299,21 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         preloaderKeys.remove(placementName)?.let { key ->
             runCatching { InterstitialAdPreloader.destroy(key) }
         }
+    }
+
+    private fun armInlineSafetyIfNeeded(placement: com.itwingtech.itwingsdk.core.AdPlacementConfig) {
+        if (placement.isSplashPlacement()) return
+        InlineAdSafetyGate.arm("interstitial", placement.name)
+    }
+
+    private fun com.itwingtech.itwingsdk.core.AdPlacementConfig.isSplashPlacement(): Boolean {
+        val usage = metadata["usage"]?.toString()?.trim().orEmpty()
+        val splash = metadata["splash"]
+        return name.contains("splash", ignoreCase = true) ||
+            usage.equals("splash", ignoreCase = true) ||
+            splash == true ||
+            splash?.toString()?.equals("true", ignoreCase = true) == true ||
+            splash?.toString() == "1"
     }
 
     private fun Any?.isTruthy(): Boolean {

@@ -29,6 +29,7 @@ internal object InlineAdSafetyGate {
     @Volatile private var sourcePlacement = ""
     @Volatile private var suppressedActivityRef: WeakReference<Activity>? = null
     @Volatile private var windowCallbackRef: WeakReference<SafetyWindowCallback>? = null
+    @Volatile private var bypassNextActivityName: String? = null
 
     fun arm(sourceFormat: String, placement: String) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -54,6 +55,16 @@ internal object InlineAdSafetyGate {
                 "source_placement" to placement,
             ),
         )
+    }
+
+    fun bypassNextActivity(activityClassName: String) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            bypassNextActivityName = activityClassName
+        } else {
+            mainHandler.post {
+                bypassNextActivityName = activityClassName
+            }
+        }
     }
 
     fun suppressInlineAd(
@@ -83,6 +94,13 @@ internal object InlineAdSafetyGate {
         if (!pending && suppressedActivityRef?.get() == null) return false
         if (now - armedAtMs > PENDING_WINDOW_MS) {
             clear(activity, "expired", reload = false)
+            return false
+        }
+
+        val bypassClass = bypassNextActivityName
+        if (bypassClass != null && activity.javaClass.name == bypassClass) {
+            bypassNextActivityName = null
+            clear(activity, "bypassed_for_startup_onboarding", reload = false)
             return false
         }
 
@@ -129,6 +147,7 @@ internal object InlineAdSafetyGate {
             pending = false
             suppressedActivityRef = null
             windowCallbackRef = null
+            bypassNextActivityName = null
             reloadCallbacks.clear()
 
             SDKTelemetry.track(

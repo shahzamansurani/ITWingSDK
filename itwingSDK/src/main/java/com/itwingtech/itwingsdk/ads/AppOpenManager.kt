@@ -64,7 +64,11 @@ class AppOpenManager(
                                     return
                                 }
                                 val placement = automaticPlacementName() ?: return
-                                show(currentActivity, placement, waitForLoad = false)
+                                if (validAppOpenAd() != null || hasLoadedCustomAd(placement)) {
+                                    show(currentActivity, placement, waitForLoad = false)
+                                } else if (automaticPlacement()?.metadata.safeValue("preload_on_resume").isTruthy()) {
+                                    preload(currentActivity, placement)
+                                }
                             }
                         }
                     },
@@ -170,7 +174,7 @@ class AppOpenManager(
         if (customRenderer.canRender(placement)) {
             val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
-                InlineAdSafetyGate.arm("app_open", placement.name)
+                armInlineSafetyIfNeeded(placement)
                 preloadAfterShowIfEnabled(activity, placementName, placement)
                 safeCallback(onComplete)
             })
@@ -250,7 +254,7 @@ class AppOpenManager(
 
                 override fun onAdDismissedFullScreenContent() {
                     AdEventTracker.log("ad_dismissed", placement)
-                    InlineAdSafetyGate.arm("app_open", placement.name)
+                    armInlineSafetyIfNeeded(placement)
                     preloadAfterShowIfEnabled(activity, placementName, placement)
                     FullscreenAdState.end(fullscreenOwner)
                     completion.complete()
@@ -353,6 +357,13 @@ class AppOpenManager(
         return null
     }
 
+    private fun hasLoadedCustomAd(placementName: String): Boolean {
+        val placement = configProvider().ads.placements.firstOrNull {
+            it.name == placementName && it.enabled && it.format == "app_open"
+        } ?: return false
+        return customRenderer.canRender(placement)
+    }
+
     private fun clearExpiredAppOpenAd() {
         if (appOpenAd == null) return
         val ageMs = SystemClock.elapsedRealtime() - appOpenLoadedAtMs
@@ -423,6 +434,21 @@ class AppOpenManager(
             is Number -> value.toInt() != 0
             else -> false
         }
+    }
+
+    private fun armInlineSafetyIfNeeded(placement: com.itwingtech.itwingsdk.core.AdPlacementConfig) {
+        if (placement.isSplashPlacement()) return
+        InlineAdSafetyGate.arm("app_open", placement.name)
+    }
+
+    private fun com.itwingtech.itwingsdk.core.AdPlacementConfig.isSplashPlacement(): Boolean {
+        val usage = metadata.safeValue("usage").safeString().orEmpty()
+        val splash = metadata.safeValue("splash")
+        return name.contains("splash", ignoreCase = true) ||
+            usage.equals("splash", ignoreCase = true) ||
+            splash == true ||
+            splash?.toString()?.equals("true", ignoreCase = true) == true ||
+            splash?.toString() == "1"
     }
 
     private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed

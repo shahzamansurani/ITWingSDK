@@ -12,9 +12,13 @@ import com.itwingtech.itwingsdk.core.FirebaseConfig
 import com.itwingtech.itwingsdk.core.InAppUpdateConfig
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.core.ITWingOptions
+import com.itwingtech.itwingsdk.core.MediaLibraryConfig
+import com.itwingtech.itwingsdk.core.MediaPlacementConfig
 import com.itwingtech.itwingsdk.core.NotificationConfig
 import com.itwingtech.itwingsdk.core.SubscriptionConfig
 import com.itwingtech.itwingsdk.core.SubscriptionProductConfig
+import com.itwingtech.itwingsdk.core.WallpaperConfig
+import com.itwingtech.itwingsdk.core.WallpaperPlacementConfig
 import com.itwingtech.itwingsdk.security.RequestSigner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -246,6 +250,80 @@ class ConfigRepository(
             .put("metadata", metadata),
     )
 
+    suspend fun fetchWallpapers(
+        categoryId: String? = null,
+        categorySlug: String? = null,
+        limit: Int = 60,
+        trendingLimit: Int? = null,
+        sort: String? = null,
+        selectedWallpaperIds: List<String> = emptyList(),
+    ): JSONObject = signedPost(
+        "/wallpapers",
+        JSONObject()
+            .put("install_id", installId())
+            .apply {
+                if (!categoryId.isNullOrBlank()) put("category_id", categoryId)
+                if (!categorySlug.isNullOrBlank()) put("category_slug", categorySlug)
+                put("limit", limit.coerceIn(1, 500))
+                trendingLimit?.let { put("trending_limit", it.coerceIn(1, 100)) }
+                if (!sort.isNullOrBlank()) put("sort", sort)
+                if (selectedWallpaperIds.isNotEmpty()) {
+                    put("wallpaper_ids", org.json.JSONArray(selectedWallpaperIds.distinct().take(500)))
+                }
+            },
+    )
+
+    suspend fun submitWallpaperEvent(
+        wallpaperId: String,
+        eventType: String,
+        metadata: JSONObject = JSONObject(),
+    ): JSONObject = signedPost(
+        "/wallpapers/${wallpaperId.trim('/')}/events",
+        JSONObject()
+            .put("install_id", installId())
+            .put("event_type", eventType)
+            .put("country", detectCountry())
+            .put("metadata", metadata),
+    )
+
+    suspend fun fetchMediaLibrary(
+        kind: String,
+        categoryId: String? = null,
+        categorySlug: String? = null,
+        limit: Int = 60,
+        trendingLimit: Int? = null,
+        sort: String? = null,
+        selectedItemIds: List<String> = emptyList(),
+    ): JSONObject = signedPost(
+        "/media/${kind.trim('/')}",
+        JSONObject()
+            .put("install_id", installId())
+            .apply {
+                if (!categoryId.isNullOrBlank()) put("category_id", categoryId)
+                if (!categorySlug.isNullOrBlank()) put("category_slug", categorySlug)
+                put("limit", limit.coerceIn(1, 500))
+                trendingLimit?.let { put("trending_limit", it.coerceIn(1, 100)) }
+                if (!sort.isNullOrBlank()) put("sort", sort)
+                if (selectedItemIds.isNotEmpty()) {
+                    put("item_ids", org.json.JSONArray(selectedItemIds.distinct().take(500)))
+                }
+            },
+    )
+
+    suspend fun submitMediaLibraryEvent(
+        kind: String,
+        itemId: String,
+        eventType: String,
+        metadata: JSONObject = JSONObject(),
+    ): JSONObject = signedPost(
+        "/media/${kind.trim('/')}/${itemId.trim('/')}/events",
+        JSONObject()
+            .put("install_id", installId())
+            .put("event_type", eventType)
+            .put("country", detectCountry())
+            .put("metadata", metadata),
+    )
+
     suspend fun reportApiKeyUsage(configKey: String, selectedKeyId: String? = null): JSONObject = signedPost(
         "/api-keys/${configKey.trim('/')}/usage",
         JSONObject()
@@ -338,6 +416,10 @@ class ConfigRepository(
                 val app = data.optJSONObject("app")
                 val ads = data.optJSONObject("ads")
                 val notifications = data.optJSONObject("notifications")
+                val wallpapers = data.optJSONObject("wallpapers")
+                val ringtones = data.optJSONObject("ringtones")
+                val videos = data.optJSONObject("videos")
+                val vpnServers = data.optJSONObject("vpn_servers")
                 val subscriptions = data.optJSONObject("subscriptions")
                 val firebase = data.optJSONObject("firebase")
                 val parsed = ITWingConfig(
@@ -378,6 +460,17 @@ class ConfigRepository(
                             ?: emptyList(),
                         tags = notifications?.optJSONObject("tags")?.toStringMap() ?: emptyMap(),
                     ),
+                    wallpapers = WallpaperConfig(
+                        enabled = wallpapers?.optBoolean("enabled", false) ?: false,
+                        topLimit = wallpapers?.optInt("top_limit", 10) ?: 10,
+                        defaultSort = wallpapers?.optCleanString("default_sort") ?: "trending",
+                        listEndpoint = wallpapers?.optCleanString("list_endpoint") ?: "/wallpapers",
+                        eventEndpoint = wallpapers?.optCleanString("event_endpoint") ?: "/wallpapers/{id}/events",
+                        placements = parseWallpaperPlacements(wallpapers),
+                    ),
+                    ringtones = parseMediaLibraryConfig("ringtones", ringtones),
+                    videos = parseMediaLibraryConfig("videos", videos),
+                    vpnServers = parseMediaLibraryConfig("vpn_servers", vpnServers),
                     subscriptions = SubscriptionConfig(
                         enabled = subscriptions?.optBoolean("enabled", false) ?: false,
                         verifyEndpoint = subscriptions?.optString("verify_endpoint", "/subscriptions/verify")
@@ -545,6 +638,75 @@ class ConfigRepository(
                 healthyKeyCount = item.optInt("healthy_key_count", 0),
                 dailyQuota = item.optInt("daily_quota", 0),
                 dailyUsage = item.optInt("daily_usage", 0),
+            )
+        }.toMap()
+    }
+
+    private fun parseWallpaperPlacements(wallpapers: JSONObject?): Map<String, WallpaperPlacementConfig> {
+        val placements = wallpapers?.optJSONObject("placements") ?: return emptyMap()
+        return placements.keys().asSequence().mapNotNull { name ->
+            val item = placements.optJSONObject(name) ?: return@mapNotNull null
+            name to WallpaperPlacementConfig(
+                name = item.optCleanString("name") ?: name,
+                type = item.optCleanString("type") ?: "wallpapers",
+                enabled = item.optBoolean("enabled", true),
+                limit = item.optNullableInt("limit"),
+                trendingLimit = item.optNullableInt("trending_limit"),
+                sort = item.optCleanString("sort"),
+                columns = item.optNullableInt("columns"),
+                horizontal = if (item.has("horizontal") && !item.isNull("horizontal")) item.optBoolean("horizontal") else null,
+                itemWidthDp = item.optNullableInt("item_width_dp"),
+                itemHeightDp = item.optNullableInt("item_height_dp"),
+                itemSpacingDp = item.optNullableInt("item_spacing_dp"),
+                cornerRadiusDp = item.optNullableInt("corner_radius_dp"),
+                showTitle = if (item.has("show_title") && !item.isNull("show_title")) item.optBoolean("show_title") else null,
+                premiumUnlockPlacement = item.optCleanString("premium_unlock_placement"),
+                categoryDisplayMode = item.optCleanString("category_display_mode"),
+                contentSource = item.optCleanString("content_source"),
+                categoryId = item.optCleanString("category_id"),
+                timeRange = item.optCleanString("time_range"),
+                selectedWallpaperIds = item.optJSONArray("selected_wallpaper_ids")
+                    ?.let { array -> (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) } }
+                    ?: emptyList(),
+                selectedCategoryIds = item.optJSONArray("selected_category_ids")
+                    ?.let { array -> (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) } }
+                    ?: emptyList(),
+            )
+        }.toMap()
+    }
+
+    private fun parseMediaLibraryConfig(kind: String, source: JSONObject?): MediaLibraryConfig {
+        return MediaLibraryConfig(
+            kind = kind,
+            enabled = source?.optBoolean("enabled", false) ?: false,
+            topLimit = source?.optInt("top_limit", 10) ?: 10,
+            defaultSort = source?.optCleanString("default_sort") ?: "trending",
+            listEndpoint = source?.optCleanString("list_endpoint") ?: "/media/$kind",
+            eventEndpoint = source?.optCleanString("event_endpoint") ?: "/media/$kind/{id}/events",
+            placements = parseMediaPlacements(source),
+        )
+    }
+
+    private fun parseMediaPlacements(source: JSONObject?): Map<String, MediaPlacementConfig> {
+        val placements = source?.optJSONObject("placements") ?: return emptyMap()
+        return placements.keys().asSequence().mapNotNull { name ->
+            val item = placements.optJSONObject(name) ?: return@mapNotNull null
+            name to MediaPlacementConfig(
+                name = item.optCleanString("name") ?: name,
+                type = item.optCleanString("type") ?: "items",
+                enabled = item.optBoolean("enabled", true),
+                limit = item.optNullableInt("limit"),
+                sort = item.optCleanString("sort"),
+                columns = item.optNullableInt("columns"),
+                horizontal = if (item.has("horizontal") && !item.isNull("horizontal")) item.optBoolean("horizontal") else null,
+                showTitle = if (item.has("show_title") && !item.isNull("show_title")) item.optBoolean("show_title") else null,
+                premiumUnlockPlacement = item.optCleanString("premium_unlock_placement"),
+                categoryDisplayMode = item.optCleanString("category_display_mode"),
+                contentSource = item.optCleanString("content_source"),
+                categoryId = item.optCleanString("category_id"),
+                selectedItemIds = item.optJSONArray("selected_item_ids")
+                    ?.let { array -> (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) } }
+                    ?: emptyList(),
             )
         }.toMap()
     }

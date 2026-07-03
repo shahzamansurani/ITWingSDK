@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.Gravity.CENTER
 import android.view.ViewGroup
@@ -41,6 +42,12 @@ class ITWingBannerView @JvmOverloads constructor(
 
     private var readyRetryRegistered =
         false
+
+    private var lastAutoLoadAtMs =
+        0L
+
+    private val minAutoReloadMs =
+        60_000L
 
     private val bannerContainer =
         RelativeLayout(context).apply {
@@ -223,14 +230,14 @@ class ITWingBannerView @JvmOverloads constructor(
         isDestroyed =
             false
 
-        postLoadBanner()
+        postLoadBanner(force = false)
     }
 
     fun loadBanner() {
-        postLoadBanner()
+        postLoadBanner(force = true)
     }
 
-    private fun postLoadBanner() {
+    private fun postLoadBanner(force: Boolean = false) {
         runOnMain {
 
             if (
@@ -257,7 +264,7 @@ class ITWingBannerView @JvmOverloads constructor(
                 }
 
                 if (width <= 0) {
-                    postDelayed({ postLoadBanner() }, 150)
+                    postDelayed({ postLoadBanner(force) }, 150)
                     return@post
                 }
 
@@ -266,6 +273,10 @@ class ITWingBannerView @JvmOverloads constructor(
                         ?: return@post
 
                 if (!activity.isUsable()) {
+                    return@post
+                }
+
+                if (!force && !canAutoLoad()) {
                     return@post
                 }
 
@@ -283,7 +294,7 @@ class ITWingBannerView @JvmOverloads constructor(
                     readyRetryRegistered = true
                     ITWingSDK.onReady {
                         if (!isDestroyed && isAttachedToWindow) {
-                            postDelayed({ postLoadBanner() }, 100)
+                            postDelayed({ postLoadBanner(force = true) }, 100)
                         }
                     }
                 }
@@ -317,8 +328,20 @@ class ITWingBannerView @JvmOverloads constructor(
             isAttachedToWindow &&
             !isDestroyed
         ) {
-            postLoadBanner()
+            postLoadBanner(force = false)
         }
+    }
+
+    private fun canAutoLoad(): Boolean {
+        if (!ITWingSDK.isReady()) {
+            return true
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastAutoLoadAtMs < minAutoReloadMs) {
+            return false
+        }
+        lastAutoLoadAtMs = now
+        return true
     }
 
     private fun runOnMain(

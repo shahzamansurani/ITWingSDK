@@ -11,4 +11,5 @@
     <color name="gray_transparent">#80000000</color>
 
     <color name="buttonColor">#F3F4F8</color>
+    <color name="green">#ffffff</color>
 </resources>

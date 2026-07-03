@@ -10,6 +10,10 @@ data class ITWingConfig(
     val remoteConfig: Map<String, Any?> = emptyMap(),
     val analytics: Map<String, Any?> = emptyMap(),
     val notifications: NotificationConfig = NotificationConfig(),
+    val wallpapers: WallpaperConfig = WallpaperConfig(),
+    val ringtones: MediaLibraryConfig = MediaLibraryConfig(kind = "ringtones", listEndpoint = "/media/ringtones", eventEndpoint = "/media/ringtones/{id}/events"),
+    val videos: MediaLibraryConfig = MediaLibraryConfig(kind = "videos", listEndpoint = "/media/videos", eventEndpoint = "/media/videos/{id}/events"),
+    val vpnServers: MediaLibraryConfig = MediaLibraryConfig(kind = "vpn_servers", listEndpoint = "/media/vpn_servers", eventEndpoint = "/media/vpn_servers/{id}/events"),
     val subscriptions: SubscriptionConfig = SubscriptionConfig(),
     val firebase: FirebaseConfig = FirebaseConfig(),
     val apiProviders: Map<String, ApiProviderConfig> = emptyMap(),
@@ -98,6 +102,64 @@ data class NotificationConfig(
     val topics: List<String> = emptyList(),
     val segments: List<String> = emptyList(),
     val tags: Map<String, String> = emptyMap(),
+)
+
+data class WallpaperConfig(
+    val enabled: Boolean = false,
+    val topLimit: Int = 10,
+    val defaultSort: String = "trending",
+    val listEndpoint: String = "/wallpapers",
+    val eventEndpoint: String = "/wallpapers/{id}/events",
+    val placements: Map<String, WallpaperPlacementConfig> = emptyMap(),
+)
+
+data class WallpaperPlacementConfig(
+    val name: String = "",
+    val type: String = "wallpapers",
+    val enabled: Boolean = true,
+    val limit: Int? = null,
+    val trendingLimit: Int? = null,
+    val sort: String? = null,
+    val columns: Int? = null,
+    val horizontal: Boolean? = null,
+    val itemWidthDp: Int? = null,
+    val itemHeightDp: Int? = null,
+    val itemSpacingDp: Int? = null,
+    val cornerRadiusDp: Int? = null,
+    val showTitle: Boolean? = null,
+    val premiumUnlockPlacement: String? = null,
+    val categoryDisplayMode: String? = null,
+    val contentSource: String? = null,
+    val categoryId: String? = null,
+    val timeRange: String? = null,
+    val selectedWallpaperIds: List<String> = emptyList(),
+    val selectedCategoryIds: List<String> = emptyList(),
+)
+
+data class MediaLibraryConfig(
+    val kind: String = "",
+    val enabled: Boolean = false,
+    val topLimit: Int = 10,
+    val defaultSort: String = "trending",
+    val listEndpoint: String = "",
+    val eventEndpoint: String = "",
+    val placements: Map<String, MediaPlacementConfig> = emptyMap(),
+)
+
+data class MediaPlacementConfig(
+    val name: String = "",
+    val type: String = "items",
+    val enabled: Boolean = true,
+    val limit: Int? = null,
+    val sort: String? = null,
+    val columns: Int? = null,
+    val horizontal: Boolean? = null,
+    val showTitle: Boolean? = null,
+    val premiumUnlockPlacement: String? = null,
+    val categoryDisplayMode: String? = null,
+    val contentSource: String? = null,
+    val categoryId: String? = null,
+    val selectedItemIds: List<String> = emptyList(),
 )
 
 data class ApiKeyConfig(

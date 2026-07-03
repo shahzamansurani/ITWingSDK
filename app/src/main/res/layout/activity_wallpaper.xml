@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/wallpaperRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/carplay_background"
+    android:padding="10dp"
+    tools:context=".WallpaperActivity">
+
+    <include
+        android:id="@+id/toolbar"
+        layout="@layout/custom_toolbar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/tvTopTrend"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="@string/top_trend"
+        android:textColor="@color/white"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/toolbar" />
+
+    <com.itwingtech.itwingsdk.wallpapers.ITWingTopTrendsWallpaperView
+        android:id="@+id/rvTopTrend"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/_200sdp"
+        android:layout_marginTop="10dp"
+        android:clipToPadding="false"
+        android:overScrollMode="never"
+        app:ITWingWallpaperItemWidth="@dimen/_150sdp"
+        app:ITWingWallpaperItemLayout="@layout/item_wallpaper_grid"
+        app:ITWingWallpaperPlacement="top_trends"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tvTopTrend" />
+
+    <com.itwingtech.itwingsdk.wallpapers.ITWingWallpaperCategoriesView
+        android:id="@+id/rvCategories"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/_40sdp"
+        android:layout_marginTop="14dp"
+        android:clipToPadding="false"
+        android:overScrollMode="never"
+        app:ITWingWallpaperCategoryItemLayout="@layout/item_wallpaper_category_chip"
+        app:ITWingWallpaperPlacement="categories"
+        app:ITWingWallpaperCategorySelectedDrawable="@drawable/bg_category_selected"
+        app:ITWingWallpaperCategoryUnselectedDrawable="@drawable/bg_category_unselected"
+        app:ITWingWallpaperCategorySelectedColor="@color/white"
+        app:ITWingWallpaperLinkedView="@id/rvWallpapers"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/rvTopTrend" />
+
+    <com.itwingtech.itwingsdk.wallpapers.ITWingWallpapersView
+        android:id="@+id/rvWallpapers"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:clipToPadding="false"
+        android:overScrollMode="never"
+        android:paddingTop="15dp"
+        android:paddingBottom="15dp"
+        app:ITWingWallpaperItemBackgroundColor="@color/wallpaper_card"
+        app:ITWingWallpaperItemLayout="@layout/item_wallpaper_grid"
+        app:ITWingWallpaperItemStrokeColor="@color/colorPrimary"
+        app:ITWingWallpaperPlacement="wallpapers"
+        app:ITWingWallpaperPremiumUnlockPlacement="rewarded"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/rvCategories" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

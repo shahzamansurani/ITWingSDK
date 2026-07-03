@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:theme="@style/RoundedWallpaperImage">
+
+    <com.google.android.material.imageview.ShapeableImageView
+        android:id="@+id/itwing_wallpaper_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        app:shapeAppearanceOverlay="@style/RoundedWallpaperImage" />
+
+    <FrameLayout
+        android:id="@+id/itwing_wallpaper_title_layout"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/_25sdp"
+        android:layout_gravity="bottom"
+        android:background="#99000000">
+
+        <TextView
+            android:id="@+id/itwing_wallpaper_title"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="1"
+            android:text="Name"
+            android:padding="@dimen/_5sdp"
+            android:textColor="@android:color/white"
+            android:textSize="@dimen/_10ssp"
+            android:textStyle="bold" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/itwing_wallpaper_premium"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="8dp"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="4dp"
+        android:text="PREMIUM"
+        android:textColor="@android:color/white"
+        android:textSize="10sp"
+        android:textStyle="bold" />
+
+</FrameLayout>

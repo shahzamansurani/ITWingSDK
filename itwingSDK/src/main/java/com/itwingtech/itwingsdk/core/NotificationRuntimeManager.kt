@@ -22,6 +22,7 @@ import androidx.core.content.edit
 import com.google.firebase.messaging.FirebaseMessaging
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.data.ConfigRepository
+import com.itwingtech.itwingsdk.ui.ITWingInAppNotificationDialog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,7 +30,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal object NotificationRuntimeManager {
@@ -41,14 +44,25 @@ internal object NotificationRuntimeManager {
     private const val KEY_PENDING_OPENED_IDS = "pending_opened_ids"
     private const val KEY_SHOWN_NOTIFICATION_IDS = "shown_notification_ids"
     private const val KEY_OPENED_NOTIFICATION_IDS = "opened_notification_ids"
+    private const val KEY_IN_APP_HANDLED_NOTIFICATION_IDS = "in_app_handled_notification_ids"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val started = AtomicBoolean(false)
+    private val syncInFlight = AtomicBoolean(false)
     private val shownIds = ConcurrentHashMap.newKeySet<String>()
     private var repository: ConfigRepository? = null
     private var appContext: Context? = null
     private var config: NotificationConfig = NotificationConfig()
+    private val pendingInAppItems = ConcurrentHashMap<String, JSONObject>()
+
+    private fun isSdkFlowActivity(activity: Activity): Boolean {
+        return activity.javaClass.name in setOf(
+            "com.itwingtech.itwingsdk.flow.ITWingFlowSplashActivity",
+            "com.itwingtech.itwingsdk.flow.ITWingFlowOnboardingActivity",
+            "com.itwingtech.itwingsdk.flow.ITWingFlowTermsActivity"
+        )
+    }
 
     fun configure(activity: Activity, sdkConfig: ITWingConfig, repository: ConfigRepository? = null) {
         val notifications = sdkConfig.notifications
@@ -92,6 +106,7 @@ internal object NotificationRuntimeManager {
                 SDKTelemetry.recordNonFatal(it, mapOf("operation" to "notification_device_register"))
             }
             syncNow()
+            mainHandler.postDelayed({ onForegroundActivityAvailable() }, 750L)
             flushPendingEvents()
         }
         if (started.compareAndSet(false, true)) {
@@ -145,6 +160,7 @@ internal object NotificationRuntimeManager {
         val context = appContext ?: return
         val notifications = config
         if (!notifications.enabled) return
+        if (!syncInFlight.compareAndSet(false, true)) return
 
         scope.launch {
             runCatching {
@@ -153,9 +169,16 @@ internal object NotificationRuntimeManager {
                 for (index in 0 until items.length()) {
                     val item = items.optJSONObject(index) ?: continue
                     val id = item.optString("id").takeIf { it.isNotBlank() } ?: continue
-                    if (wasNotificationHandled(context, id)) continue
+                    if (wasNotificationHandled(context, id) || wasInAppNotificationHandled(context, id)) continue
                     if (!shownIds.add(id)) continue
-                    showNotification(context, item)
+                    val displayedInApp = showInAppNotificationIfPossible(item)
+                    if (!displayedInApp && shouldPostOsNotification(item)) {
+                        showNotification(context, item)
+                    } else if (!displayedInApp && isInAppOnly(item)) {
+                        pendingInAppItems[id] = item
+                        shownIds.remove(id)
+                        continue
+                    }
                     runCatching { repo.reportNotificationEvent(id, "delivered") }
                     SDKTelemetry.track(
                         "notification_delivered",
@@ -163,13 +186,41 @@ internal object NotificationRuntimeManager {
                             "notification_id" to id,
                             "has_image" to item.optString("image_url").isNotBlank(),
                             "has_deeplink" to item.optString("deep_link").isNotBlank(),
+                            "presentation" to if (displayedInApp) "in_app_dialog" else "os_notification",
                         ),
                     )
                 }
             }.onFailure {
                 SDKTelemetry.recordNonFatal(it, mapOf("operation" to "notification_sync"))
+            }.also {
+                syncInFlight.set(false)
             }
         }
+    }
+
+    fun onForegroundActivityAvailable() {
+        val context = appContext
+        if (context != null && pendingInAppItems.isNotEmpty()) {
+            pendingInAppItems.entries.toList().forEach { (id, item) ->
+                if (wasNotificationHandled(context, id) || wasInAppNotificationHandled(context, id)) {
+                    pendingInAppItems.remove(id)
+                    shownIds.remove(id)
+                    return@forEach
+                }
+                if (shownIds.add(id)) {
+                    val displayed = showInAppNotificationIfPossible(item)
+                    if (displayed) {
+                        pendingInAppItems.remove(id)
+                        repository?.let { repo ->
+                            scope.launch { runCatching { repo.reportNotificationEvent(id, "delivered") } }
+                        }
+                    } else {
+                        shownIds.remove(id)
+                    }
+                }
+            }
+        }
+        syncNow()
     }
 
     fun reportOpened(notificationId: String?) {
@@ -377,6 +428,15 @@ internal object NotificationRuntimeManager {
             prefs.getStringSet(KEY_SHOWN_NOTIFICATION_IDS, emptySet()).orEmpty().contains(id)
     }
 
+    private fun wasInAppNotificationHandled(context: Context, id: String): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getStringSet(KEY_IN_APP_HANDLED_NOTIFICATION_IDS, emptySet()).orEmpty().contains(id)
+    }
+
+    private fun markInAppNotificationHandled(context: Context, id: String) {
+        storeBoundedSet(context, KEY_IN_APP_HANDLED_NOTIFICATION_IDS, id)
+    }
+
     private fun markNotificationShown(context: Context, id: String) {
         storeBoundedSet(context, KEY_SHOWN_NOTIFICATION_IDS, id)
     }
@@ -384,6 +444,110 @@ internal object NotificationRuntimeManager {
     private fun markNotificationOpened(context: Context, id: String) {
         storeBoundedSet(context, KEY_OPENED_NOTIFICATION_IDS, id)
         storeBoundedSet(context, KEY_SHOWN_NOTIFICATION_IDS, id)
+    }
+
+//    private fun showInAppNotificationIfPossible(item: JSONObject): Boolean {
+//        val context = appContext ?: return false
+//        if (!item.allowsInAppDialog()) return false
+//        val id = item.optString("id").takeIf { it.isNotBlank() } ?: return false
+//        if (wasInAppNotificationHandled(context, id)) return false
+//        val activity = ITWingSDK.foregroundActivityOrNull() ?: return false
+//        val showDialog = {
+//            ITWingInAppNotificationDialog.show(
+//                activity = activity,
+//                item = item,
+//                primaryColor = ITWingSDK.sdkPrimaryColorInt(),
+//            ) { notificationId ->
+//                markInAppNotificationHandled(context, notificationId)
+//                reportOpened(notificationId)
+//            }
+//        }
+//        if (Looper.myLooper() == Looper.getMainLooper()) {
+//            return showDialog()
+//        }
+//
+//        val latch = CountDownLatch(1)
+//        val shown = AtomicBoolean(false)
+//        mainHandler.post {
+//            shown.set(showDialog())
+//            latch.countDown()
+//        }
+//        latch.await(1500, TimeUnit.MILLISECONDS)
+//        return shown.get()
+//    }
+
+    private fun showInAppNotificationIfPossible(item: JSONObject): Boolean {
+        val context = appContext ?: return false
+        if (!item.allowsInAppDialog()) return false
+
+        val id = item.optString("id").takeIf { it.isNotBlank() } ?: return false
+        if (wasInAppNotificationHandled(context, id)) return false
+
+        // Do not show during SDK splash/onboarding/terms flow
+        if (!ITWingSDK.canShowInAppNotificationsNow()) {
+            pendingInAppItems[id] = item
+            shownIds.remove(id)
+            return false
+        }
+
+        val activity = ITWingSDK.foregroundActivityOrNull() ?: return false
+
+        val showDialog = {
+            ITWingInAppNotificationDialog.show(
+                activity = activity,
+                item = item,
+                primaryColor = ITWingSDK.sdkPrimaryColorInt(),
+            ) { notificationId ->
+                markInAppNotificationHandled(context, notificationId)
+                reportOpened(notificationId)
+            }
+        }
+
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return showDialog()
+        }
+
+        val latch = CountDownLatch(1)
+        var shown = false
+
+        mainHandler.post {
+            shown = showDialog()
+            latch.countDown()
+        }
+
+        latch.await(2, TimeUnit.SECONDS)
+        return shown
+    }
+
+    private fun JSONObject.allowsInAppDialog(): Boolean {
+        val payload = optJSONObject("data") ?: JSONObject()
+        if (payload.deliveryType() == "push") return false
+        val value = payload.optString("in_app_dialog")
+            .ifBlank { payload.optString("show_in_app") }
+            .ifBlank { payload.optString("in_app") }
+        return !value.equals("false", ignoreCase = true) &&
+            value != "0" &&
+            !value.equals("off", ignoreCase = true) &&
+            !value.equals("no", ignoreCase = true)
+    }
+
+    private fun shouldPostOsNotification(item: JSONObject): Boolean {
+        val payload = item.optJSONObject("data") ?: JSONObject()
+        return payload.deliveryType() != "in_app"
+    }
+
+    private fun isInAppOnly(item: JSONObject): Boolean {
+        val payload = item.optJSONObject("data") ?: JSONObject()
+        return payload.deliveryType() == "in_app"
+    }
+
+    private fun JSONObject.deliveryType(): String {
+        val value = optString("notification_type")
+            .ifBlank { optString("_notification_type") }
+            .ifBlank { optString("delivery_type") }
+            .trim()
+            .lowercase()
+        return value.takeIf { it in setOf("push", "in_app", "both") } ?: "both"
     }
 
     private fun storeBoundedSet(context: Context, key: String, id: String) {

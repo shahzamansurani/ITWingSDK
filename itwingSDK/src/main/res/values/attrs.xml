@@ -36,4 +36,108 @@
         <attr name="ITWingPremiumShowRestore" format="boolean" />
     </declare-styleable>
 
+    <declare-styleable name="ITWingWallpapersView">
+        <attr name="ITWingWallpaperPlacement" format="string" />
+        <attr name="ITWingWallpaperColumns" format="integer" />
+        <attr name="ITWingWallpaperHorizontal" format="boolean" />
+        <attr name="ITWingWallpaperLimit" format="integer" />
+        <attr name="ITWingWallpaperTrendingLimit" format="integer" />
+        <attr name="ITWingWallpaperSort" format="string" />
+        <attr name="ITWingWallpaperPremiumUnlockPlacement" format="string" />
+        <attr name="ITWingWallpaperTopTrending" format="boolean" />
+        <attr name="ITWingWallpaperItemWidth" format="dimension" />
+        <attr name="ITWingWallpaperItemHeight" format="dimension" />
+        <attr name="ITWingWallpaperItemSpacing" format="dimension" />
+        <attr name="ITWingWallpaperCornerRadius" format="dimension" />
+        <attr name="ITWingWallpaperItemWidthDp" format="integer" />
+        <attr name="ITWingWallpaperItemHeightDp" format="integer" />
+        <attr name="ITWingWallpaperItemSpacingDp" format="integer" />
+        <attr name="ITWingWallpaperCornerRadiusDp" format="integer" />
+        <attr name="ITWingWallpaperShowTitle" format="boolean" />
+        <attr name="ITWingWallpaperTitleTextColor" format="color" />
+        <attr name="ITWingWallpaperMutedTextColor" format="color" />
+        <attr name="ITWingWallpaperTitlePosition">
+            <enum name="top" value="0" />
+            <enum name="center" value="1" />
+            <enum name="bottom" value="2" />
+            <enum name="outside_bottom" value="3" />
+        </attr>
+        <attr name="ITWingWallpaperPremiumMode">
+            <enum name="text" value="0" />
+            <enum name="icon" value="1" />
+            <enum name="hidden" value="2" />
+        </attr>
+        <attr name="ITWingWallpaperPremiumColor" format="color" />
+        <attr name="ITWingWallpaperPremiumTextColor" format="color" />
+        <attr name="ITWingWallpaperPremiumIcon" format="reference" />
+        <attr name="ITWingWallpaperPremiumIconTint" format="color" />
+        <attr name="ITWingWallpaperItemBackgroundColor" format="color" />
+        <attr name="ITWingWallpaperItemStrokeColor" format="color" />
+        <attr name="ITWingWallpaperItemLayout" format="reference" />
+    </declare-styleable>
+
+    <declare-styleable name="ITWingWallpaperCategoriesView">
+        <attr name="ITWingWallpaperPlacement" />
+        <attr name="ITWingWallpaperCategoryPlacement" format="string" />
+        <attr name="ITWingWallpaperCategoryColumns" format="integer" />
+        <attr name="ITWingWallpaperCategoryHorizontal" format="boolean" />
+        <attr name="ITWingWallpaperLinkedView" format="reference" />
+        <attr name="ITWingWallpaperCategoryItemWidth" format="dimension" />
+        <attr name="ITWingWallpaperCategoryItemHeight" format="dimension" />
+        <attr name="ITWingWallpaperCategorySelectedDrawable" format="reference" />
+        <attr name="ITWingWallpaperCategoryUnselectedDrawable" format="reference" />
+        <attr name="ITWingWallpaperCategoryItemWidthDp" format="integer" />
+        <attr name="ITWingWallpaperCategoryItemHeightDp" format="integer" />
+        <attr name="ITWingWallpaperCategorySelectedColor" format="color" />
+        <attr name="ITWingWallpaperCategoryTextColor" format="color" />
+        <attr name="ITWingWallpaperCategoryMutedTextColor" format="color" />
+        <attr name="ITWingWallpaperCategoryShowTitle" format="boolean" />
+        <attr name="ITWingWallpaperCategoryTextPosition">
+            <enum name="top" value="0" />
+            <enum name="center" value="1" />
+            <enum name="bottom" value="2" />
+            <enum name="outside_bottom" value="3" />
+        </attr>
+        <attr name="ITWingWallpaperCategoryItemLayout" format="reference" />
+        <attr name="ITWingWallpaperCategoryDisplayMode">
+            <enum name="text" value="0" />
+            <enum name="image" value="1" />
+            <enum name="both" value="2" />
+        </attr>
+    </declare-styleable>
+
+    <declare-styleable name="ITWingMediaItemsView">
+        <attr name="ITWingMediaPlacement" format="string" />
+        <attr name="ITWingMediaColumns" format="integer" />
+        <attr name="ITWingMediaHorizontal" format="boolean" />
+        <attr name="ITWingMediaLimit" format="integer" />
+        <attr name="ITWingMediaTopTrending" format="boolean" />
+        <attr name="ITWingMediaShowTitle" format="boolean" />
+        <attr name="ITWingMediaItemLayout" format="reference" />
+        <attr name="ITWingMediaPremiumUnlockPlacement" format="string" />
+        <attr name="ITWingMediaPremiumMode">
+            <enum name="text" value="0" />
+            <enum name="icon" value="1" />
+            <enum name="both" value="2" />
+        </attr>
+        <attr name="ITWingMediaPremiumIcon" format="reference" />
+        <attr name="ITWingMediaPremiumIconTint" format="color" />
+    </declare-styleable>
+
+    <declare-styleable name="ITWingMediaCategoriesView">
+        <attr name="ITWingMediaPlacement" />
+        <attr name="ITWingMediaCategoryColumns" format="integer" />
+        <attr name="ITWingMediaCategoryHorizontal" format="boolean" />
+        <attr name="ITWingMediaLinkedView" format="reference" />
+        <attr name="ITWingMediaCategoryItemLayout" format="reference" />
+        <attr name="ITWingMediaCategoryDisplayMode">
+            <enum name="text" value="0" />
+            <enum name="image" value="1" />
+            <enum name="both" value="2" />
+        </attr>
+        <attr name="ITWingMediaCategoryShowTitle" format="boolean" />
+        <attr name="ITWingMediaCategorySelectedDrawable" format="reference" />
+        <attr name="ITWingMediaCategoryUnselectedDrawable" format="reference" />
+    </declare-styleable>
+
 </resources>

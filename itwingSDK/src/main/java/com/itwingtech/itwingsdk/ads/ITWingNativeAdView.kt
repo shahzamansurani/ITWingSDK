@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.Gravity.CENTER
 import android.widget.RelativeLayout
@@ -42,6 +43,12 @@ class ITWingNativeAdView @JvmOverloads constructor(
 
     private var isLoadPosted =
         false
+
+    private var lastAutoLoadAtMs =
+        0L
+
+    private val minAutoReloadMs =
+        60_000L
 
     private val nativeContainer =
         RelativeLayout(context).apply {
@@ -238,14 +245,14 @@ class ITWingNativeAdView @JvmOverloads constructor(
         isDestroyed =
             false
 
-        postLoadAd()
+        postLoadAd(force = false)
     }
 
     fun loadAd() {
-        postLoadAd()
+        postLoadAd(force = true)
     }
 
-    private fun postLoadAd() {
+    private fun postLoadAd(force: Boolean = false) {
         runOnMain {
 
             if (
@@ -276,6 +283,10 @@ class ITWingNativeAdView @JvmOverloads constructor(
                         ?: return@post
 
                 if (!activity.isUsable()) {
+                    return@post
+                }
+
+                if (!force && !canAutoLoad()) {
                     return@post
                 }
 
@@ -321,8 +332,20 @@ class ITWingNativeAdView @JvmOverloads constructor(
             isAttachedToWindow &&
             !isDestroyed
         ) {
-            postLoadAd()
+            postLoadAd(force = false)
         }
+    }
+
+    private fun canAutoLoad(): Boolean {
+        if (!ITWingSDK.isReady()) {
+            return true
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastAutoLoadAtMs < minAutoReloadMs) {
+            return false
+        }
+        lastAutoLoadAtMs = now
+        return true
     }
 
     private fun runOnMain(

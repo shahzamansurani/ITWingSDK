@@ -93,7 +93,7 @@ class RewardedInterstitialManager(
             return
         }
 
-        if (!frequency.canShow(placement, countTrigger = true)) {
+        if (!frequency.canShow(placement)) {
             AdEventTracker.log("ad_frequency_capped", placement)
             AdFailureDialog.show(activity, config.adPrimaryColor(), "This ad reached its display interval or frequency limit. Please try again later.")
             return
@@ -104,11 +104,11 @@ class RewardedInterstitialManager(
             return
         }
 
-        AdEventTracker.log("ad_requested", placement)
         if (customRenderer.canRender(placement)) {
             RewardedIntroDialog.show(activity, placement, config.adPrimaryColor(), onSkip = {
                 AdEventTracker.log("ad_opt_out", placement)
             }) {
+                AdEventTracker.log("ad_requested", placement)
                 val customRewardEarned = AtomicBoolean(false)
                 val shown = customRenderer.show(activity, placement, reward = {
                     AdEventTracker.log("ad_reward_earned", placement)
@@ -136,6 +136,7 @@ class RewardedInterstitialManager(
         RewardedIntroDialog.show(activity, placement, config.adPrimaryColor(), onSkip = {
             AdEventTracker.log("ad_opt_out", placement)
         }) {
+            AdEventTracker.log("ad_requested", placement)
             val ad = pollPreloadedAd(placementName)
             if (ad == null) {
                 load(activity, placementName, forceRequest = true)

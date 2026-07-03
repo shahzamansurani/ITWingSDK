@@ -54,6 +54,10 @@
     <string name="itwing_flow_accept_terms">I accept the Terms of Use</string>
     <string name="itwing_flow_accept_required">Please accept the Terms of Use</string>
     <string name="itwing_flow_loading">Loading app configuration</string>
+    <string name="itwing_in_app_notification_badge">Update</string>
+    <string name="itwing_in_app_notification_image">Notification image</string>
+    <string name="itwing_in_app_notification_open">Open</string>
+    <string name="itwing_in_app_notification_ok">Got it</string>
     <string name="app_name">IT Wing Technologies</string>
     <string name="splash_desc">This is IT Wing Official SDK</string>
 </resources>

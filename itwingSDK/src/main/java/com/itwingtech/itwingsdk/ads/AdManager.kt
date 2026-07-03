@@ -50,14 +50,21 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
     /**
      * Rewarded
      */
-    fun showRewarded(activity: Activity, placement: String, onReward: () -> Unit, onComplete: () -> Unit = {}) {
+    fun showRewarded(
+        activity: Activity,
+        placement: String,
+        onReward: () -> Unit,
+        onComplete: () -> Unit = {},
+        onUnavailableOrSkipped: () -> Unit = {},
+    ) {
         if (adsSuppressed()) {
             trackSuppressed("rewarded", placement)
             clearCache()
             AdFailureDialog.show(activity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
+            onUnavailableOrSkipped()
             return
         }
-        rewardedManager.show(activity, placement, onReward, onComplete)
+        rewardedManager.show(activity, placement, onReward, onComplete, onUnavailableOrSkipped)
     }
 
     fun showRewarded(activity: Activity, placement: String, onComplete: () -> Unit = {}) {

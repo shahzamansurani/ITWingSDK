@@ -1,35 +1,20 @@
 package com.itwingtech.itwingsdk.example
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
-import com.itwingtech.itwingsdk.core.ITWingAppFlowOptions
-import com.itwingtech.itwingsdk.core.ITWingOptions
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.example.databinding.ActivityMainBinding
-import java.net.URL
 import kotlin.getValue
 
 class MainActivity : AppCompatActivity() {
     private val binding by lazy { ActivityMainBinding.inflate(layoutInflater) }
-    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            binding.notificationText.text =
-                "Notification permission: ${if (granted) "granted" else "denied"}"
-        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        requestNotificationPermissionIfNeeded()
         bindSdkExamples()
         renderSdkState()
 
@@ -82,6 +67,14 @@ class MainActivity : AppCompatActivity() {
 
         binding.directSubscription.setOnClickListener {
             ITWingSDK.launchSubscriptionPurchase(this, "premium_monthly")
+        }
+
+        binding.openWallpaperDemo.setOnClickListener {
+            startActivity(Intent(this, WallpaperActivity::class.java))
+        }
+
+        binding.openMediaDemo.setOnClickListener {
+            startActivity(Intent(this, MediaLibraryActivity::class.java))
         }
 
         binding.preloadAds.setOnClickListener {
@@ -180,32 +173,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showInterstitialAndNavigate(placement: String) {
-        ITWingSDK.analytics.track("example_interstitial_requested", mapOf("placement" to placement))
         ITWingSDK.showInterstitial(this, placement) {
-            ITWingSDK.analytics.track(
-                "example_interstitial_callback",
-                mapOf("placement" to placement)
-            )
             openResult("Interstitial: $placement")
         }
     }
 
     private fun showRewardedAndNavigate(placement: String) {
         var rewarded = false
-        ITWingSDK.analytics.track("example_rewarded_requested", mapOf("placement" to placement))
         ITWingSDK.showRewarded(
             activity = this,
             placement = placement,
             onReward = {
                 rewarded = true
                 toast("Reward earned")
-                ITWingSDK.analytics.track("example_reward_earned", mapOf("placement" to placement))
             },
             onComplete = {
-                ITWingSDK.analytics.track(
-                    "example_rewarded_callback",
-                    mapOf("placement" to placement, "rewarded" to rewarded)
-                )
                 openResult("Rewarded: $placement", rewarded)
             },
         )
@@ -213,35 +195,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun showRewardedInterstitialAndNavigate(placement: String) {
         var rewarded = false
-        ITWingSDK.analytics.track(
-            "example_rewarded_interstitial_requested",
-            mapOf("placement" to placement)
-        )
         ITWingSDK.showRewardedInterstitial(
             activity = this,
             placement = placement,
             onReward = {
                 rewarded = true
                 toast("Reward earned")
-                ITWingSDK.analytics.track(
-                    "example_rewarded_interstitial_reward",
-                    mapOf("placement" to placement)
-                )
             },
             onComplete = {
-                ITWingSDK.analytics.track(
-                    "example_rewarded_interstitial_callback",
-                    mapOf("placement" to placement, "rewarded" to rewarded)
-                )
                 openResult("Rewarded interstitial: $placement", rewarded)
             },
         )
     }
 
     private fun showAppOpenAndNavigate(placement: String) {
-        ITWingSDK.analytics.track("example_app_open_requested", mapOf("placement" to placement))
         ITWingSDK.showAppOpen(this, placement) {
-            ITWingSDK.analytics.track("example_app_open_callback", mapOf("placement" to placement))
             openResult("App open: $placement")
         }
     }
@@ -249,17 +217,6 @@ class MainActivity : AppCompatActivity() {
     private fun openResult(source: String, rewarded: Boolean = false) {
         if (isFinishing || isDestroyed) return
         startActivity(Intent(this, ResultActivity::class.java))
-    }
-
-    private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        val granted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!granted) {
-            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
     }
 
     private fun toast(message: String) {

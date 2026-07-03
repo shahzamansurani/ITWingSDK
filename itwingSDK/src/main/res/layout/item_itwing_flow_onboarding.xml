@@ -8,6 +8,7 @@
         android:id="@+id/page_data"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layout_above="@id/itwing_flow_page_ad_container"
         android:layout_alignParentTop="true"
         android:gravity="center_horizontal"
         android:orientation="vertical">
@@ -50,4 +51,11 @@
             android:textSize="@dimen/_11ssp" />
 
     </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/itwing_flow_page_ad_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:visibility="gone" />
 </RelativeLayout>

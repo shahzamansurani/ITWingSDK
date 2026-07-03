@@ -19,4 +19,9 @@
         <item name="android:windowFullscreen">true</item>
     </style>
 
+    <style name="RoundedWallpaperImage">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/_10sdp</item>
+    </style>
+
 </resources>

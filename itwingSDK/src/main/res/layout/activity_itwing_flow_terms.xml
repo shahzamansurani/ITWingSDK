@@ -39,7 +39,7 @@
                 android:padding="@dimen/_5sdp"
                 android:text="@string/itwing_flow_accept_terms"
                 android:textColor="#333333"
-                app:buttonTint="@color/itwing_flow_tint_selector" />
+                app:buttonTint="@drawable/itwing_flow_tint_selector" />
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/itwing_flow_terms_accept"
@@ -55,11 +55,10 @@
 
     </LinearLayout>
 
-    <com.itwingtech.itwingsdk.ads.ITWingBannerView
+    <FrameLayout
         android:id="@+id/itwing_flow_banner_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        app:ITWingBannerPlacement="terms_banner_placement" />
+        android:layout_alignParentBottom="true" />
 
 </RelativeLayout>

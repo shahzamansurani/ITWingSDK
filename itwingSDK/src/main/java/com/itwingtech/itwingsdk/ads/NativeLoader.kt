@@ -39,6 +39,7 @@ class NativeLoader(
 ) {
 
     private val nativeAds = WeakHashMap<ViewGroup, NativeAd>()
+    private val loadTokens = WeakHashMap<ViewGroup, Int>()
 
     /*
     |--------------------------------------------------------------------------
@@ -53,6 +54,12 @@ class NativeLoader(
         nativeTypeOverride: NativeType? = null,
         shimmerView: View? = null,
     ) {
+        if (!container.isAttachedToWindow) {
+            destroy(container)
+            return
+        }
+
+        val token = nextToken(container)
 
         val config =
             configProvider()
@@ -114,7 +121,8 @@ class NativeLoader(
                 container = container,
                 ad = customAd,
                 type = resolvedNativeType,
-                loadingView = loadingView
+                loadingView = loadingView,
+                token = token
             )
 
             return
@@ -174,7 +182,8 @@ class NativeLoader(
                             if (
                                 activity.isFinishing ||
                                 activity.isDestroyed ||
-                                !container.isAttachedToWindow
+                                !container.isAttachedToWindow ||
+                                !isCurrentLoad(container, token)
                             ) {
                                 nativeAd.destroy()
                                 return@runOnUiThread
@@ -236,7 +245,11 @@ class NativeLoader(
                         adError: LoadAdError
                     ) {
 
-                        activity.runOnUiThread {
+                            activity.runOnUiThread {
+
+                            if (!isCurrentLoad(container, token)) {
+                                return@runOnUiThread
+                            }
 
                             stopShimmer(
                                 loadingView
@@ -256,9 +269,9 @@ class NativeLoader(
 
         } catch (_: Exception) {
 
-            stopShimmer(
-                loadingView
-            )
+            if (!isCurrentLoad(container, token)) return
+
+            stopShimmer(loadingView)
 
             container.visibility =
                 View.GONE
@@ -284,6 +297,9 @@ class NativeLoader(
         } else {
             val ad = synchronized(nativeAds) { nativeAds.remove(container) }
             runCatching { ad?.destroy() }
+            synchronized(loadTokens) {
+                loadTokens.remove(container)
+            }
         }
 
         container?.let {
@@ -786,7 +802,7 @@ class NativeLoader(
         activity.runOnUiThread {
             runCatching {
                 imageView?.let {
-                    Glide.with(activity)
+                    Glide.with(it)
                         .load(url)
                         .fitCenter()
                         .into(it)
@@ -917,7 +933,8 @@ class NativeLoader(
         container: ViewGroup,
         ad: CustomAdConfig,
         type: NativeType,
-        loadingView: View?
+        loadingView: View?,
+        token: Int
     ) {
 
         val media = ad.mediaUrl()
@@ -933,7 +950,8 @@ class NativeLoader(
                 if (
                     activity.isFinishing ||
                     activity.isDestroyed ||
-                    !container.isAttachedToWindow
+                    !container.isAttachedToWindow ||
+                    !isCurrentLoad(container, token)
                 ) {
                     stopShimmer(loadingView)
                     return@runOnUiThread
@@ -965,7 +983,8 @@ class NativeLoader(
                 if (
                     activity.isFinishing ||
                     activity.isDestroyed ||
-                    !container.isAttachedToWindow
+                    !container.isAttachedToWindow ||
+                    !isCurrentLoad(container, token)
                 ) {
                     stopShimmer(loadingView)
                     return@runOnUiThread
@@ -991,6 +1010,20 @@ class NativeLoader(
             }
 
         }, 650)
+    }
+
+    private fun nextToken(container: ViewGroup): Int {
+        return synchronized(loadTokens) {
+            val next = (loadTokens[container] ?: 0) + 1
+            loadTokens[container] = next
+            next
+        }
+    }
+
+    private fun isCurrentLoad(container: ViewGroup, token: Int): Boolean {
+        return synchronized(loadTokens) {
+            loadTokens[container] == token
+        }
     }
 
     private fun releaseMediaViews(

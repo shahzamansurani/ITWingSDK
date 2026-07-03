@@ -31,6 +31,7 @@ import androidx.viewpager2.widget.ViewPager2
 import com.airbnb.lottie.LottieAnimationView
 import com.bumptech.glide.Glide
 import com.itwingtech.itwingsdk.R
+import com.itwingtech.itwingsdk.ads.InlineAdSafetyGate
 import com.itwingtech.itwingsdk.ads.ITWingBannerView
 import com.itwingtech.itwingsdk.ads.ITWingNativeAdView
 import com.itwingtech.itwingsdk.core.ITWingAppFlowOptions
@@ -71,7 +72,9 @@ class ITWingFlowSplashActivity : ComponentActivity() {
                     renderSplash()
                 }
                 current.listener?.onReady()
-                if (shouldShowStartupScreens() || splashAdFormat() in setOf("none", "no_ad", "disabled")) {
+                if (!flowEnabled("flow_splash", current.flowOptions.showSplash)) {
+                    openNextScreen()
+                } else if (shouldShowStartupScreens() || splashAdFormat() in setOf("none", "no_ad", "disabled")) {
                     continueAfterUpdateCheckWithDelay()
                 } else {
                     ITWingSDK.showSplash(this@ITWingFlowSplashActivity) {
@@ -239,10 +242,10 @@ class ITWingFlowSplashActivity : ComponentActivity() {
         val current = session ?: return false
         val prefs = flowPrefs()
         val pages = resolvePages(current.flowOptions)
-        val shouldShowOnboarding = current.flowOptions.showOnboarding &&
+        val shouldShowOnboarding = flowEnabled("flow_onboarding", current.flowOptions.showOnboarding) &&
             pages.isNotEmpty() &&
             !prefs.getBoolean(KEY_TERMS_ACCEPTED, false)
-        val shouldShowTerms = current.flowOptions.requireTerms &&
+        val shouldShowTerms = flowEnabled("flow_terms", current.flowOptions.requireTerms) &&
             !prefs.getBoolean(KEY_TERMS_ACCEPTED, false)
         return shouldShowOnboarding || shouldShowTerms
     }
@@ -259,15 +262,18 @@ class ITWingFlowSplashActivity : ComponentActivity() {
         val current = session ?: return
         val prefs = flowPrefs()
         val pages = resolvePages(current.flowOptions)
-        val shouldShowOnboarding = current.flowOptions.showOnboarding &&
+        val shouldShowOnboarding = flowEnabled("flow_onboarding", current.flowOptions.showOnboarding) &&
             pages.isNotEmpty() &&
             !prefs.getBoolean(KEY_TERMS_ACCEPTED, false)
-        val shouldShowTerms = current.flowOptions.requireTerms &&
+        val shouldShowTerms = flowEnabled("flow_terms", current.flowOptions.requireTerms) &&
             !prefs.getBoolean(KEY_TERMS_ACCEPTED, false)
 
         val opensMain = !shouldShowOnboarding && !shouldShowTerms
         val target = when {
-            shouldShowOnboarding -> Intent(this, ITWingFlowOnboardingActivity::class.java)
+            shouldShowOnboarding -> {
+                InlineAdSafetyGate.bypassNextActivity(ITWingFlowOnboardingActivity::class.java.name)
+                Intent(this, ITWingFlowOnboardingActivity::class.java)
+            }
             shouldShowTerms -> Intent(this, ITWingFlowTermsActivity::class.java)
             else -> mainIntent(current)
         }
@@ -296,7 +302,7 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
     private lateinit var nextButton: Button
     private lateinit var backButton: ImageView
     private lateinit var dots: LinearLayout
-    private lateinit var bottomNativeAd: ITWingNativeAdView
+    private lateinit var bottomAdContainer: FrameLayout
     private var pages: List<ITWingOnboardingPage> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -325,23 +331,24 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
         nextButton = findViewById(R.id.itwing_flow_next)
         backButton = findViewById(R.id.itwing_flow_back)
         dots = findViewById(R.id.itwing_flow_dots)
-        bottomNativeAd = findViewById(R.id.itwing_flow_onboarding_native)
+        bottomAdContainer = findViewById(R.id.itwing_flow_onboarding_ad_container)
 
         val primary = primaryColor()
         nextButton.backgroundTintList = ColorStateList.valueOf(primary)
         nextButton.setTextColor(onPrimary(primary))
         backButton.imageTintList = null
 
-        pager.adapter = OnboardingAdapter(pages)
+        val pageAdsEnabled = onboardingAdScope(current.flowOptions) == "page"
+        pager.adapter = OnboardingAdapter(pages, pageAdsEnabled)
         dots.post { renderDots(0) }
         backButton.visibility = View.INVISIBLE
-        updateBottomNativeAd(0)
+        updateBottomAd(0)
         pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 renderDots(position)
                 nextButton.text = getString(if (position == pages.lastIndex) R.string.itwing_flow_finish else R.string.itwing_flow_next)
                 backButton.visibility = if (position == 0) View.INVISIBLE else View.VISIBLE
-                updateBottomNativeAd(position)
+                updateBottomAd(position)
             }
         })
         backButton.setOnClickListener {
@@ -356,20 +363,39 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
                 finishOnboarding()
             }
         }
-        attachBanner(flowPlacement("onboarding_banner_placement", current.flowOptions.onboardingBannerPlacement))
+        if (onboardingAdScope(current.flowOptions) == "off") {
+            bottomAdContainer.visibility = View.GONE
+        }
     }
 
-    private fun updateBottomNativeAd(position: Int) {
-        val placement = pages.getOrNull(position)?.nativePlacement?.trim()
-        if (placement.isNullOrBlank()) {
-            bottomNativeAd.visibility = View.GONE
+    private fun updateBottomAd(position: Int) {
+        val current = session ?: return
+        if (onboardingAdScope(current.flowOptions) != "activity") {
+            bottomAdContainer.visibility = View.GONE
             return
         }
-        bottomNativeAd.visibility = View.VISIBLE
-        if (bottomNativeAd.placementName != placement) {
-            bottomNativeAd.placementName = placement
+        val placement = onboardingActivityAdPlacement(current.flowOptions, pages.getOrNull(position))
+        if (placement.isNullOrBlank()) {
+            bottomAdContainer.visibility = View.GONE
+            return
         }
-        bottomNativeAd.loadAd()
+        bottomAdContainer.visibility = View.VISIBLE
+        if (bottomAdContainer.childCount > 0 && bottomAdContainer.getTag(R.id.itwing_flow_onboarding_ad_container) == placement) return
+        bottomAdContainer.removeAllViews()
+        bottomAdContainer.setTag(R.id.itwing_flow_onboarding_ad_container, placement)
+        if (onboardingAdFormat(current.flowOptions, placement) == "banner") {
+            val banner = ITWingBannerView(this)
+            banner.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
+            banner.placementName = placement
+            bottomAdContainer.addView(banner)
+            banner.loadBanner()
+        } else {
+            val nativeAd = ITWingNativeAdView(this)
+            nativeAd.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
+            nativeAd.placementName = placement
+            bottomAdContainer.addView(nativeAd)
+            nativeAd.loadAd()
+        }
     }
 
     private fun renderDots(position: Int) {
@@ -389,7 +415,7 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
 
     private fun finishOnboarding() {
         val current = session ?: return finish()
-        val shouldShowTerms = current.flowOptions.requireTerms &&
+        val shouldShowTerms = flowEnabled("flow_terms", current.flowOptions.requireTerms) &&
             !flowPrefs().getBoolean(KEY_TERMS_ACCEPTED, false)
         val opensMain = !shouldShowTerms
         val target = if (shouldShowTerms) {
@@ -469,7 +495,10 @@ class ITWingFlowTermsActivity : ComponentActivity() {
                 }
             }
         }
-        attachBanner(flowPlacement("terms_banner_placement", current.flowOptions.termsBannerPlacement))
+        attachBottomAd(
+            placement = flowPlacement("terms_banner_placement", current.flowOptions.termsBannerPlacement),
+            preferredFormat = termsAdFormat(current.flowOptions),
+        )
     }
 
     private fun openMain() {
@@ -506,9 +535,12 @@ class ITWingFlowTermsActivity : ComponentActivity() {
 
 private class OnboardingAdapter(
     private val pages: List<ITWingOnboardingPage>,
+    private val pageAdsEnabled: Boolean,
 ) : RecyclerView.Adapter<OnboardingAdapter.Holder>() {
+    override fun getItemViewType(position: Int): Int = pages[position].layoutResId.takeIf { it != 0 } ?: R.layout.item_itwing_flow_onboarding
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
-        return Holder(LayoutInflater.from(parent.context).inflate(R.layout.item_itwing_flow_onboarding, parent, false))
+        return Holder(LayoutInflater.from(parent.context).inflate(viewType, parent, false), pageAdsEnabled)
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
@@ -517,15 +549,17 @@ private class OnboardingAdapter(
 
     override fun getItemCount(): Int = pages.size
 
-    class Holder(view: View) : RecyclerView.ViewHolder(view) {
-        private val image: ImageView = view.findViewById(R.id.itwing_flow_page_image)
-        private val title: TextView = view.findViewById(R.id.itwing_flow_page_title)
-        private val description: TextView = view.findViewById(R.id.itwing_flow_page_description)
+    class Holder(view: View, private val pageAdsEnabled: Boolean) : RecyclerView.ViewHolder(view) {
+        private val image: ImageView? = view.findViewById(R.id.itwing_flow_page_image)
+        private val title: TextView? = view.findViewById(R.id.itwing_flow_page_title)
+        private val description: TextView? = view.findViewById(R.id.itwing_flow_page_description)
+        private val pageAdContainer: FrameLayout? = view.findViewById(R.id.itwing_flow_page_ad_container)
 
         fun bind(page: ITWingOnboardingPage) {
-            title.text = page.title
-            description.text = page.description
+            title?.text = page.title
+            description?.text = page.description
             when {
+                image == null -> Unit
                 page.imageResId != 0 -> image.setImageResource(page.imageResId)
                 !page.imageUrl.isNullOrBlank() -> Glide.with(image)
                     .load(page.imageUrl)
@@ -535,22 +569,53 @@ private class OnboardingAdapter(
                     .into(image)
                 else -> image.setImageResource(R.drawable.itwing_flow_intro_default_1)
             }
+            if (pageAdsEnabled && pageAdContainer != null && !page.nativePlacement.isNullOrBlank()) {
+                pageAdContainer.visibility = View.VISIBLE
+                pageAdContainer.removeAllViews()
+                if (placementFormat(page.nativePlacement) == "banner") {
+                    val banner = ITWingBannerView(pageAdContainer.context)
+                    banner.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
+                    banner.placementName = page.nativePlacement
+                    pageAdContainer.addView(banner)
+                    banner.loadBanner()
+                } else {
+                    val nativeAd = ITWingNativeAdView(pageAdContainer.context)
+                    nativeAd.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
+                    nativeAd.placementName = page.nativePlacement
+                    pageAdContainer.addView(nativeAd)
+                    nativeAd.loadAd()
+                }
+            } else {
+                pageAdContainer?.visibility = View.GONE
+                pageAdContainer?.removeAllViews()
+            }
         }
     }
 }
 
-private fun Activity.attachBanner(placement: String?) {
+private fun Activity.attachBottomAd(placement: String?, preferredFormat: String? = null) {
     if (placement.isNullOrBlank()) return
     val container = findViewById<FrameLayout?>(R.id.itwing_flow_banner_container) ?: return
     container.removeAllViews()
-    val banner = ITWingBannerView(this)
-    banner.layoutParams = FrameLayout.LayoutParams(
-        FrameLayout.LayoutParams.MATCH_PARENT,
-        FrameLayout.LayoutParams.WRAP_CONTENT,
-    )
-    container.addView(banner)
-    banner.placementName = placement
-    banner.loadBanner()
+    if (preferredFormat == "native" || placementFormat(placement) == "native") {
+        val native = ITWingNativeAdView(this)
+        native.layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+        )
+        container.addView(native)
+        native.placementName = placement
+        native.loadAd()
+    } else {
+        val banner = ITWingBannerView(this)
+        banner.layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+        )
+        container.addView(banner)
+        banner.placementName = placement
+        banner.loadBanner()
+    }
 }
 
 private fun applyInsets(root: View) {
@@ -562,7 +627,20 @@ private fun applyInsets(root: View) {
 }
 
 private fun resolvePages(options: ITWingAppFlowOptions): List<ITWingOnboardingPage> {
+    fun hostXmlPages(): List<ITWingOnboardingPage> = options.splashOnboardings.layouts.mapIndexed { index, layout ->
+            ITWingOnboardingPage(
+                title = "",
+                description = "",
+                imageResId = options.onboardingImages.getOrElse(index) { 0 },
+                layoutResId = layout,
+            )
+        }
+
+    val source = onboardingDesignSource()
+    val hostPages = hostXmlPages()
+    if (source == "host_xml" && hostPages.isNotEmpty()) return hostPages
     if (options.onboardingPages.isNotEmpty()) return options.onboardingPages
+
     val remotePages = ITWingSDK.currentConfig().app["onboarding_pages"].asListOfMaps()
         .ifEmpty { ITWingSDK.currentConfig().app["onboarding"].asListOfMaps() }
         .mapNotNull { item ->
@@ -581,25 +659,27 @@ private fun resolvePages(options: ITWingAppFlowOptions): List<ITWingOnboardingPa
             )
         }
     if (remotePages.isNotEmpty()) return remotePages
-    val localImages = options.onboardingImages
-    val defaultTitles = listOf("Powered by IT Wing Technologies", "Remote App Control", "Ads, Analytics & Growth")
-    val defaultDescriptions = listOf(
-        "Launch apps with a reliable SDK platform built by IT Wing Technologies.",
-        "Sync app settings, legal content, startup flow, and media from itwingtech.com.",
-        "Manage ads, subscriptions, notifications, and analytics from one secure dashboard.",
-    )
-    val fallbackImages = listOf(
-        R.drawable.itwing_flow_intro_default_1,
-        R.drawable.itwing_flow_intro_default_2,
-        R.drawable.itwing_flow_intro_default_3,
-    )
-    return (0 until maxOf(3, localImages.size)).map { index ->
+    if ((source == "auto" || source == "host_xml") && hostPages.isNotEmpty()) return hostPages
+    return options.onboardingImages.mapIndexed { index, image ->
         ITWingOnboardingPage(
-            title = defaultTitles.getOrElse(index) { "Welcome" },
-            description = defaultDescriptions.getOrElse(index) { "" },
-            imageResId = localImages.getOrElse(index) { fallbackImages.getOrElse(index) { 0 } },
+            title = "",
+            description = "",
+            imageResId = image,
         )
     }
+}
+
+private fun onboardingDesignSource(): String {
+    val app = ITWingSDK.currentConfig().app
+    val flow = app["start_flow"].safeMap()
+        .ifEmpty { app["app_flow"].safeMap() }
+    return (flow.safeString("onboarding_design_source")
+        ?: appString("onboarding_design_source")
+        ?: "admin_pages")
+        .trim()
+        .lowercase()
+        .takeIf { it in setOf("admin_pages", "host_xml", "auto") }
+        ?: "admin_pages"
 }
 
 private fun Activity.primaryColor(): Int {
@@ -629,6 +709,56 @@ private fun flowPlacement(key: String, fallback: String?): String? {
     if (app.containsKey(key)) return appString(key)
     return fallback
 }
+
+private fun flowEnabled(key: String, fallback: Boolean): Boolean {
+    val app = ITWingSDK.currentConfig().app
+    val flow = app["start_flow"].safeMap()
+        .ifEmpty { app["app_flow"].safeMap() }
+    return (flow[key] ?: app[key]).asBooleanOrNull() ?: fallback
+}
+
+private fun onboardingAdScope(options: ITWingAppFlowOptions): String {
+    val app = ITWingSDK.currentConfig().app
+    val flow = app["start_flow"].safeMap()
+        .ifEmpty { app["app_flow"].safeMap() }
+    val configured = flow.safeString("onboarding_ad_scope")
+        ?: appString("onboarding_ad_scope")
+        ?: options.onboardingAdScope
+    return configured?.trim()?.lowercase()?.takeIf { it in setOf("activity", "page", "off", "none") }
+        ?.let { if (it == "none") "off" else it }
+        ?: "activity"
+}
+
+private fun onboardingActivityAdPlacement(options: ITWingAppFlowOptions, page: ITWingOnboardingPage?): String? {
+    val configured = flowPlacement("onboarding_activity_ad_placement", options.onboardingActivityAdPlacement)
+        ?: flowPlacement("onboarding_banner_placement", options.onboardingBannerPlacement)
+    return configured?.takeIf(String::isNotBlank) ?: page?.nativePlacement
+}
+
+private fun onboardingAdFormat(options: ITWingAppFlowOptions, placement: String): String {
+    val configured = flowPlacement("onboarding_activity_ad_format", options.onboardingActivityAdFormat)
+        ?: appString("onboarding_ad_format")
+    if (!configured.isNullOrBlank()) return configured.trim().lowercase()
+    return placementFormat(placement)
+}
+
+private fun termsAdFormat(options: ITWingAppFlowOptions): String? {
+    val app = ITWingSDK.currentConfig().app
+    val flow = app["start_flow"].safeMap()
+        .ifEmpty { app["app_flow"].safeMap() }
+    val configured = flow.safeString("terms_ad_format")
+        ?: appString("terms_ad_format")
+        ?: placementFormat(options.termsBannerPlacement.orEmpty())
+    return configured.trim().lowercase().takeIf { it in setOf("native", "banner") }
+}
+
+private fun placementFormat(placement: String): String =
+    ITWingSDK.currentConfig().ads.placements
+        .firstOrNull { it.name == placement }
+        ?.format
+        ?.lowercase()
+        ?.takeIf { it in setOf("banner", "native") }
+        ?: "native"
 
 private fun splashStyle(options: ITWingAppFlowOptions): String =
     (options.splashStyle
@@ -698,6 +828,17 @@ private fun Map<*, *>.value(key: String): String? =
 private fun Any?.safeLong(): Long? = when (this) {
     is Number -> toLong()
     is String -> trim().toLongOrNull() ?: trim().toDoubleOrNull()?.toLong()
+    else -> null
+}
+
+private fun Any?.asBooleanOrNull(): Boolean? = when (this) {
+    is Boolean -> this
+    is Number -> toInt() != 0
+    is String -> when (trim().lowercase()) {
+        "1", "true", "yes", "on", "enabled" -> true
+        "0", "false", "no", "off", "disabled" -> false
+        else -> null
+    }
     else -> null
 }
 

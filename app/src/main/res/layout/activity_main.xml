@@ -111,6 +111,18 @@
             android:layout_height="wrap_content"
             android:text="Launch Subscription: premium_monthly" />
 
+        <Button
+            android:id="@+id/openWallpaperDemo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Open Wallpaper Views Demo" />
+
+        <Button
+            android:id="@+id/openMediaDemo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Open Ringtone / Video Views Demo" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

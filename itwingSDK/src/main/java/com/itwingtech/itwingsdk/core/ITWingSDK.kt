@@ -2,6 +2,8 @@ package com.itwingtech.itwingsdk.core
 
 import android.app.Activity
 import android.app.Application
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -23,7 +25,12 @@ import com.itwingtech.itwingsdk.billing.SubscriptionManager
 import com.itwingtech.itwingsdk.data.ConfigRepository
 import com.itwingtech.itwingsdk.ui.ITWingActionDialog
 import com.itwingtech.itwingsdk.ui.ITWingLoadingDialog
+import com.itwingtech.itwingsdk.ui.SdkFeatureErrorDialog
 import com.itwingtech.itwingsdk.updates.InAppUpdateManager
+import com.itwingtech.itwingsdk.wallpapers.ITWingWallpapersCallback
+import com.itwingtech.itwingsdk.wallpapers.toWallpaperResponse
+import com.itwingtech.itwingsdk.media.ITWingMediaCallback
+import com.itwingtech.itwingsdk.media.toMediaResponse
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.itwingtech.itwingsdk.flow.ITWingFlowOnboardingActivity
@@ -106,7 +113,45 @@ object ITWingSDK {
     lateinit var updates: InAppUpdateManager private set
     lateinit var subscriptions: SubscriptionManager private set
 
+    @Volatile
+    private var hostAppActivityReached = false
+
+    @Volatile
+    private var notificationTargetActivityName: String? = null
+
+    internal fun canShowInAppNotificationsNow(): Boolean {
+        val activity = getActiveActivity() ?: return false
+        if (isSdkInternalFlowActivity(activity)) return false
+        val target = notificationTargetActivityName
+        return if (target.isNullOrBlank()) {
+            hostAppActivityReached
+        } else {
+            activity.javaClass.name == target
+        }
+    }
+
+    private fun isSdkInternalFlowActivity(activity: Activity): Boolean {
+        val name = activity.javaClass.name
+        return name.startsWith("com.itwingtech.itwingsdk.flow.") ||
+                name.contains("ITWingFlowSplashActivity") ||
+                name.contains("ITWingFlowOnboardingActivity") ||
+                name.contains("ITWingFlowTermsActivity")
+    }
+
     internal fun currentConfig(): ITWingConfig = config
+
+    internal fun foregroundActivityOrNull(): Activity? = getActiveActivity()
+
+    internal fun sdkPrimaryColorInt(): Int = appPrimaryColorInt()
+
+    internal fun showSdkFeatureError(
+        context: Context,
+        feature: String,
+        reason: String,
+        onRetry: (() -> Unit)? = null,
+    ) {
+        SdkFeatureErrorDialog.show(context.findActivityForSdkDialog() ?: getActiveActivity(), feature, appPrimaryColorInt(), reason, onRetry)
+    }
 
     @JvmStatic
     fun initialize(activity: Activity, apiKey: String, onReady: () -> Unit) {
@@ -114,34 +159,129 @@ object ITWingSDK {
     }
 
     @JvmStatic
-    @JvmOverloads
     fun startAppFlow(
         activity: Activity,
         apiKey: String,
         mainActivity: Class<out Activity>,
-        sdkOptions: ITWingOptions = ITWingOptions(autoApplyResponsiveLayout = true),
-        flowOptions: ITWingAppFlowOptions = ITWingAppFlowOptions(),
+    ) {
+        startAppFlow(
+            activity = activity,
+            apiKey = apiKey,
+            mainActivity = mainActivity,
+            endpoint = null,
+        )
+    }
+
+    @JvmStatic
+    fun startAppFlow(
+        activity: Activity,
+        apiKey: String,
+        mainActivity: Class<out Activity>,
+        config: ITWingStartAppFlowConfig,
+    ) {
+        startAppFlow(
+            activity = activity,
+            apiKey = apiKey,
+            mainActivity = mainActivity,
+            endpoint = config.endpoint,
+            autoApplyResponsiveLayout = config.autoApplyResponsiveLayout,
+            analyticsEnabled = config.analyticsEnabled,
+            bootstrapTimeoutMs = config.bootstrapTimeoutMs,
+            strictSslPinning = config.strictSslPinning,
+            finishCurrent = config.finishCurrent,
+            showSplash = config.showSplash,
+            showOnboarding = config.showOnboarding,
+            requireTerms = config.requireTerms,
+            splashStyle = config.splashStyle,
+            splash_bg = config.splashBackground,
+            splash_title = config.splashTitle,
+            splash_sub_title = config.splashSubtitle,
+            splash_lottie_anim = config.splashLottie,
+            splash_bg_color = config.splashBackgroundColor,
+            splash_logo = config.splashLogo,
+            splash_onboardings = config.splashOnboardings,
+            onboardingPages = config.onboardingPages,
+            onboardingImages = config.onboardingImages,
+            onboardingBannerPlacement = config.onboardingBannerPlacement,
+            onboardingAdScope = config.onboardingAdScope,
+            onboardingActivityAdPlacement = config.onboardingActivityAdPlacement,
+            onboardingActivityAdFormat = config.onboardingActivityAdFormat,
+            termsBannerPlacement = config.termsBannerPlacement,
+            termsInterstitialPlacement = config.termsInterstitialPlacement,
+            listener = config.listener,
+        )
+    }
+
+    @JvmStatic
+    fun startAppFlow(
+        activity: Activity,
+        apiKey: String,
+        mainActivity: Class<out Activity>,
+        endpoint: String? = null,
+        autoApplyResponsiveLayout: Boolean = true,
+        analyticsEnabled: Boolean = true,
+        bootstrapTimeoutMs: Long = 4_000,
+        strictSslPinning: Boolean = false,
         finishCurrent: Boolean = true,
+        showSplash: Boolean = true,
+        showOnboarding: Boolean = true,
+        requireTerms: Boolean = true,
+        splashStyle: String? = "app_own",
+        splash_bg: ImageView? = null,
+        splash_title: TextView? = null,
+        splash_sub_title: TextView? = null,
+        splash_lottie_anim: View? = null,
+        splash_bg_color: View? = null,
+        splash_logo: ImageView? = null,
+        splash_onboardings: SplashOnBoardings = SplashOnBoardings(),
+        onboardingPages: List<ITWingOnboardingPage> = emptyList(),
+        onboardingImages: List<Int> = emptyList(),
+        onboardingBannerPlacement: String? = "banner_adaptive",
+        onboardingAdScope: String? = null,
+        onboardingActivityAdPlacement: String? = null,
+        onboardingActivityAdFormat: String? = null,
+        termsBannerPlacement: String? = "banner_adaptive",
+        termsInterstitialPlacement: String? = "interstitial",
         listener: SDKInitListener? = null,
         listner: SDKInitListener? = null,
     ) {
-        val externalListener = listener ?: listner
-        val sessionId = ITWingAppFlowRegistry.put(
-            ITWingAppFlowSession(
-                apiKey = apiKey,
-                sdkOptions = sdkOptions,
-                flowOptions = flowOptions,
-                mainActivityName = mainActivity.name,
-                listener = externalListener,
+        startAppFlow(
+            activity = activity,
+            apiKey = apiKey,
+            mainActivity = mainActivity,
+            splash_bg = splash_bg,
+            splash_title = splash_title,
+            splash_sub_title = splash_sub_title,
+            splash_lottie_anim = splash_lottie_anim,
+            splash_bg_color = splash_bg_color,
+            splash_logo = splash_logo,
+            splash_onboardings = splash_onboardings,
+            endpoint = endpoint,
+            sdkOptions = ITWingOptions(
+                endpoint = endpoint ?: ITWingOptions().endpoint,
+                bootstrapTimeoutMs = bootstrapTimeoutMs,
+                strictSslPinning = strictSslPinning,
+                analyticsEnabled = analyticsEnabled,
+                autoApplyResponsiveLayout = autoApplyResponsiveLayout,
             ),
+            flowOptions = ITWingAppFlowOptions(
+                splashStyle = splashStyle,
+                onboardingImages = onboardingImages,
+                onboardingPages = onboardingPages,
+                onboardingBannerPlacement = onboardingBannerPlacement,
+                termsBannerPlacement = termsBannerPlacement,
+                termsInterstitialPlacement = termsInterstitialPlacement,
+                requireTerms = requireTerms,
+                showOnboarding = showOnboarding,
+                showSplash = showSplash,
+                onboardingAdScope = onboardingAdScope,
+                onboardingActivityAdPlacement = onboardingActivityAdPlacement,
+                onboardingActivityAdFormat = onboardingActivityAdFormat,
+            ),
+            finishCurrent = finishCurrent,
+            listener = listener,
+            listner = listner,
         )
-        activity.startActivity(
-            Intent(activity, ITWingFlowSplashActivity::class.java)
-                .putExtra(ITWingFlowSplashActivity.EXTRA_SESSION_ID, sessionId),
-        )
-        if (finishCurrent) {
-            activity.finish()
-        }
     }
 
     @JvmStatic
@@ -155,6 +295,9 @@ object ITWingSDK {
         splash_lottie_anim: View? = null,
         splash_bg_color: View? = null,
         splash_logo: ImageView? = null,
+        splash_onboardings: SplashOnBoardings = SplashOnBoardings(),
+        endpoint: String? = null,
+        autoApplyResponsiveLayout: Boolean? = null,
         sdkOptions: ITWingOptions = ITWingOptions(autoApplyResponsiveLayout = true),
         flowOptions: ITWingAppFlowOptions = ITWingAppFlowOptions(),
         finishCurrent: Boolean = true,
@@ -162,11 +305,18 @@ object ITWingSDK {
         listner: SDKInitListener? = null,
     ) {
         val externalListener = listener ?: listner
+        notificationTargetActivityName = mainActivity.name
+        hostAppActivityReached = false
+        val effectiveSdkOptions = sdkOptions.copy(
+            endpoint = endpoint ?: sdkOptions.endpoint,
+            autoApplyResponsiveLayout = autoApplyResponsiveLayout ?: sdkOptions.autoApplyResponsiveLayout,
+        )
+        val sessionFlowOptions = effectiveFlowOptions(flowOptions, splash_onboardings)
         val sessionId = ITWingAppFlowRegistry.put(
             ITWingAppFlowSession(
                 apiKey = apiKey,
-                sdkOptions = sdkOptions,
-                flowOptions = flowOptions,
+                sdkOptions = effectiveSdkOptions,
+                flowOptions = sessionFlowOptions,
                 mainActivityName = mainActivity.name,
                 listener = externalListener,
             ),
@@ -194,11 +344,12 @@ object ITWingSDK {
         fun openNext() {
             val prefs = activity.getSharedPreferences("itwing_app_flow", Activity.MODE_PRIVATE)
             val termsAccepted = prefs.getBoolean("terms_accepted", false)
+            val pagesAvailable = hasStartupOnboardingPages(sessionFlowOptions)
             when {
-                flowOptions.showOnboarding && !termsAccepted ->
+                isFlowScreenEnabled("flow_onboarding", sessionFlowOptions.showOnboarding) && pagesAvailable && !termsAccepted ->
                     open(Intent(activity, ITWingFlowOnboardingActivity::class.java))
 
-                flowOptions.requireTerms && !termsAccepted ->
+                isFlowScreenEnabled("flow_terms", sessionFlowOptions.requireTerms) && !termsAccepted ->
                     open(Intent(activity, ITWingFlowTermsActivity::class.java))
 
                 else -> openMain()
@@ -213,7 +364,18 @@ object ITWingSDK {
             }.onFailure { continueAction() }
         }
 
+        fun continueAfterUpdateWithoutDelay() {
+            val continueAction = { mainHandler.post { openNext() } }
+            runCatching {
+                if (::updates.isInitialized) updates.checkBeforeSplash(activity) { continueAction() } else continueAction()
+            }.onFailure { continueAction() }
+        }
+
         fun continueWithSplashAdOrDelay() {
+            if (!isFlowScreenEnabled("flow_splash", sessionFlowOptions.showSplash)) {
+                continueAfterUpdateWithoutDelay()
+                return
+            }
             when (getSplashAdFormat("none").lowercase()) {
                 "none", "no_ad", "disabled" -> continueAfterUpdateAndDelay()
                 else -> showSplash(activity) { openNext() }
@@ -223,24 +385,28 @@ object ITWingSDK {
         fun renderVisibleSplashFromCache() {
             makeSplashFullscreen(activity)
             loadCachedConfigForStartup(activity)
-            applyHostSplashBranding(
-                activity = activity,
-                splashBackground = splash_bg,
-                splashTitle = splash_title,
-                splashSubtitle = splash_sub_title,
-                splashLottie = splash_lottie_anim,
-                splashBackgroundColor = splash_bg_color,
-                splashLogo = splash_logo,
-                flowOptions = flowOptions,
-            )
+            if (isFlowScreenEnabled("flow_splash", sessionFlowOptions.showSplash) && shouldApplyAdminSplashDesign(sessionFlowOptions)) {
+                applyHostSplashBranding(
+                    activity = activity,
+                    splashBackground = splash_bg,
+                    splashTitle = splash_title,
+                    splashSubtitle = splash_sub_title,
+                    splashLottie = splash_lottie_anim,
+                    splashBackgroundColor = splash_bg_color,
+                    splashLogo = splash_logo,
+                    flowOptions = sessionFlowOptions,
+                )
+            }
         }
 
         fun prefetchOnly() {
             prefetchStartupMedia(activity)
         }
 
-        renderVisibleSplashFromCache()
-        initialize(activity, apiKey, sdkOptions, object : SDKInitListener {
+        runCatching { renderVisibleSplashFromCache() }
+            .onFailure { externalListener?.onError(it.message ?: "Startup splash render failed.") }
+        runCatching {
+            initialize(activity, apiKey, effectiveSdkOptions, object : SDKInitListener {
             override fun onConfigLoaded(config: ITWingConfig) {
                 prefetchOnly()
                 externalListener?.onConfigLoaded(config)
@@ -280,7 +446,11 @@ object ITWingSDK {
             override fun onRetry(reason: String) {
                 externalListener?.onRetry(reason)
             }
-        })
+            })
+        }.onFailure {
+            externalListener?.onError(it.message ?: "SDK startup failed.")
+            continueAfterUpdateAndDelay()
+        }
     }
 
     @JvmStatic
@@ -297,6 +467,7 @@ object ITWingSDK {
         splash_lottie_anim: View? = null,
         splash_bg_color: View? = null,
         splash_logo: ImageView? = null,
+        splash_onboardings: SplashOnBoardings = SplashOnBoardings(),
         flowOptions: ITWingAppFlowOptions = ITWingAppFlowOptions(),
         finishCurrent: Boolean = true,
         listener: SDKInitListener? = null,
@@ -312,15 +483,66 @@ object ITWingSDK {
             splash_lottie_anim = splash_lottie_anim,
             splash_bg_color = splash_bg_color,
             splash_logo = splash_logo,
-            sdkOptions = ITWingOptions(
-                endpoint = endpoint,
-                autoApplyResponsiveLayout = autoApplyResponsiveLayout,
-            ),
+            splash_onboardings = splash_onboardings,
+            endpoint = endpoint,
+            autoApplyResponsiveLayout = autoApplyResponsiveLayout,
             flowOptions = flowOptions,
             finishCurrent = finishCurrent,
             listener = listener,
             listner = listner,
         )
+    }
+
+    private fun effectiveFlowOptions(
+        flowOptions: ITWingAppFlowOptions,
+        splashOnboardings: SplashOnBoardings,
+    ): ITWingAppFlowOptions {
+        if (splashOnboardings.layouts.isEmpty()) return flowOptions
+        val hostPages = splashOnboardings.layouts.mapIndexed { index, layout ->
+            ITWingOnboardingPage(
+                title = "",
+                description = "",
+                layoutResId = layout,
+                imageResId = flowOptions.onboardingImages.getOrElse(index) { 0 },
+            )
+        }
+        return flowOptions.copy(
+            splashOnboardings = splashOnboardings,
+            onboardingPages = if (flowOptions.onboardingPages.isEmpty()) hostPages else flowOptions.onboardingPages,
+        )
+    }
+
+    private fun hasStartupOnboardingPages(flowOptions: ITWingAppFlowOptions): Boolean {
+        if (flowOptions.onboardingPages.isNotEmpty()) return true
+        if (flowOptions.splashOnboardings.layouts.isNotEmpty()) return true
+        val app = config.app
+        val remotePages = app["onboarding_pages"] as? List<*>
+        return !remotePages.isNullOrEmpty()
+    }
+
+    private fun isFlowScreenEnabled(key: String, fallback: Boolean): Boolean {
+        val app = config.app
+        val flow = (app["start_flow"] as? Map<*, *>) ?: (app["app_flow"] as? Map<*, *>) ?: emptyMap<Any?, Any?>()
+        return when (val value = flow[key] ?: app[key]) {
+            is Boolean -> value
+            is Number -> value.toInt() != 0
+            is String -> value.trim().lowercase() !in setOf("0", "false", "off", "no", "disabled")
+            else -> fallback
+        }
+    }
+
+    private fun shouldApplyAdminSplashDesign(flowOptions: ITWingAppFlowOptions): Boolean {
+        val app = config.app
+        val flow = (app["start_flow"] as? Map<*, *>) ?: (app["app_flow"] as? Map<*, *>) ?: emptyMap<Any?, Any?>()
+        val style = (
+            flow["splash_design"]
+                ?: flow["splash_style"]
+                ?: app["splash_design"]
+                ?: app["splash_style"]
+                ?: flowOptions.splashStyle
+                ?: "app_own"
+            ).toString().trim().lowercase()
+        return style !in setOf("app_own", "host", "host_app", "own", "none", "off", "disabled")
     }
 
     @JvmStatic
@@ -1062,10 +1284,11 @@ object ITWingSDK {
         activity: Activity,
         placement: String,
         onReward: () -> Unit,
-        onComplete: () -> Unit = {}
+        onComplete: () -> Unit = {},
+        onUnavailableOrSkipped: () -> Unit = {},
     ) =
         runSdkCall("show_rewarded", mapOf("placement" to placement)) {
-            ads.showRewarded(activity, placement, onReward, onComplete)
+            ads.showRewarded(activity, placement, onReward, onComplete, onUnavailableOrSkipped)
         }
 
     @JvmStatic
@@ -1122,6 +1345,236 @@ object ITWingSDK {
                 metadata + mapOf("custom_ad_id" to customAdId)
             )
             runCatching { repository?.submitCustomAdEvent(customAdId, eventType, payload) }
+        }
+    }
+
+    @JvmStatic
+    fun fetchWallpapers(
+        categoryId: String? = null,
+        categorySlug: String? = null,
+        limit: Int = 60,
+        trendingLimit: Int? = null,
+        sort: String? = null,
+        callback: ITWingWallpapersCallback,
+    ) {
+        fetchWallpapers(
+            categoryId = categoryId,
+            categorySlug = categorySlug,
+            limit = limit,
+            trendingLimit = trendingLimit,
+            sort = sort,
+            selectedWallpaperIds = emptyList(),
+            callback = callback,
+        )
+    }
+
+    @JvmStatic
+    fun fetchWallpapers(
+        categoryId: String? = null,
+        categorySlug: String? = null,
+        limit: Int = 60,
+        trendingLimit: Int? = null,
+        sort: String? = null,
+        selectedWallpaperIds: List<String> = emptyList(),
+        callback: ITWingWallpapersCallback,
+    ) {
+        scope.launch {
+            val repo = repository
+            if (repo == null) {
+                callback.onError("ITWingSDK is not initialized.")
+                return@launch
+            }
+            runCatching {
+                repo.fetchWallpapers(
+                    categoryId = categoryId,
+                    categorySlug = categorySlug,
+                    limit = limit,
+                    trendingLimit = trendingLimit,
+                    sort = sort,
+                    selectedWallpaperIds = selectedWallpaperIds,
+                ).toWallpaperResponse()
+            }.onSuccess { response ->
+                callback.onLoaded(response)
+            }.onFailure { throwable ->
+                callback.onError(throwable.toSdkErrorMessage())
+            }
+        }
+    }
+
+    @JvmStatic
+    fun trackWallpaperView(wallpaperId: String, metadata: Map<String, Any?> = emptyMap()) {
+        trackWallpaperEvent(wallpaperId, "view", metadata)
+    }
+
+    @JvmStatic
+    fun trackWallpaperClick(wallpaperId: String, metadata: Map<String, Any?> = emptyMap()) {
+        trackWallpaperEvent(wallpaperId, "click", metadata)
+    }
+
+    @JvmStatic
+    fun trackWallpaperDownload(wallpaperId: String, metadata: Map<String, Any?> = emptyMap()) {
+        trackWallpaperEvent(wallpaperId, "download", metadata)
+    }
+
+    @JvmStatic
+    fun trackWallpaperSet(wallpaperId: String, metadata: Map<String, Any?> = emptyMap()) {
+        trackWallpaperEvent(wallpaperId, "set", metadata)
+    }
+
+    @JvmStatic
+    fun trackWallpaperEvent(
+        wallpaperId: String,
+        eventType: String,
+        metadata: Map<String, Any?> = emptyMap(),
+    ) {
+        if (wallpaperId.isBlank()) return
+        scope.launch {
+            val payload = JSONObject()
+            metadata.forEach { (key, value) -> payload.put(key, value) }
+            analyticsOrNull()?.track(
+                "wallpaper_$eventType",
+                metadata + mapOf("wallpaper_id" to wallpaperId),
+            )
+            runCatching { repository?.submitWallpaperEvent(wallpaperId, eventType, payload) }
+        }
+    }
+
+    @JvmStatic
+    fun fetchRingtones(
+        categoryId: String? = null,
+        categorySlug: String? = null,
+        limit: Int = 60,
+        trendingLimit: Int? = null,
+        sort: String? = null,
+        selectedItemIds: List<String> = emptyList(),
+        callback: ITWingMediaCallback,
+    ) = fetchMediaLibrary(
+        kind = "ringtones",
+        categoryId = categoryId,
+        categorySlug = categorySlug,
+        limit = limit,
+        trendingLimit = trendingLimit,
+        sort = sort,
+        selectedItemIds = selectedItemIds,
+        callback = callback,
+    )
+
+    @JvmStatic
+    fun fetchVideos(
+        categoryId: String? = null,
+        categorySlug: String? = null,
+        limit: Int = 60,
+        trendingLimit: Int? = null,
+        sort: String? = null,
+        selectedItemIds: List<String> = emptyList(),
+        callback: ITWingMediaCallback,
+    ) = fetchMediaLibrary(
+        kind = "videos",
+        categoryId = categoryId,
+        categorySlug = categorySlug,
+        limit = limit,
+        trendingLimit = trendingLimit,
+        sort = sort,
+        selectedItemIds = selectedItemIds,
+        callback = callback,
+    )
+
+    @JvmStatic
+    fun fetchVpnServers(
+        categoryId: String? = null,
+        categorySlug: String? = null,
+        limit: Int = 60,
+        trendingLimit: Int? = null,
+        sort: String? = null,
+        selectedItemIds: List<String> = emptyList(),
+        callback: ITWingMediaCallback,
+    ) = fetchMediaLibrary(
+        kind = "vpn_servers",
+        categoryId = categoryId,
+        categorySlug = categorySlug,
+        limit = limit,
+        trendingLimit = trendingLimit,
+        sort = sort,
+        selectedItemIds = selectedItemIds,
+        callback = callback,
+    )
+
+    @JvmStatic
+    fun fetchMediaLibrary(
+        kind: String,
+        categoryId: String? = null,
+        categorySlug: String? = null,
+        limit: Int = 60,
+        trendingLimit: Int? = null,
+        sort: String? = null,
+        selectedItemIds: List<String> = emptyList(),
+        callback: ITWingMediaCallback,
+    ) {
+        scope.launch {
+            val repo = repository
+            if (repo == null) {
+                callback.onError("ITWingSDK is not initialized.")
+                return@launch
+            }
+            runCatching {
+                repo.fetchMediaLibrary(
+                    kind = kind,
+                    categoryId = categoryId,
+                    categorySlug = categorySlug,
+                    limit = limit,
+                    trendingLimit = trendingLimit,
+                    sort = sort,
+                    selectedItemIds = selectedItemIds,
+                ).toMediaResponse()
+            }.onSuccess { response ->
+                callback.onLoaded(response)
+            }.onFailure { throwable ->
+                callback.onError(throwable.toSdkErrorMessage())
+            }
+        }
+    }
+
+    @JvmStatic
+    fun trackRingtonePlay(itemId: String, metadata: Map<String, Any?> = emptyMap()) {
+        trackMediaLibraryEvent("ringtones", itemId, "play", metadata)
+    }
+
+    @JvmStatic
+    fun trackVideoPlay(itemId: String, metadata: Map<String, Any?> = emptyMap()) {
+        trackMediaLibraryEvent("videos", itemId, "play", metadata)
+    }
+
+    @JvmStatic
+    fun trackVpnServerClick(itemId: String, metadata: Map<String, Any?> = emptyMap()) {
+        trackMediaLibraryEvent("vpn_servers", itemId, "click", metadata)
+    }
+
+    @JvmStatic
+    fun trackVpnServerConnect(itemId: String, metadata: Map<String, Any?> = emptyMap()) {
+        trackMediaLibraryEvent("vpn_servers", itemId, "connect", metadata)
+    }
+
+    @JvmStatic
+    fun trackVpnServerPing(itemId: String, metadata: Map<String, Any?> = emptyMap()) {
+        trackMediaLibraryEvent("vpn_servers", itemId, "ping", metadata)
+    }
+
+    @JvmStatic
+    fun trackMediaLibraryEvent(
+        kind: String,
+        itemId: String,
+        eventType: String,
+        metadata: Map<String, Any?> = emptyMap(),
+    ) {
+        if (kind.isBlank() || itemId.isBlank()) return
+        scope.launch {
+            val payload = JSONObject()
+            metadata.forEach { (key, value) -> payload.put(key, value) }
+            analyticsOrNull()?.track(
+                "${kind.trimEnd('s')}_$eventType",
+                metadata + mapOf("media_kind" to kind, "media_item_id" to itemId),
+            )
+            runCatching { repository?.submitMediaLibraryEvent(kind, itemId, eventType, payload) }
         }
     }
 
@@ -1377,7 +1830,6 @@ object ITWingSDK {
 
         subscribeButton?.setOnClickListener {
             if (isAdFree()) {
-                showToast(activeText)
                 mainHandler.post(updateUi)
                 return@setOnClickListener
             }
@@ -1386,7 +1838,7 @@ object ITWingSDK {
             showPurchaseDialog(activity) { result ->
                 mainHandler.post {
                     updateUi()
-                    showToast(messageFor(result), long = true)
+//                    showToast(messageFor(result), long = true)
                 }
             }
         }
@@ -1396,7 +1848,7 @@ object ITWingSDK {
             restorePurchases { restored ->
                 mainHandler.post {
                     updateUi()
-                    showToast(if (restored) "Purchase restored" else "No active purchase found")
+//                    showToast(if (restored) "Purchase restored" else "No active purchase found")
                 }
             }
         }
@@ -1464,24 +1916,6 @@ object ITWingSDK {
         else -> kind
     }
 
-//    private fun registerLifecycleAutomation(application: Application) {
-//        if (lifecycleTrackingRegistered) return
-//        lifecycleTrackingRegistered = true
-//        application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
-//            override fun onActivityResumed(activity: Activity) {
-//                activeActivity = activity
-//                if (::analytics.isInitialized) {
-//                    analytics.track("screen_view", mapOf("screen" to activity.javaClass.simpleName))
-//                }
-//            }
-//            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
-//            override fun onActivityStarted(activity: Activity) {}
-//            override fun onActivityPaused(activity: Activity) {}
-//            override fun onActivityStopped(activity: Activity) {}
-//            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
-//            override fun onActivityDestroyed(activity: Activity) {}
-//        })
-//    }
 
     private fun registerLifecycleAutomation(application: Application) {
 
@@ -1514,9 +1948,13 @@ object ITWingSDK {
                         NotificationRuntimeManager.reportOpened(notificationId)
                         activity.intent?.removeExtra("itwing_notification_id")
                     }
-                    NotificationRuntimeManager.syncNow()
-                    if (::updates.isInitialized) {
-                        updates.onResume(activity)
+                    //NotificationRuntimeManager.onForegroundActivityAvailable()
+                    if (!isSdkInternalFlowActivity(activity)) {
+                        val target = notificationTargetActivityName
+                        if (target.isNullOrBlank() || activity.javaClass.name == target) {
+                            hostAppActivityReached = true
+                            NotificationRuntimeManager.onForegroundActivityAvailable()
+                        }
                     }
 
                     /*
@@ -1844,5 +2282,16 @@ object ITWingSDK {
 
             else -> defaultValue
         }
+    }
+
+    private fun Context.findActivityForSdkDialog(): Activity? {
+        var current: Context? = this
+        while (current is ContextWrapper) {
+            if (current is Activity && !current.isFinishing && !current.isDestroyed) {
+                return current
+            }
+            current = current.baseContext
+        }
+        return null
     }
 }
