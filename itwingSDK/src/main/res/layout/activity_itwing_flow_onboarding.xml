@@ -1,38 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/itwing_flow_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/white"
-    android:fitsSystemWindows="true"
-    android:orientation="vertical">
+    android:background="@android:color/white">
+
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/itwing_flow_view_pager"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
     <ImageView
         android:id="@+id/itwing_flow_back"
         android:layout_width="@dimen/_25sdp"
         android:layout_height="@dimen/_25sdp"
-        android:layout_gravity="start"
-        android:layout_margin="@dimen/_10sdp"
+        android:layout_gravity="top|start"
+        android:layout_marginHorizontal="@dimen/_15sdp"
+        android:layout_marginTop="@dimen/_20sdp"
         android:contentDescription="@string/itwing_flow_back"
         android:src="@drawable/ic_back" />
-
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/itwing_flow_view_pager"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
 
     <RelativeLayout
         android:id="@+id/itwing_flow_bottom_bar"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/_40sdp"
-        android:layout_margin="@dimen/_10sdp"
+        android:layout_height="@dimen/_35sdp"
+        android:layout_gravity="bottom"
+        android:layout_marginHorizontal="@dimen/_15sdp"
+        android:layout_marginBottom="@dimen/_20sdp"
+        android:background="@android:color/transparent"
         android:gravity="center">
 
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/itwing_flow_next"
             android:layout_width="@dimen/_90sdp"
-            android:layout_height="@dimen/_35sdp"
+            android:layout_height="match_parent"
             android:background="@drawable/start_bg"
             android:gravity="center"
             android:text="Install"
@@ -54,6 +55,7 @@
         android:id="@+id/itwing_flow_onboarding_ad_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
         android:visibility="gone" />
 
-</LinearLayout>
+</FrameLayout>
