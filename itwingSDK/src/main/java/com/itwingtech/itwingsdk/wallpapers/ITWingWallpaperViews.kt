@@ -1,7 +1,6 @@
 package com.itwingtech.itwingsdk.wallpapers
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Color
@@ -34,6 +33,7 @@ import com.bumptech.glide.request.target.Target
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.core.WallpaperPlacementConfig
+import com.itwingtech.itwingsdk.utils.NetworkState
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -346,6 +346,13 @@ open class ITWingWallpapersView @JvmOverloads constructor(
             recyclerView.adapter = wallpaperAdapter
             wallpaperAdapter.submit(emptyList())
             emptyText.visibility = VISIBLE
+            return
+        }
+        if (!NetworkState.isOnline(context)) {
+            showWallpaperItems(emptyList())
+            emptyText.text = NetworkState.offlineMessage()
+            emptyText.visibility = VISIBLE
+            showFeatureError(NetworkState.offlineMessage()) { reload() }
             return
         }
         renderLoading()
@@ -726,16 +733,14 @@ open class ITWingWallpapersView @JvmOverloads constructor(
         val now = System.currentTimeMillis()
         if (now - lastErrorDialogAt < 5_000L || activity.isFinishing || activity.isDestroyed) return
         lastErrorDialogAt = now
-        AlertDialog.Builder(activity)
-            .setTitle("Content unavailable")
-            .setMessage(
-                reason.ifBlank {
-                    "Wallpaper content could not be loaded. Check your internet connection and try again."
-                },
-            )
-            .setPositiveButton("Try again") { _, _ -> onRetry() }
-            .setNegativeButton("Cancel", null)
-            .show()
+        ITWingSDK.showSdkFeatureError(
+            context = activity,
+            feature = "Wallpaper content",
+            reason = reason.ifBlank {
+                "Wallpaper content could not be loaded. Check your internet connection and try again."
+            },
+            onRetry = onRetry,
+        )
     }
 
     private fun notifyStyleChanged() {
@@ -991,6 +996,13 @@ class ITWingWallpaperCategoriesView @JvmOverloads constructor(
         applyRemotePlacement()
         if (!placementEnabled) {
             adapter.submit(emptyList())
+            return
+        }
+        if (!NetworkState.isOnline(context)) {
+            val all = ITWingWallpaperCategory("", "All", "", "All wallpapers", null, -1)
+            adapter.submit(listOf(all))
+            adapter.select("")
+            ITWingSDK.showSdkFeatureError(context, "Wallpaper categories", NetworkState.offlineMessage()) { reload() }
             return
         }
         adapter.submitPlaceholders()

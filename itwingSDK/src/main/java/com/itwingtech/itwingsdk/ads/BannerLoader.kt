@@ -31,6 +31,7 @@ import com.itwingtech.itwingsdk.core.AdPlacementConfig
 import com.itwingtech.itwingsdk.core.CustomAdConfig
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.core.ITWingSDK
+import com.itwingtech.itwingsdk.utils.NetworkState
 import com.itwingtech.itwingsdk.utils.SDKMediaView
 import java.util.WeakHashMap
 import kotlin.math.roundToInt
@@ -40,6 +41,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
     private val bannerAds = WeakHashMap<ViewGroup, BannerAd>()
     private val adViews = WeakHashMap<ViewGroup, AdView>()
     private val loadTokens = WeakHashMap<ViewGroup, Int>()
+    private val activeLoadKeys = WeakHashMap<ViewGroup, String>()
 
     @MainThread
     fun load(
@@ -54,11 +56,14 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             return
         }
 
-        val token = nextToken(container)
-
         val config = configProvider()
 
         if (!config.ads.globalEnabled) {
+            destroy(container)
+            return
+        }
+
+        if (!NetworkState.isOnline(activity)) {
             destroy(container)
             return
         }
@@ -70,7 +75,15 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             return
         }
 
-        AdEventTracker.log("ad_requested", placement)
+        val activeKey = listOf(placementName, bannerType?.name.orEmpty()).joinToString("|")
+        synchronized(activeLoadKeys) {
+            if (activeLoadKeys[container] == activeKey && container.childCount > 0) {
+                return
+            }
+            activeLoadKeys[container] = activeKey
+        }
+
+        val token = nextToken(container)
 
         val loadingView = shimmerView ?: createDefaultShimmer(activity, container)
 
@@ -79,6 +92,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         val customAd = selectedCustomAd(config, placement)
 
         if (customAd != null) {
+            AdEventTracker.log("ad_requested", placement)
             preloadCustomBanner(
                 activity = activity,
                 container = container,
@@ -90,6 +104,9 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         }
 
         val unit = placement.units.firstOrNull { it.network == "admob" } ?: run {
+            synchronized(activeLoadKeys) {
+                activeLoadKeys.remove(container)
+            }
             if (isCurrentLoad(container, token)) {
                 stopShimmer(loadingView)
                 container.visibility = View.GONE
@@ -122,6 +139,8 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             )
                 .setGoogleExtrasBundle(extras)
                 .build()
+
+            AdEventTracker.log("ad_requested", placement)
 
             adView.loadAd(
                 request,
@@ -190,6 +209,9 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                                     adViews.remove(container)
                                 }
                             }
+                            synchronized(activeLoadKeys) {
+                                activeLoadKeys.remove(container)
+                            }
 
                             runCatching { adView.destroy() }
 
@@ -207,6 +229,9 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             if (isCurrentLoad(container, token)) {
                 stopShimmer(loadingView)
                 container.visibility = View.GONE
+                synchronized(activeLoadKeys) {
+                    activeLoadKeys.remove(container)
+                }
                 AdEventTracker.log(
                     "ad_load_failed",
                     placement,
@@ -450,7 +475,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             return null
         }
 
-        placement.customAd?.let { return it }
+        placement.customAd?.takeIf { !it.mediaUrl().isNullOrBlank() }?.let { return it }
 
         val requestedId = placement.metadata["custom_ad_id"]
             ?.toString()
@@ -461,6 +486,9 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                 it.format == "banner" ||
                         it.format == "image" ||
                         it.format == "html"
+            }
+            .filter {
+                !it.mediaUrl().isNullOrBlank()
             }
             .filter {
                 requestedId == null || it.id == requestedId
@@ -482,6 +510,10 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
 
             synchronized(loadTokens) {
                 loadTokens.clear()
+            }
+
+            synchronized(activeLoadKeys) {
+                activeLoadKeys.clear()
             }
 
             return
@@ -507,6 +539,10 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             adViews.remove(container)?.let { view ->
                 runCatching { view.destroy() }
             }
+        }
+
+        synchronized(activeLoadKeys) {
+            activeLoadKeys.remove(container)
         }
     }
 

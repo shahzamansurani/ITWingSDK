@@ -27,6 +27,7 @@ import com.itwingtech.itwingsdk.ui.ITWingActionDialog
 import com.itwingtech.itwingsdk.ui.ITWingLoadingDialog
 import com.itwingtech.itwingsdk.ui.SdkFeatureErrorDialog
 import com.itwingtech.itwingsdk.updates.InAppUpdateManager
+import com.itwingtech.itwingsdk.utils.SensitiveDataSanitizer
 import com.itwingtech.itwingsdk.wallpapers.ITWingWallpapersCallback
 import com.itwingtech.itwingsdk.wallpapers.toWallpaperResponse
 import com.itwingtech.itwingsdk.media.ITWingMediaCallback
@@ -150,7 +151,13 @@ object ITWingSDK {
         reason: String,
         onRetry: (() -> Unit)? = null,
     ) {
-        SdkFeatureErrorDialog.show(context.findActivityForSdkDialog() ?: getActiveActivity(), feature, appPrimaryColorInt(), reason, onRetry)
+        SdkFeatureErrorDialog.show(
+            context.findActivityForSdkDialog() ?: getActiveActivity(),
+            feature,
+            appPrimaryColorInt(),
+            SensitiveDataSanitizer.sanitize(reason),
+            onRetry,
+        )
     }
 
     @JvmStatic
@@ -255,6 +262,9 @@ object ITWingSDK {
             termsCheckboxTextColor = config.termsCheckboxTextColor,
             termsCheckboxTextSizeSp = config.termsCheckboxTextSizeSp,
             termsCheckboxTintColor = config.termsCheckboxTintColor,
+            splashUi = config.splashUi,
+            onboardingUi = config.onboardingUi,
+            termsUi = config.termsUi,
             listener = config.listener,
         )
     }
@@ -336,6 +346,9 @@ object ITWingSDK {
         termsCheckboxTextColor: Int? = null,
         termsCheckboxTextSizeSp: Float? = null,
         termsCheckboxTintColor: Int? = null,
+        splashUi: ITWingSplashUiStyle = ITWingSplashUiStyle(),
+        onboardingUi: ITWingOnboardingUiStyle = ITWingOnboardingUiStyle(),
+        termsUi: ITWingTermsUiStyle = ITWingTermsUiStyle(),
         listener: SDKInitListener? = null,
         listner: SDKInitListener? = null,
     ) {
@@ -418,6 +431,9 @@ object ITWingSDK {
                 onboardingDotInactiveWidthDp = onboardingDotInactiveWidthDp,
                 onboardingDotHeightDp = onboardingDotHeightDp,
                 onboardingDotSpacingDp = onboardingDotSpacingDp,
+                splashUi = splashUi,
+                onboardingUi = onboardingUi,
+                termsUi = termsUi,
             ),
             finishCurrent = finishCurrent,
             listener = listener,
@@ -545,7 +561,7 @@ object ITWingSDK {
         }
 
         runCatching { renderVisibleSplashFromCache() }
-            .onFailure { externalListener?.onError(it.message ?: "Startup splash render failed.") }
+            .onFailure { externalListener?.onError(SensitiveDataSanitizer.sanitize(it.message ?: "Startup splash render failed.")) }
         runCatching {
             initialize(activity, apiKey, effectiveSdkOptions, object : SDKInitListener {
             override fun onConfigLoaded(config: ITWingConfig) {
@@ -560,7 +576,7 @@ object ITWingSDK {
             }
 
             override fun onError(error: String) {
-                externalListener?.onError(error)
+                externalListener?.onError(SensitiveDataSanitizer.sanitize(error))
                 continueAfterUpdateAndDelay()
             }
 
@@ -581,15 +597,15 @@ object ITWingSDK {
             }
 
             override fun onOfflineMode(reason: String) {
-                externalListener?.onOfflineMode(reason)
+                externalListener?.onOfflineMode(SensitiveDataSanitizer.sanitize(reason))
             }
 
             override fun onRetry(reason: String) {
-                externalListener?.onRetry(reason)
+                externalListener?.onRetry(SensitiveDataSanitizer.sanitize(reason))
             }
             })
         }.onFailure {
-            externalListener?.onError(it.message ?: "SDK startup failed.")
+            externalListener?.onError(SensitiveDataSanitizer.sanitize(it.message ?: "SDK startup failed."))
             continueAfterUpdateAndDelay()
         }
     }
@@ -735,7 +751,7 @@ object ITWingSDK {
             "sdk_initialize_requested",
             mapOf(
                 "activity" to activity.javaClass.simpleName,
-                "endpoint" to options.endpoint,
+                "endpoint_configured" to options.endpoint.isNotBlank(),
             ),
         )
         if (repository!!.consumeFirstOpen()) {
@@ -859,7 +875,7 @@ object ITWingSDK {
             }.onFailure {
                 val cachedConfigAvailable = config.configVersion > 0
                 val networkFailure = it.isNetworkFailure()
-                val message = it.toSdkErrorMessage()
+                val message = SensitiveDataSanitizer.sanitize(it.toSdkErrorMessage())
                 lastError = message
                 connectionState = when {
                     cachedConfigAvailable && networkFailure -> "ready_from_cache_network_unavailable"
@@ -1134,7 +1150,7 @@ object ITWingSDK {
     }
 
     @JvmStatic
-    fun lastError(): String? = lastError
+    fun lastError(): String? = SensitiveDataSanitizer.sanitize(lastError)
 
     @JvmStatic
     fun connectionState(): String = connectionState
@@ -1143,7 +1159,7 @@ object ITWingSDK {
     fun diagnostics(): Map<String, Any?> = mapOf(
         "ready" to isReady(),
         "state" to connectionState,
-        "last_error" to lastError,
+        "last_error" to SensitiveDataSanitizer.sanitize(lastError),
         "config_version" to config.configVersion,
         "bootstrap_finished" to bootstrapFinished,
         "bootstrap_in_flight" to bootstrapInFlight,
@@ -1943,7 +1959,7 @@ object ITWingSDK {
             if (!activity.isFinishing && !activity.isDestroyed) {
                 Toast.makeText(
                     activity,
-                    message,
+                    SensitiveDataSanitizer.sanitize(message),
                     if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT,
                 ).show()
             }

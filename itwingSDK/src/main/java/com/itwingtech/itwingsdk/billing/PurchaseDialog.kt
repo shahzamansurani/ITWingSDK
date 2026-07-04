@@ -121,10 +121,17 @@ internal object PurchaseDialog {
                 ?: "Secure Google Play checkout. Active purchases are restored automatically."
             row.findViewById<TextView>(R.id.itwing_purchase_product_description).text = description
 
+            val sameProductAdminPlans = products.count { it.productId.trim() == product.productId.trim() }
             val isOwned = currentSubscription?.active == true &&
                 product.productId.trim() in ownedProductIds &&
                 currentSubscription.productId == product.productId.trim() &&
-                (currentSubscription.basePlanId.isNullOrBlank() || currentSubscription.basePlanId == product.basePlanId)
+                if (sameProductAdminPlans > 1) {
+                    !currentSubscription.basePlanId.isNullOrBlank() &&
+                        currentSubscription.basePlanId == product.basePlanId &&
+                        (currentSubscription.offerId.isNullOrBlank() || currentSubscription.offerId == product.offerId)
+                } else {
+                    currentSubscription.basePlanId.isNullOrBlank() || currentSubscription.basePlanId == product.basePlanId
+                }
             val idleButtonText = when {
                 isOwned -> "Active purchase"
                 hasActivePurchase && productType == BillingClient.ProductType.SUBS -> "Change plan"

@@ -55,6 +55,12 @@ class FrequencyController {
         lastShownAt[key] = System.currentTimeMillis()
     }
 
+    fun refundTrigger(placement: AdPlacementConfig) {
+        val key = frequencyKey(placement)
+        val current = triggerCounts[key] ?: return
+        triggerCounts[key] = (current - 1).coerceAtLeast(0)
+    }
+
     private fun frequencyKey(placement: AdPlacementConfig): String {
         return when (placement.format.lowercase()) {
             "interstitial" -> "format:interstitial"

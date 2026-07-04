@@ -15,6 +15,7 @@ import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
 import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingConfig
+import com.itwingtech.itwingsdk.utils.NetworkState
 import com.itwingtech.itwingsdk.utils.runOnMain
 import com.itwingtech.itwingsdk.utils.safeCallback
 import java.lang.ref.WeakReference
@@ -96,6 +97,7 @@ class AppOpenManager(
         if (!config.ads.globalEnabled || loading.get() || appOpenAd != null) {
             return
         }
+        if (!NetworkState.isOnline(activity)) return
 
         val placement = config.ads.placements.firstOrNull {
             it.name == placementName &&
@@ -113,11 +115,9 @@ class AppOpenManager(
         val unit = placement.units.firstOrNull {
             it.network == "admob"
         } ?: return
-        if (!forceRequest && !canStartLoad(placementName, placement)) return
-        if (forceRequest) {
-            lastLoadAttemptAt[placementName] = SystemClock.elapsedRealtime()
-        }
+        if (!canStartLoad(placementName, placement)) return
         loading.set(true)
+        AdEventTracker.log("ad_load_requested", placement)
         AppOpenAd.load(
             AdRequest.Builder(unit.adUnitId).build(),
             object : AdLoadCallback<AppOpenAd> {
@@ -150,6 +150,10 @@ class AppOpenManager(
         }
         updateForegroundActivity(activity)
         val config = configProvider()
+        if (!NetworkState.isOnline(activity)) {
+            safeCallback(onComplete)
+            return
+        }
         val placement =
             config.ads.placements.firstOrNull {
                 config.ads.globalEnabled &&
@@ -170,7 +174,7 @@ class AppOpenManager(
             return
         }
 
-        AdEventTracker.log("ad_requested", placement)
+        AdEventTracker.log("ad_show_requested", placement)
         if (customRenderer.canRender(placement)) {
             val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
@@ -179,6 +183,7 @@ class AppOpenManager(
                 safeCallback(onComplete)
             })
             if (shown) {
+                AdEventTracker.log("ad_requested", placement)
                 frequency.markShown(placement)
                 AdEventTracker.log("ad_impression", placement)
             } else {
@@ -245,6 +250,7 @@ class AppOpenManager(
         appOpenAd = null
         appOpenLoadedAtMs = 0L
         loadedPlacement = null
+        AdEventTracker.log("ad_requested", placement)
         ad.adEventCallback =
             object : AppOpenAdEventCallback {
                 override fun onAdShowedFullScreenContent() {
@@ -317,6 +323,11 @@ class AppOpenManager(
 
         fun poll() {
             if (!activity.isUsable()) {
+                loadingDialog.dismiss()
+                safeCallback(onComplete)
+                return
+            }
+            if (!NetworkState.isOnline(activity)) {
                 loadingDialog.dismiss()
                 safeCallback(onComplete)
                 return

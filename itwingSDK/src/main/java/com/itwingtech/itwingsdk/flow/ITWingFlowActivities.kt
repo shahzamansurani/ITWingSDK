@@ -41,6 +41,7 @@ import com.itwingtech.itwingsdk.core.ITWingAppFlowOptions
 import com.itwingtech.itwingsdk.core.ITWingAppFlowRegistry
 import com.itwingtech.itwingsdk.core.ITWingAppFlowSession
 import com.itwingtech.itwingsdk.core.ITWingConfig
+import com.itwingtech.itwingsdk.core.ITWingDimen
 import com.itwingtech.itwingsdk.core.ITWingOnboardingPage
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.core.SDKInitListener
@@ -153,13 +154,12 @@ class ITWingFlowSplashActivity : ComponentActivity() {
         subtitle.text =
             current.flowOptions.splashSubtitle ?: appString("splash_subtitle")
             ?: getString(R.string.itwing_flow_loading)
-        current.flowOptions.splashTitleTextColor?.let(title::setTextColor)
-        current.flowOptions.splashSubtitleTextColor?.let(subtitle::setTextColor)
-        current.flowOptions.splashTitleTextSizeSp?.let { title.setTextSize(TypedValue.COMPLEX_UNIT_SP, it) }
-        current.flowOptions.splashSubtitleTextSizeSp?.let { subtitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, it) }
-        current.flowOptions.splashContentMarginDp?.let { margin ->
+        (current.flowOptions.splashUi.title.color ?: current.flowOptions.splashTitleTextColor)?.let(title::setTextColor)
+        (current.flowOptions.splashUi.subtitle.color ?: current.flowOptions.splashSubtitleTextColor)?.let(subtitle::setTextColor)
+        title.applySdkTextSize(current.flowOptions.splashUi.title.textSize, current.flowOptions.splashUi.title.textSizeSp ?: current.flowOptions.splashTitleTextSizeSp)
+        subtitle.applySdkTextSize(current.flowOptions.splashUi.subtitle.textSize, current.flowOptions.splashUi.subtitle.textSizeSp ?: current.flowOptions.splashSubtitleTextSizeSp)
+        (dimensionPx(current.flowOptions.splashUi.contentMargin) ?: current.flowOptions.splashContentMarginDp?.let(::dp))?.let { value ->
             (content.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-                val value = dp(margin)
                 params.setMargins(value, value, value, value)
                 content.layoutParams = params
             }
@@ -209,12 +209,15 @@ class ITWingFlowSplashActivity : ComponentActivity() {
             lottie.playAnimation()
         }
         lottie.applyViewSize(
-            widthDp = current.flowOptions.splashLottieWidthDp,
-            heightDp = current.flowOptions.splashLottieHeightDp,
+            widthPx = dimensionPx(current.flowOptions.splashUi.lottieWidth),
+            heightPx = dimensionPx(current.flowOptions.splashUi.lottieHeight),
+            widthDp = current.flowOptions.splashUi.lottieWidthDp ?: current.flowOptions.splashLottieWidthDp,
+            heightDp = current.flowOptions.splashUi.lottieHeightDp ?: current.flowOptions.splashLottieHeightDp,
         )
-        current.flowOptions.splashLottieBottomMarginDp?.let { margin ->
+        (dimensionPx(current.flowOptions.splashUi.lottieBottomMargin)
+            ?: (current.flowOptions.splashUi.lottieBottomMarginDp ?: current.flowOptions.splashLottieBottomMarginDp)?.let(::dp))?.let { margin ->
             (lottie.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-                params.bottomMargin = dp(margin)
+                params.bottomMargin = margin
                 lottie.layoutParams = params
             }
         }
@@ -228,11 +231,16 @@ class ITWingFlowSplashActivity : ComponentActivity() {
                 lottie.visibility = View.VISIBLE
                 setSplashLogoSize(
                     logo,
-                    current.flowOptions.splashLogoWidthDp?.let(::dp) ?: ViewGroup.LayoutParams.MATCH_PARENT,
-                    current.flowOptions.splashLogoHeightDp?.let(::dp) ?: dp(240),
+                    dimensionPx(current.flowOptions.splashUi.logoWidth)
+                        ?: (current.flowOptions.splashUi.logoWidthDp ?: current.flowOptions.splashLogoWidthDp)?.let(::dp)
+                        ?: ViewGroup.LayoutParams.MATCH_PARENT,
+                    dimensionPx(current.flowOptions.splashUi.logoHeight)
+                        ?: (current.flowOptions.splashUi.logoHeightDp ?: current.flowOptions.splashLogoHeightDp)?.let(::dp)
+                        ?: dp(240),
                 )
                 (content.layoutParams as? RelativeLayout.LayoutParams)?.let {
-                    val margin = dp(current.flowOptions.splashContentMarginDp ?: 20)
+                    val margin = dimensionPx(current.flowOptions.splashUi.contentMargin)
+                        ?: dp(current.flowOptions.splashUi.contentMarginDp ?: current.flowOptions.splashContentMarginDp ?: 20)
                     it.setMargins(margin, margin, margin, margin)
                     content.layoutParams = it
                 }
@@ -254,8 +262,12 @@ class ITWingFlowSplashActivity : ComponentActivity() {
                 lottie.visibility = View.VISIBLE
                 setSplashLogoSize(
                     logo,
-                    current.flowOptions.splashLogoWidthDp?.let(::dp) ?: dp(40),
-                    current.flowOptions.splashLogoHeightDp?.let(::dp) ?: dp(40),
+                    dimensionPx(current.flowOptions.splashUi.logoWidth)
+                        ?: (current.flowOptions.splashUi.logoWidthDp ?: current.flowOptions.splashLogoWidthDp)?.let(::dp)
+                        ?: dp(40),
+                    dimensionPx(current.flowOptions.splashUi.logoHeight)
+                        ?: (current.flowOptions.splashUi.logoHeightDp ?: current.flowOptions.splashLogoHeightDp)?.let(::dp)
+                        ?: dp(40),
                 )
             }
         }
@@ -369,6 +381,7 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
             root = findViewById(R.id.itwing_flow_root),
             back = backButton,
             bottomBar = findViewById(R.id.itwing_flow_bottom_bar),
+            margin = current.flowOptions.onboardingUi.controlsMargin,
             marginDp = current.flowOptions.onboardingControlsMarginDp,
         )
 
@@ -442,19 +455,37 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
     private fun renderDots(position: Int) {
         dots.removeAllViews()
         val current = session
-        val primary = current?.flowOptions?.onboardingDotsActiveColor ?: primaryColor()
-        val inactive = current?.flowOptions?.onboardingDotsInactiveColor ?: Color.rgb(220, 227, 234)
+        val primary = current?.flowOptions?.onboardingUi?.dots?.activeColor
+            ?: current?.flowOptions?.onboardingDotsActiveColor
+            ?: primaryColor()
+        val inactive = current?.flowOptions?.onboardingUi?.dots?.inactiveColor
+            ?: current?.flowOptions?.onboardingDotsInactiveColor
+            ?: Color.rgb(220, 227, 234)
         for (index in pages.indices) {
             val dot = View(this)
             val width = if (index == position) {
-                current?.flowOptions?.onboardingDotActiveWidthDp ?: 30
+                dimensionPx(current?.flowOptions?.onboardingUi?.dots?.activeWidth)
+                    ?: current?.flowOptions?.onboardingUi?.dots?.activeWidthDp?.let(::dp)
+                    ?: current?.flowOptions?.onboardingDotActiveWidthDp
+                        ?.let(::dp)
+                    ?: dp(30)
             } else {
-                current?.flowOptions?.onboardingDotInactiveWidthDp ?: 10
+                dimensionPx(current?.flowOptions?.onboardingUi?.dots?.inactiveWidth)
+                    ?: current?.flowOptions?.onboardingUi?.dots?.inactiveWidthDp?.let(::dp)
+                    ?: current?.flowOptions?.onboardingDotInactiveWidthDp
+                        ?.let(::dp)
+                    ?: dp(10)
             }
-            val height = current?.flowOptions?.onboardingDotHeightDp ?: 10
-            val spacing = current?.flowOptions?.onboardingDotSpacingDp ?: 3
-            val params = LinearLayout.LayoutParams(dp(width), dp(height))
-            params.setMargins(dp(spacing), 0, dp(spacing), 0)
+            val height = dimensionPx(current?.flowOptions?.onboardingUi?.dots?.height)
+                ?: current?.flowOptions?.onboardingUi?.dots?.heightDp?.let(::dp)
+                ?: current?.flowOptions?.onboardingDotHeightDp?.let(::dp)
+                ?: dp(10)
+            val spacing = dimensionPx(current?.flowOptions?.onboardingUi?.dots?.spacing)
+                ?: current?.flowOptions?.onboardingUi?.dots?.spacingDp?.let(::dp)
+                ?: current?.flowOptions?.onboardingDotSpacingDp?.let(::dp)
+                ?: dp(3)
+            val params = LinearLayout.LayoutParams(width, height)
+            params.setMargins(spacing, 0, spacing, 0)
             dot.layoutParams = params
             dot.setBackgroundResource(if (index == position) R.drawable.itwing_flow_dot_active else R.drawable.itwing_flow_dot_inactive)
             dot.backgroundTintList = ColorStateList.valueOf(if (index == position) primary else inactive)
@@ -463,32 +494,42 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
     }
 
     private fun styleOnboardingControls(options: ITWingAppFlowOptions) {
+        options.onboardingUi.nextButton.backgroundDrawableRes?.let {
+            nextButton.setBackgroundResource(it)
+            nextButton.backgroundTintList = null
+        }
         val buttonColor = options.onboardingButtonColor ?: primaryColor()
         val buttonTextColor = options.onboardingButtonTextColor ?: onPrimary(buttonColor)
-        val background = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp(options.onboardingButtonCornerRadiusDp ?: 8).toFloat()
-            setColor(buttonColor)
-            if (options.onboardingButtonStrokeWidthDp > 0) {
-                setStroke(
-                    dp(options.onboardingButtonStrokeWidthDp),
-                    options.onboardingButtonStrokeColor ?: buttonColor,
-                )
+        if (options.onboardingUi.nextButton.backgroundDrawableRes == null) {
+            val background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(options.onboardingButtonCornerRadiusDp ?: 8).toFloat()
+                setColor(buttonColor)
+                if (options.onboardingButtonStrokeWidthDp > 0) {
+                    setStroke(
+                        dp(options.onboardingButtonStrokeWidthDp),
+                        options.onboardingButtonStrokeColor ?: buttonColor,
+                    )
+                }
             }
+            nextButton.background = background
+            nextButton.backgroundTintList = null
         }
-        nextButton.background = background
-        nextButton.backgroundTintList = null
-        nextButton.setTextColor(buttonTextColor)
+        nextButton.setTextColor(options.onboardingUi.nextButton.textColor ?: buttonTextColor)
         nextButton.applyViewSize(
+            widthPx = null,
+            heightPx = null,
             widthDp = options.onboardingButtonWidthDp,
             heightDp = options.onboardingButtonHeightDp,
         )
-        options.onboardingButtonTextSizeSp?.let {
-            nextButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, it)
-        }
-        backButton.imageTintList = options.onboardingBackTintColor?.let(ColorStateList::valueOf)
-        backButton.applyViewSize(widthDp = options.onboardingBackSizeDp, heightDp = options.onboardingBackSizeDp)
-        findViewById<View>(R.id.itwing_flow_bottom_bar)?.background = options.onboardingBottomBarBackgroundColor?.let { color ->
+        nextButton.applySdkTextSize(options.onboardingUi.nextButton.textSize, options.onboardingUi.nextButton.textSizeSp ?: options.onboardingButtonTextSizeSp)
+        options.onboardingUi.backButton.drawableRes?.let(backButton::setImageResource)
+        backButton.imageTintList = (options.onboardingUi.backButton.tintColor ?: options.onboardingBackTintColor)?.let(ColorStateList::valueOf)
+        val backSizePx = dimensionPx(options.onboardingUi.backButton.size)
+        val backSizeDp = options.onboardingUi.backButton.sizeDp ?: options.onboardingBackSizeDp
+        backButton.applyViewSize(widthPx = backSizePx, heightPx = backSizePx, widthDp = backSizeDp, heightDp = backSizeDp)
+        findViewById<View>(R.id.itwing_flow_bottom_bar)?.background =
+            (options.onboardingUi.bottomBarBackgroundColor ?: options.onboardingBottomBarBackgroundColor)?.let { color ->
             GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(14).toFloat()
@@ -552,7 +593,7 @@ class ITWingFlowTermsActivity : ComponentActivity() {
         root.setBackgroundColor(backgroundColor)
         window.statusBarColor = backgroundColor
         window.navigationBarColor = backgroundColor
-        applyTermsInsets(root, content, controls, options.termsContentPaddingDp)
+        applyTermsInsets(root, content, controls, options.termsUi.contentPadding, options.termsUi.contentPaddingDp ?: options.termsContentPaddingDp)
         styleTermsControls(check, accept, options, primary)
 
         val web = findViewById<WebView>(R.id.itwing_flow_terms_web)
@@ -604,32 +645,38 @@ class ITWingFlowTermsActivity : ComponentActivity() {
 
     private fun styleTermsControls(check: CheckBox, accept: Button, options: ITWingAppFlowOptions, primary: Int) {
         val buttonColor = options.termsAcceptButtonColor ?: primary
-        val buttonTextColor = options.termsAcceptButtonTextColor ?: onPrimary(buttonColor)
-        val background = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp(options.termsAcceptButtonCornerRadiusDp ?: 20).toFloat()
-            setColor(buttonColor)
-            if (options.termsAcceptButtonStrokeWidthDp > 0) {
-                setStroke(
-                    dp(options.termsAcceptButtonStrokeWidthDp),
-                    options.termsAcceptButtonStrokeColor ?: buttonColor,
-                )
-            }
+        val buttonTextColor = options.termsUi.acceptButton.textColor ?: options.termsAcceptButtonTextColor ?: onPrimary(buttonColor)
+        options.termsUi.acceptButton.backgroundDrawableRes?.let {
+            accept.setBackgroundResource(it)
+            accept.backgroundTintList = null
         }
-        accept.background = background
-        accept.backgroundTintList = null
+        if (options.termsUi.acceptButton.backgroundDrawableRes == null) {
+            val background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(options.termsAcceptButtonCornerRadiusDp ?: 20).toFloat()
+                setColor(buttonColor)
+                if (options.termsAcceptButtonStrokeWidthDp > 0) {
+                    setStroke(
+                        dp(options.termsAcceptButtonStrokeWidthDp),
+                        options.termsAcceptButtonStrokeColor ?: buttonColor,
+                    )
+                }
+            }
+            accept.background = background
+            accept.backgroundTintList = null
+        }
         accept.text = options.termsAcceptButtonText ?: getString(R.string.itwing_flow_accept)
         accept.setTextColor(buttonTextColor)
-        options.termsAcceptButtonTextSizeSp?.let { accept.setTextSize(TypedValue.COMPLEX_UNIT_SP, it) }
+        accept.applySdkTextSize(options.termsUi.acceptButton.textSize, options.termsUi.acceptButton.textSizeSp ?: options.termsAcceptButtonTextSizeSp)
         accept.applyViewSize(
             widthDp = options.termsAcceptButtonWidthDp,
             heightDp = options.termsAcceptButtonHeightDp,
         )
 
         check.text = options.termsCheckboxText ?: getString(R.string.itwing_flow_accept_terms)
-        check.setTextColor(options.termsCheckboxTextColor ?: Color.rgb(51, 51, 51))
-        options.termsCheckboxTextSizeSp?.let { check.setTextSize(TypedValue.COMPLEX_UNIT_SP, it) }
-        check.buttonTintList = ColorStateList.valueOf(options.termsCheckboxTintColor ?: primary)
+        check.setTextColor(options.termsUi.checkbox.color ?: options.termsCheckboxTextColor ?: Color.rgb(51, 51, 51))
+        check.applySdkTextSize(options.termsUi.checkbox.textSize, options.termsUi.checkbox.textSizeSp ?: options.termsCheckboxTextSizeSp)
+        check.buttonTintList = ColorStateList.valueOf(options.termsUi.checkboxTintColor ?: options.termsCheckboxTintColor ?: primary)
     }
 
     private fun legalHtml(options: ITWingAppFlowOptions): String {
@@ -643,10 +690,16 @@ class ITWingFlowTermsActivity : ComponentActivity() {
         return buildString {
             append("<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>")
             val background = (options.termsBackgroundColor ?: Color.WHITE).toCssColor()
-            val text = (options.termsTextColor ?: Color.rgb(17, 24, 39)).toCssColor()
-            val heading = (options.termsHeadingTextColor ?: options.termsTextColor ?: Color.rgb(17, 24, 39)).toCssColor()
-            val textSize = options.termsTextSizeSp ?: 14f
-            val headingSize = options.termsHeadingTextSizeSp ?: 20f
+            val text = (options.termsUi.body.color ?: options.termsTextColor ?: Color.rgb(17, 24, 39)).toCssColor()
+            val heading = (options.termsUi.heading.color ?: options.termsHeadingTextColor ?: options.termsTextColor ?: Color.rgb(17, 24, 39)).toCssColor()
+            val textSize = options.termsUi.body.textSize?.cssTextSize(this@ITWingFlowTermsActivity)
+                ?: options.termsUi.body.textSizeSp
+                ?: options.termsTextSizeSp
+                ?: 14f
+            val headingSize = options.termsUi.heading.textSize?.cssTextSize(this@ITWingFlowTermsActivity)
+                ?: options.termsUi.heading.textSizeSp
+                ?: options.termsHeadingTextSizeSp
+                ?: 20f
             append("<style>")
             append("body{font-family:sans-serif;background:$background;color:$text;line-height:1.55;padding:4px 2px;font-size:${textSize}px}")
             append("h1,h2{color:$heading;font-size:${headingSize}px;margin:12px 0 8px}")
@@ -754,37 +807,37 @@ private fun applyInsets(root: View) {
     }
 }
 
-private fun applyOnboardingInsets(root: View, back: View, bottomBar: View, marginDp: Int?) {
+private fun applyOnboardingInsets(root: View, back: View, bottomBar: View, margin: ITWingDimen?, marginDp: Int?) {
     ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
         val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-        val margin = root.context.dp(marginDp ?: 20)
+        val marginPx = root.context.dimensionPx(margin) ?: root.context.dp(marginDp ?: 20)
         (back.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-            params.leftMargin = bars.left + margin
-            params.topMargin = bars.top + margin
+            params.leftMargin = bars.left + marginPx
+            params.topMargin = bars.top + marginPx
             back.layoutParams = params
         }
         (bottomBar.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-            params.leftMargin = bars.left + margin
-            params.rightMargin = bars.right + margin
-            params.bottomMargin = bars.bottom + margin
+            params.leftMargin = bars.left + marginPx
+            params.rightMargin = bars.right + marginPx
+            params.bottomMargin = bars.bottom + marginPx
             bottomBar.layoutParams = params
         }
         insets
     }
 }
 
-private fun applyTermsInsets(root: View, content: View, controls: View, paddingDp: Int?) {
+private fun applyTermsInsets(root: View, content: View, controls: View, padding: ITWingDimen?, paddingDp: Int?) {
     ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
         val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-        val padding = root.context.dp(paddingDp ?: 10)
+        val paddingPx = root.context.dimensionPx(padding) ?: root.context.dp(paddingDp ?: 10)
         content.setPadding(
-            bars.left + padding,
-            bars.top + padding,
-            bars.right + padding,
-            padding,
+            bars.left + paddingPx,
+            bars.top + paddingPx,
+            bars.right + paddingPx,
+            paddingPx,
         )
         (controls.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-            params.bottomMargin = bars.bottom + padding
+            params.bottomMargin = bars.bottom + paddingPx
             controls.layoutParams = params
         }
         insets
@@ -1016,13 +1069,50 @@ private fun String.escapeHtml(): String =
 private fun Activity.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 private fun Context.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
+private fun Context.dimensionPx(value: ITWingDimen?): Int? = when {
+    value == null -> null
+    value.resId != null -> runCatching { resources.getDimensionPixelSize(value.resId) }.getOrNull()
+    value.unit == ITWingDimen.Unit.SP -> (value.value.orZero() * resources.displayMetrics.scaledDensity).toInt()
+    else -> (value.value.orZero() * resources.displayMetrics.density).toInt()
+}
+
+private fun Activity.dimensionPx(value: ITWingDimen?): Int? = (this as Context).dimensionPx(value)
+
+private fun ITWingDimen.cssTextSize(context: Context): Float? = when {
+    resId != null -> resId?.let { id ->
+        runCatching { context.resources.getDimension(id) / context.resources.displayMetrics.scaledDensity }.getOrNull()
+    }
+    unit == ITWingDimen.Unit.SP -> value
+    else -> value
+}
+
+private fun TextView.applySdkTextSize(value: ITWingDimen?, fallbackSp: Float?) {
+    when {
+        value?.resId != null -> value.resId?.let { resId ->
+            runCatching {
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, resources.getDimension(resId))
+            }
+        }
+        value?.unit == ITWingDimen.Unit.SP -> setTextSize(TypedValue.COMPLEX_UNIT_SP, value.value.orZero())
+        value?.unit == ITWingDimen.Unit.DP -> setTextSize(TypedValue.COMPLEX_UNIT_PX, context.dimensionPx(value)?.toFloat() ?: return)
+        fallbackSp != null -> setTextSize(TypedValue.COMPLEX_UNIT_SP, fallbackSp)
+    }
+}
+
+private fun Float?.orZero(): Float = this ?: 0f
+
 private fun Int.toCssColor(): String = String.format("#%06X", 0xFFFFFF and this)
 
-private fun View.applyViewSize(widthDp: Int? = null, heightDp: Int? = null) {
-    if (widthDp == null && heightDp == null) return
+private fun View.applyViewSize(
+    widthPx: Int? = null,
+    heightPx: Int? = null,
+    widthDp: Int? = null,
+    heightDp: Int? = null,
+) {
+    if (widthPx == null && heightPx == null && widthDp == null && heightDp == null) return
     layoutParams = layoutParams.apply {
-        widthDp?.let { width = context.dp(it) }
-        heightDp?.let { height = context.dp(it) }
+        widthPx?.let { width = it } ?: widthDp?.let { width = context.dp(it) }
+        heightPx?.let { height = it } ?: heightDp?.let { height = context.dp(it) }
     }
 }
 

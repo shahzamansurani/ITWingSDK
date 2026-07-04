@@ -213,11 +213,13 @@ class SubscriptionManager(
             )
         }
         pendingProductSelections[requestedProductId] = adminProduct
+        repositoryProvider()?.savePendingPlan(adminProduct.productId.trim(), adminProduct.basePlanId, adminProduct.offerId)
         val result = client.launchBillingFlow(activity, flowBuilder.build())
         if (result.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
             restorePurchases()
         }
         if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+            repositoryProvider()?.clearPendingPlan()
             lastBillingMessage = billingLaunchFailureMessage(result, adminProduct, details)
             SDKTelemetry.track(
                 "purchase_flow_failed",
@@ -565,8 +567,20 @@ class SubscriptionManager(
         purchase.products.forEach { activePurchases[it.trim()] = purchase }
         val pendingProduct = pendingProductSelections.remove(productId.trim())
         val repository = repositoryProvider()
+        val pendingStoredProduct = repository?.pendingProductId()?.takeIf { it == productId.trim() }
+        val pendingStoredBasePlan = repository?.pendingBasePlanId()?.takeIf { pendingStoredProduct != null }
+        val pendingStoredOffer = repository?.pendingOfferId()?.takeIf { pendingStoredProduct != null }
         val activeBasePlan = repository?.activeBasePlanId()?.takeIf(String::isNotBlank)
         val adminProduct = pendingProduct
+            ?: pendingStoredBasePlan?.let { basePlan ->
+                configProvider().subscriptions.products.firstOrNull {
+                    it.productId.trim() == productId.trim() &&
+                        it.basePlanId == basePlan &&
+                        (pendingStoredOffer.isNullOrBlank() || it.offerId == pendingStoredOffer)
+                } ?: configProvider().subscriptions.products.firstOrNull {
+                    it.productId.trim() == productId.trim() && it.basePlanId == basePlan
+                }
+            }
             ?: activeBasePlan?.let { basePlan ->
                 configProvider().subscriptions.products.firstOrNull {
                     it.productId.trim() == productId.trim() && it.basePlanId == basePlan
@@ -618,6 +632,7 @@ class SubscriptionManager(
                 )
                 finishPurchaseIfNeeded(purchase, adminProduct)
                 recordPlayOwnership(purchase, adminProduct)
+                repositoryProvider()?.clearPendingPlan()
                 completePendingPurchase(
                     productId,
                     BillingResult.newBuilder()
@@ -626,6 +641,7 @@ class SubscriptionManager(
                         .build(),
                 )
             }.onFailure {
+                repositoryProvider()?.clearPendingPlan()
                 lastBillingMessage = it.message
                 SDKTelemetry.track(
                     "purchase_verify_failed",
@@ -894,6 +910,9 @@ class SubscriptionManager(
         if (callbacks.isEmpty()) {
             pendingPurchaseCallbacks.remove(key)
             pendingProductSelections.remove(key)
+            if (repositoryProvider()?.pendingProductId() == key) {
+                repositoryProvider()?.clearPendingPlan()
+            }
         }
     }
 
@@ -913,6 +932,7 @@ class SubscriptionManager(
         val callbacks = pendingPurchaseCallbacks.values.flatMap { it.toList() }
         pendingPurchaseCallbacks.clear()
         pendingProductSelections.clear()
+        repositoryProvider()?.clearPendingPlan()
         if (callbacks.isEmpty()) return
         mainHandler.post {
             callbacks.forEach { callback ->

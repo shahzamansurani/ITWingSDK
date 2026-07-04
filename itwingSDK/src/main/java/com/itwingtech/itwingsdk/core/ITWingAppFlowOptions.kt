@@ -8,6 +8,99 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 
+data class ITWingDimen(
+    val value: Float? = null,
+    val unit: Unit = Unit.DP,
+    val resId: Int? = null,
+) {
+    enum class Unit { DP, SP }
+
+    companion object {
+        @JvmStatic
+        fun dp(value: Number): ITWingDimen = ITWingDimen(value.toFloat(), Unit.DP)
+
+        @JvmStatic
+        fun sp(value: Number): ITWingDimen = ITWingDimen(value.toFloat(), Unit.SP)
+
+        @JvmStatic
+        fun res(resId: Int): ITWingDimen = ITWingDimen(resId = resId)
+    }
+}
+
+val Int.dp: ITWingDimen get() = ITWingDimen.dp(this)
+val Float.dp: ITWingDimen get() = ITWingDimen.dp(this)
+val Int.sp: ITWingDimen get() = ITWingDimen.sp(this)
+val Float.sp: ITWingDimen get() = ITWingDimen.sp(this)
+
+data class ITWingFlowTextStyle @JvmOverloads constructor(
+    val color: Int? = null,
+    val textSize: ITWingDimen? = null,
+    val textSizeSp: Float? = null,
+)
+
+data class ITWingFlowButtonStyle @JvmOverloads constructor(
+    val backgroundDrawableRes: Int? = null,
+    val textColor: Int? = null,
+    val textSize: ITWingDimen? = null,
+    val textSizeSp: Float? = null,
+)
+
+data class ITWingFlowIconStyle @JvmOverloads constructor(
+    val drawableRes: Int? = null,
+    val tintColor: Int? = null,
+    val size: ITWingDimen? = null,
+    val sizeDp: Int? = null,
+)
+
+data class ITWingFlowDotsStyle @JvmOverloads constructor(
+    val activeColor: Int? = null,
+    val inactiveColor: Int? = null,
+    val activeWidth: ITWingDimen? = null,
+    val inactiveWidth: ITWingDimen? = null,
+    val height: ITWingDimen? = null,
+    val spacing: ITWingDimen? = null,
+    val activeWidthDp: Int? = null,
+    val inactiveWidthDp: Int? = null,
+    val heightDp: Int? = null,
+    val spacingDp: Int? = null,
+)
+
+data class ITWingSplashUiStyle @JvmOverloads constructor(
+    val title: ITWingFlowTextStyle = ITWingFlowTextStyle(),
+    val subtitle: ITWingFlowTextStyle = ITWingFlowTextStyle(),
+    val logoWidth: ITWingDimen? = null,
+    val logoHeight: ITWingDimen? = null,
+    val contentMargin: ITWingDimen? = null,
+    val lottieWidth: ITWingDimen? = null,
+    val lottieHeight: ITWingDimen? = null,
+    val lottieBottomMargin: ITWingDimen? = null,
+    val logoWidthDp: Int? = null,
+    val logoHeightDp: Int? = null,
+    val contentMarginDp: Int? = null,
+    val lottieWidthDp: Int? = null,
+    val lottieHeightDp: Int? = null,
+    val lottieBottomMarginDp: Int? = null,
+)
+
+data class ITWingOnboardingUiStyle @JvmOverloads constructor(
+    val nextButton: ITWingFlowButtonStyle = ITWingFlowButtonStyle(),
+    val backButton: ITWingFlowIconStyle = ITWingFlowIconStyle(),
+    val dots: ITWingFlowDotsStyle = ITWingFlowDotsStyle(),
+    val controlsMargin: ITWingDimen? = null,
+    val controlsMarginDp: Int? = null,
+    val bottomBarBackgroundColor: Int? = null,
+)
+
+data class ITWingTermsUiStyle @JvmOverloads constructor(
+    val body: ITWingFlowTextStyle = ITWingFlowTextStyle(),
+    val heading: ITWingFlowTextStyle = ITWingFlowTextStyle(),
+    val acceptButton: ITWingFlowButtonStyle = ITWingFlowButtonStyle(),
+    val checkbox: ITWingFlowTextStyle = ITWingFlowTextStyle(),
+    val checkboxTintColor: Int? = null,
+    val contentPadding: ITWingDimen? = null,
+    val contentPaddingDp: Int? = null,
+)
+
 data class ITWingStartAppFlowConfig @JvmOverloads constructor(
     val endpoint: String? = null,
     val autoApplyResponsiveLayout: Boolean = true,
@@ -81,6 +174,9 @@ data class ITWingStartAppFlowConfig @JvmOverloads constructor(
     val onboardingDotInactiveWidthDp: Int? = null,
     val onboardingDotHeightDp: Int? = null,
     val onboardingDotSpacingDp: Int? = null,
+    val splashUi: ITWingSplashUiStyle = ITWingSplashUiStyle(),
+    val onboardingUi: ITWingOnboardingUiStyle = ITWingOnboardingUiStyle(),
+    val termsUi: ITWingTermsUiStyle = ITWingTermsUiStyle(),
     val listener: SDKInitListener? = null,
 )
 
@@ -150,6 +246,9 @@ data class ITWingAppFlowOptions @JvmOverloads constructor(
     val onboardingDotInactiveWidthDp: Int? = null,
     val onboardingDotHeightDp: Int? = null,
     val onboardingDotSpacingDp: Int? = null,
+    val splashUi: ITWingSplashUiStyle = ITWingSplashUiStyle(),
+    val onboardingUi: ITWingOnboardingUiStyle = ITWingOnboardingUiStyle(),
+    val termsUi: ITWingTermsUiStyle = ITWingTermsUiStyle(),
 )
 
 data class ITWingOnboardingPage @JvmOverloads constructor(
@@ -174,7 +273,18 @@ data class SplashOnBoardings @JvmOverloads constructor(
     val screen10: Int = 0,
 ) {
     val layouts: List<Int>
-        get() = listOf(screen1, screen2, screen3, screen4, screen5, screen6, screen7, screen8, screen9, screen10)
+        get() = listOf(
+            screen1,
+            screen2,
+            screen3,
+            screen4,
+            screen5,
+            screen6,
+            screen7,
+            screen8,
+            screen9,
+            screen10
+        )
             .filter { it != 0 }
 
     companion object {

@@ -23,6 +23,7 @@ import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.core.MediaLibraryConfig
 import com.itwingtech.itwingsdk.core.MediaPlacementConfig
+import com.itwingtech.itwingsdk.utils.NetworkState
 import java.util.concurrent.CopyOnWriteArraySet
 
 fun interface ITWingMediaItemBinder {
@@ -110,6 +111,14 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
 
     fun reload() {
         showLoading()
+        if (!NetworkState.isOnline(context)) {
+            hideLoading()
+            adapter.submit(emptyList())
+            emptyView.text = NetworkState.offlineMessage()
+            emptyView.visibility = VISIBLE
+            ITWingSDK.showSdkFeatureError(context, "${mediaKind.featureTitle()} unavailable", NetworkState.offlineMessage()) { reload() }
+            return
+        }
         waitForReady(20) {
             val placement = resolvePlacement()
             if (!applyPlacement(placement)) return@waitForReady
@@ -331,6 +340,11 @@ open class ITWingMediaCategoriesView @JvmOverloads constructor(
     }
 
     fun reload() {
+        if (!NetworkState.isOnline(context)) {
+            adapter.submit(emptyList())
+            ITWingSDK.showSdkFeatureError(context, "${mediaKind.featureTitle()} categories", NetworkState.offlineMessage()) { reload() }
+            return
+        }
         waitForReady(20) {
             resolvePlacement()?.let { placement ->
                 placement.columns?.let { columns = it.coerceAtLeast(1) }
@@ -638,6 +652,13 @@ private fun Context.findActivity(): Activity? {
 private fun dp(value: Int): Int = (value * android.content.res.Resources.getSystem().displayMetrics.density).toInt()
 
 private fun View.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+private fun String.featureTitle(): String =
+    when (this) {
+        "videos" -> "Videos"
+        "vpn_servers" -> "VPN servers"
+        else -> "Ringtones"
+    }
 
 private fun rounded(color: Int, radius: Float, strokeColor: Int? = null, strokeWidth: Int = 0): GradientDrawable =
     GradientDrawable().apply {

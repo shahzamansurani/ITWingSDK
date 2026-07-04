@@ -84,6 +84,20 @@ class ConfigRepository(
         store.saveActivePlan(productId, basePlanId, offerId)
     }
 
+    fun savePendingPlan(productId: String?, basePlanId: String?, offerId: String?) {
+        store.savePendingPlan(productId, basePlanId, offerId)
+    }
+
+    fun clearPendingPlan() {
+        store.savePendingPlan(null, null, null)
+    }
+
+    fun pendingProductId(): String? = store.pendingProductId()
+
+    fun pendingBasePlanId(): String? = store.pendingBasePlanId()
+
+    fun pendingOfferId(): String? = store.pendingOfferId()
+
     fun saveActivePlanPrice(formattedPrice: String?) {
         store.saveActivePlanPrice(formattedPrice)
     }
@@ -374,20 +388,24 @@ class ConfigRepository(
                 .firstOrNull { it.optBoolean("active", false) }
         }
         val productId = data.optCleanString("product_id") ?: activePurchase?.optCleanString("product_id")
-        val basePlanId = data.optCleanString("base_plan_id") ?: activePurchase?.optCleanString("base_plan_id")
-        val offerId = data.optCleanString("offer_id") ?: activePurchase?.optCleanString("offer_id")
+        val incomingBasePlanId = data.optCleanString("base_plan_id") ?: activePurchase?.optCleanString("base_plan_id")
+        val incomingOfferId = data.optCleanString("offer_id") ?: activePurchase?.optCleanString("offer_id")
+        val basePlanId = incomingBasePlanId ?: store.activeBasePlanId()?.takeIf { productId == store.activeProductId() }
+        val offerId = incomingOfferId ?: store.activeOfferId()?.takeIf { productId == store.activeProductId() }
         val formattedPrice = data.optCleanString("formatted_price")
             ?: activePurchase?.optCleanString("formatted_price")
             ?: formattedPriceFromParts(data)
             ?: activePurchase?.let { formattedPriceFromParts(it) }
         if (active && !productId.isNullOrBlank()) {
             store.saveActivePlan(productId, basePlanId, offerId)
+            store.savePendingPlan(null, null, null)
             if (!formattedPrice.isNullOrBlank()) {
                 store.saveActivePlanPrice(formattedPrice)
             }
         } else if (!active) {
             store.saveActivePlan(null, null, null)
             store.saveActivePlanPrice(null)
+            store.savePendingPlan(null, null, null)
         }
         store.saveEntitlement(active, removesAds, expiresAt)
     }
@@ -782,7 +800,7 @@ class ConfigRepository(
             client.newCall(request).execute()
         } catch (e: UnknownHostException) {
             throw IllegalStateException(
-                "network_dns_unavailable: unable to resolve ${request.url.host}. Check device internet, DNS, VPN/private DNS, or server domain records.",
+                "network_dns_unavailable: unable to reach the SDK server. Check device internet, DNS, VPN/private DNS, or server connection.",
                 e,
             )
         }

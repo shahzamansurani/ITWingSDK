@@ -24,6 +24,7 @@ import com.itwingtech.itwingsdk.core.AdPlacementConfig
 import com.itwingtech.itwingsdk.core.CustomAdConfig
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.databinding.CustomInterstitialBinding
+import com.itwingtech.itwingsdk.utils.NetworkState
 import com.itwingtech.itwingsdk.utils.SDKMediaView
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -48,7 +49,7 @@ internal class CustomFullscreenAdRenderer {
         placement: AdPlacementConfig
     ): Boolean {
 
-        return placement.customAd != null
+        return !placement.customAd?.mediaUrl().isNullOrBlank()
     }
 
     /*
@@ -61,6 +62,8 @@ internal class CustomFullscreenAdRenderer {
         activity: Activity,
         placement: AdPlacementConfig
     ) {
+
+        if (!NetworkState.isOnline(activity)) return
 
         val ad =
             placement.customAd ?: return
@@ -89,8 +92,12 @@ internal class CustomFullscreenAdRenderer {
         onComplete: () -> Unit = {}
     ): Boolean {
 
+        if (!NetworkState.isOnline(activity)) return false
+
         val ad =
             placement.customAd ?: return false
+
+        if (ad.mediaUrl().isNullOrBlank()) return false
         val completion = FullscreenCompletion(onComplete)
         val isRewardedPlacement = placement.format.contains("rewarded", ignoreCase = true)
         val rewardEarned = AtomicBoolean(false)

@@ -12,6 +12,7 @@ import com.google.android.libraries.ads.mobile.sdk.rewarded.RewardedAdEventCallb
 import com.google.android.libraries.ads.mobile.sdk.rewarded.RewardedAdPreloader
 import com.itwingtech.itwingsdk.core.AdPlacementConfig
 import com.itwingtech.itwingsdk.core.ITWingConfig
+import com.itwingtech.itwingsdk.utils.NetworkState
 import com.itwingtech.itwingsdk.utils.runOnMain
 import com.itwingtech.itwingsdk.utils.safeCallback
 import java.util.concurrent.ConcurrentHashMap
@@ -47,6 +48,8 @@ class RewardedManager(
         val config = configProvider()
         if (!config.ads.globalEnabled) return
 
+        if (!NetworkState.isOnline(activity)) return
+
         val placement = config.ads.placements.firstOrNull {
             it.name == placementName && it.enabled && it.format == "rewarded"
         } ?: return
@@ -57,11 +60,9 @@ class RewardedManager(
         }
 
         val unit = placement.units.firstOrNull { it.network == "admob" } ?: return
-        if (!forceRequest && !canStartLoad(placementName, placement)) return
-        if (forceRequest) {
-            lastLoadAttemptAt[placementName] = SystemClock.elapsedRealtime()
-        }
+        if (!canStartLoad(placementName, placement)) return
         val request = AdRequest.Builder(unit.adUnitId).build()
+        AdEventTracker.log("ad_load_requested", placement)
         startPreloader(placementName, unit.adUnitId, request)
     }
 
@@ -77,6 +78,12 @@ class RewardedManager(
             return
         }
         val config = configProvider()
+        if (!NetworkState.isOnline(activity)) {
+            AdFailureDialog.show(activity, config.adPrimaryColor(), NetworkState.offlineMessage())
+            safeCallback(onUnavailableOrSkipped)
+            return
+        }
+
         if (!config.ads.globalEnabled) {
             AdFailureDialog.show(activity, config.adPrimaryColor(), "Rewarded ads are disabled for this app.")
             safeCallback(onUnavailableOrSkipped)
@@ -114,7 +121,7 @@ class RewardedManager(
             AdEventTracker.log("ad_opt_out", placement)
             safeCallback(onUnavailableOrSkipped)
         }) {
-            AdEventTracker.log("ad_requested", placement)
+            AdEventTracker.log("ad_show_requested", placement)
             if (customRenderer.canRender(placement)) {
                 val customRewardEarned = AtomicBoolean(false)
                 val shown = customRenderer.show(activity, placement, reward = {
@@ -135,6 +142,7 @@ class RewardedManager(
                     AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
                     showFailure(activity, placementName, placement, "Another full-screen ad is already showing.", onReward, onComplete, onUnavailableOrSkipped)
                 } else {
+                    AdEventTracker.log("ad_requested", placement)
                     frequency.markShown(placement)
                     AdEventTracker.log("ad_impression", placement)
                 }
@@ -174,6 +182,7 @@ class RewardedManager(
             showFailure(activity, placementName, placement, "Another full-screen ad is already showing.", onReward, onComplete, onUnavailableOrSkipped)
             return
         }
+        AdEventTracker.log("ad_requested", placement)
         ad.adEventCallback = object : RewardedAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
@@ -264,6 +273,16 @@ class RewardedManager(
             if (!activity.isUsable()) {
                 loadingDialog.dismiss()
                 safeCallback(onUnavailableOrSkipped)
+                return
+            }
+            if (!NetworkState.isOnline(activity)) {
+                loadingDialog.dismiss()
+                val placement = configProvider().ads.placements.firstOrNull { it.name == placementName }
+                if (placement != null) {
+                    showFailure(activity, placementName, placement, NetworkState.offlineMessage(), onReward, onComplete, onUnavailableOrSkipped)
+                } else {
+                    safeCallback(onUnavailableOrSkipped)
+                }
                 return
             }
             val ad = pollPreloadedAd(placementName)

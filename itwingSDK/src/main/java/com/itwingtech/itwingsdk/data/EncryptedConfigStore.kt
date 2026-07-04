@@ -55,6 +55,15 @@ class EncryptedConfigStore(context: Context) {
         }
     }
 
+    fun savePendingPlan(productId: String?, basePlanId: String?, offerId: String?) {
+        prefs.edit {
+            putString("pending_product_id", productId)
+            putString("pending_base_plan_id", basePlanId)
+            putString("pending_offer_id", offerId)
+            putLong("pending_plan_saved_at", if (productId.isNullOrBlank()) 0L else System.currentTimeMillis())
+        }
+    }
+
     fun saveActivePlanPrice(formattedPrice: String?) {
         prefs.edit { putString("active_formatted_price", formattedPrice) }
     }
@@ -66,6 +75,12 @@ class EncryptedConfigStore(context: Context) {
     fun activeOfferId(): String? = prefs.getString("active_offer_id", null)?.takeIf(String::isNotBlank)
 
     fun activeFormattedPrice(): String? = prefs.getString("active_formatted_price", null)?.takeIf(String::isNotBlank)
+
+    fun pendingProductId(): String? = prefs.getString("pending_product_id", null)?.takeIf(String::isNotBlank)
+
+    fun pendingBasePlanId(): String? = prefs.getString("pending_base_plan_id", null)?.takeIf(String::isNotBlank)
+
+    fun pendingOfferId(): String? = prefs.getString("pending_offer_id", null)?.takeIf(String::isNotBlank)
 
     fun ownedProductIds(): Set<String> =
         prefs.getStringSet("owned_product_ids", emptySet())?.toSet().orEmpty()

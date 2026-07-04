@@ -12,6 +12,7 @@ import com.google.android.libraries.ads.mobile.sdk.rewardedinterstitial.Rewarded
 import com.google.android.libraries.ads.mobile.sdk.rewardedinterstitial.RewardedInterstitialAdPreloader
 import com.itwingtech.itwingsdk.core.AdPlacementConfig
 import com.itwingtech.itwingsdk.core.ITWingConfig
+import com.itwingtech.itwingsdk.utils.NetworkState
 import com.itwingtech.itwingsdk.utils.runOnMain
 import com.itwingtech.itwingsdk.utils.safeCallback
 import java.util.concurrent.ConcurrentHashMap
@@ -47,6 +48,8 @@ class RewardedInterstitialManager(
         val config = configProvider()
         if (!config.ads.globalEnabled) return
 
+        if (!NetworkState.isOnline(activity)) return
+
         val placement = config.ads.placements.firstOrNull {
             it.name == placementName && it.enabled && it.format == "rewarded_interstitial"
         } ?: return
@@ -57,11 +60,9 @@ class RewardedInterstitialManager(
         }
 
         val unit = placement.units.firstOrNull { it.network == "admob" } ?: return
-        if (!forceRequest && !canStartLoad(placementName, placement)) return
-        if (forceRequest) {
-            lastLoadAttemptAt[placementName] = SystemClock.elapsedRealtime()
-        }
+        if (!canStartLoad(placementName, placement)) return
         val request = AdRequest.Builder(unit.adUnitId).build()
+        AdEventTracker.log("ad_load_requested", placement)
         startPreloader(placementName, unit.adUnitId, request)
     }
 
@@ -75,6 +76,11 @@ class RewardedInterstitialManager(
             return
         }
         val config = configProvider()
+        if (!NetworkState.isOnline(activity)) {
+            AdFailureDialog.show(activity, config.adPrimaryColor(), NetworkState.offlineMessage())
+            return
+        }
+
         if (!config.ads.globalEnabled) {
             AdFailureDialog.show(activity, config.adPrimaryColor(), "Rewarded interstitial ads are disabled for this app.")
             return
@@ -108,7 +114,7 @@ class RewardedInterstitialManager(
             RewardedIntroDialog.show(activity, placement, config.adPrimaryColor(), onSkip = {
                 AdEventTracker.log("ad_opt_out", placement)
             }) {
-                AdEventTracker.log("ad_requested", placement)
+                AdEventTracker.log("ad_show_requested", placement)
                 val customRewardEarned = AtomicBoolean(false)
                 val shown = customRenderer.show(activity, placement, reward = {
                     AdEventTracker.log("ad_reward_earned", placement)
@@ -126,6 +132,7 @@ class RewardedInterstitialManager(
                     AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
                     showFailure(activity, placementName, placement, "Another full-screen ad is already showing.", onReward, onComplete)
                 } else {
+                    AdEventTracker.log("ad_requested", placement)
                     frequency.markShown(placement)
                     AdEventTracker.log("ad_impression", placement)
                 }
@@ -136,7 +143,7 @@ class RewardedInterstitialManager(
         RewardedIntroDialog.show(activity, placement, config.adPrimaryColor(), onSkip = {
             AdEventTracker.log("ad_opt_out", placement)
         }) {
-            AdEventTracker.log("ad_requested", placement)
+            AdEventTracker.log("ad_show_requested", placement)
             val ad = pollPreloadedAd(placementName)
             if (ad == null) {
                 load(activity, placementName, forceRequest = true)
@@ -169,6 +176,7 @@ class RewardedInterstitialManager(
             showFailure(activity, placementName, placement, "Another full-screen ad is already showing.", onReward, onComplete)
             return
         }
+        AdEventTracker.log("ad_requested", placement)
         ad.adEventCallback = object : RewardedInterstitialAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
@@ -254,6 +262,14 @@ class RewardedInterstitialManager(
         fun poll() {
             if (!activity.isUsable()) {
                 loadingDialog.dismiss()
+                return
+            }
+            if (!NetworkState.isOnline(activity)) {
+                loadingDialog.dismiss()
+                val placement = configProvider().ads.placements.firstOrNull { it.name == placementName }
+                if (placement != null) {
+                    showFailure(activity, placementName, placement, NetworkState.offlineMessage(), onReward, onComplete)
+                }
                 return
             }
             val ad = pollPreloadedAd(placementName)

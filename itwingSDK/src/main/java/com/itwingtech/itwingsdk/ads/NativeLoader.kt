@@ -29,6 +29,7 @@ import com.itwingtech.itwingsdk.core.AdPlacementConfig
 import com.itwingtech.itwingsdk.core.CustomAdConfig
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.core.ITWingSDK
+import com.itwingtech.itwingsdk.utils.NetworkState
 import com.itwingtech.itwingsdk.utils.SDKMediaView
 import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
@@ -59,12 +60,15 @@ class NativeLoader(
             return
         }
 
-        val token = nextToken(container)
-
         val config =
             configProvider()
 
         if (!config.ads.globalEnabled) {
+            destroy(container)
+            return
+        }
+
+        if (!NetworkState.isOnline(activity)) {
             destroy(container)
             return
         }
@@ -79,13 +83,13 @@ class NativeLoader(
 
                 return
             }
-        AdEventTracker.log("ad_requested", placement)
-
         val resolvedNativeType =
             resolveNativeType(
                 placement,
                 nativeTypeOverride
             )
+
+        val token = nextToken(container)
 
         /*
         |--------------------------------------------------------------------------
@@ -116,6 +120,7 @@ class NativeLoader(
         val customAd = selectedCustomAd(config, placement)
 
         if (customAd != null) {
+            AdEventTracker.log("ad_requested", placement)
             preloadCustomAd(
                 activity = activity,
                 container = container,
@@ -138,7 +143,6 @@ class NativeLoader(
             placement.units.firstOrNull {
                 it.network == "admob"
             } ?: run {
-
                 stopShimmer(
                     loadingView
                 )
@@ -169,6 +173,8 @@ class NativeLoader(
                         NativeAd.NativeAdType.NATIVE
                     )
                 ).build()
+
+            AdEventTracker.log("ad_requested", placement)
 
             NativeAdLoader.load(
                 request,
@@ -901,7 +907,7 @@ class NativeLoader(
             return null
         }
 
-        placement.customAd?.let {
+        placement.customAd?.takeIf { !it.mediaUrl().isNullOrBlank() }?.let {
             return it
         }
 
@@ -917,6 +923,9 @@ class NativeLoader(
                 it.format == "native" ||
                         it.format == "image" ||
                         it.format == "html"
+            }
+            .filter {
+                !it.mediaUrl().isNullOrBlank()
             }
             .filter {
 
