@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import com.google.android.libraries.ads.mobile.sdk.common.AdRequest
+import com.google.android.libraries.ads.mobile.sdk.common.AdValue
 import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
 import com.google.android.libraries.ads.mobile.sdk.common.PreloadConfiguration
 import com.google.android.libraries.ads.mobile.sdk.rewarded.RewardedAd
@@ -208,6 +209,19 @@ class RewardedManager(
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                 FullscreenAdState.end(fullscreenOwner)
                 showFailure(activity, placementName, placement, fullScreenContentError.message, onReward, onComplete, onUnavailableOrSkipped)
+            }
+
+            override fun onAdPaid(adValue: AdValue) {
+                AdEventTracker.log(
+                    "ad_paid",
+                    placement,
+                    mapOf(
+                        "revenue_micros" to adValue.valueMicros,
+                        "currency" to adValue.currencyCode,
+                        "precision" to adValue.precisionType,
+                        "ad_unit_id" to (placement.units.firstOrNull { it.network == "admob" }?.adUnitId ?: ""),
+                    ),
+                )
             }
         }
 

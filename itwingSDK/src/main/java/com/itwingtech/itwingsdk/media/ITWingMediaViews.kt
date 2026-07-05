@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.content.res.ColorStateList
 import android.util.AttributeSet
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -25,6 +26,7 @@ import com.itwingtech.itwingsdk.core.MediaLibraryConfig
 import com.itwingtech.itwingsdk.core.MediaPlacementConfig
 import com.itwingtech.itwingsdk.utils.NetworkState
 import java.util.concurrent.CopyOnWriteArraySet
+import androidx.core.content.withStyledAttributes
 
 fun interface ITWingMediaItemBinder {
     fun bind(view: View, item: ITWingMediaItem, position: Int)
@@ -60,6 +62,29 @@ private object ITWingMediaCache {
     fun markViewTracked(kind: String, id: String): Boolean = trackedViews.add("$kind:$id")
 }
 
+private data class MediaItemStyle(
+    var widthPx: Int = 0,
+    var heightPx: Int = 0,
+    var spacingPx: Int = 0,
+    var cornerPx: Int = 0,
+    var titleColor: Int = Color.parseColor("#111827"),
+    var backgroundColor: Int = Color.WHITE,
+    var strokeColor: Int = Color.parseColor("#E5E7EB"),
+    var premiumMode: Int = 0,
+    var premiumIcon: Int = 0,
+    var premiumIconTint: Int? = null,
+)
+
+private data class MediaCategoryStyle(
+    var widthPx: Int = 0,
+    var heightPx: Int = 0,
+    var selectedDrawable: Int = 0,
+    var unselectedDrawable: Int = 0,
+    var selectedColor: Int = ITWingSDK.sdkPrimaryColorInt(),
+    var textColor: Int = Color.parseColor("#111827"),
+    var showTitle: Boolean = true,
+)
+
 open class ITWingMediaItemsView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -90,6 +115,7 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
     private var categorySlug: String? = null
     private var clickListener: ((ITWingMediaItem) -> Unit)? = null
     private var customBinder: ITWingMediaItemBinder? = null
+    private val itemStyle = MediaItemStyle()
 
     init {
         readAttrs(attrs)
@@ -169,6 +195,7 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
         adapter.showTitle = showTitle
         adapter.customLayoutRes = customLayoutRes
         adapter.customBinder = customBinder
+        adapter.style = itemStyle
         adapter.submit(items)
         items.forEach {
             if (ITWingMediaCache.markViewTracked(mediaKind, it.id)) {
@@ -227,18 +254,140 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
     }
 
     private fun readAttrs(attrs: AttributeSet?) {
-        val a = context.obtainStyledAttributes(attrs, R.styleable.ITWingMediaItemsView)
-        placementName = a.getString(R.styleable.ITWingMediaItemsView_ITWingMediaPlacement)
-        columns = a.getInt(R.styleable.ITWingMediaItemsView_ITWingMediaColumns, columns).coerceAtLeast(1)
-        horizontal = a.getBoolean(R.styleable.ITWingMediaItemsView_ITWingMediaHorizontal, horizontal)
-        limit = a.getInt(R.styleable.ITWingMediaItemsView_ITWingMediaLimit, limit).coerceIn(1, 500)
-        showTrending = a.getBoolean(R.styleable.ITWingMediaItemsView_ITWingMediaTopTrending, showTrending)
-        showTitle = a.getBoolean(R.styleable.ITWingMediaItemsView_ITWingMediaShowTitle, showTitle)
-        customLayoutRes = a.getResourceId(R.styleable.ITWingMediaItemsView_ITWingMediaItemLayout, 0)
-        premiumUnlockPlacement = a.getString(R.styleable.ITWingMediaItemsView_ITWingMediaPremiumUnlockPlacement) ?: premiumUnlockPlacement
-        a.recycle()
+        context.withStyledAttributes(attrs, R.styleable.ITWingMediaItemsView) {
+            placementName = getString(R.styleable.ITWingMediaItemsView_ITWingMediaPlacement)
+            columns = getInt(
+                R.styleable.ITWingMediaItemsView_ITWingMediaColumns,
+                columns
+            ).coerceAtLeast(1)
+            horizontal =
+                getBoolean(R.styleable.ITWingMediaItemsView_ITWingMediaHorizontal, horizontal)
+            limit =
+                getInt(R.styleable.ITWingMediaItemsView_ITWingMediaLimit, limit).coerceIn(1, 500)
+            showTrending =
+                getBoolean(R.styleable.ITWingMediaItemsView_ITWingMediaTopTrending, showTrending)
+            showTitle = getBoolean(R.styleable.ITWingMediaItemsView_ITWingMediaShowTitle, showTitle)
+            customLayoutRes =
+                getResourceId(R.styleable.ITWingMediaItemsView_ITWingMediaItemLayout, 0)
+            premiumUnlockPlacement =
+                getString(R.styleable.ITWingMediaItemsView_ITWingMediaPremiumUnlockPlacement)
+                    ?: premiumUnlockPlacement
+            itemStyle.widthPx = getDimensionPixelSize(
+                R.styleable.ITWingMediaItemsView_ITWingMediaItemWidth,
+                itemStyle.widthPx
+            )
+            itemStyle.heightPx = getDimensionPixelSize(
+                R.styleable.ITWingMediaItemsView_ITWingMediaItemHeight,
+                itemStyle.heightPx
+            )
+            itemStyle.spacingPx = getDimensionPixelSize(
+                R.styleable.ITWingMediaItemsView_ITWingMediaItemSpacing,
+                itemStyle.spacingPx
+            )
+            itemStyle.cornerPx = getDimensionPixelSize(
+                R.styleable.ITWingMediaItemsView_ITWingMediaCornerRadius,
+                itemStyle.cornerPx
+            )
+            itemStyle.titleColor = getColor(
+                R.styleable.ITWingMediaItemsView_ITWingMediaTitleTextColor,
+                itemStyle.titleColor
+            )
+            itemStyle.backgroundColor = getColor(
+                R.styleable.ITWingMediaItemsView_ITWingMediaItemBackgroundColor,
+                itemStyle.backgroundColor
+            )
+            itemStyle.strokeColor = getColor(
+                R.styleable.ITWingMediaItemsView_ITWingMediaItemStrokeColor,
+                itemStyle.strokeColor
+            )
+            itemStyle.premiumMode = getInt(
+                R.styleable.ITWingMediaItemsView_ITWingMediaPremiumMode,
+                itemStyle.premiumMode
+            )
+            itemStyle.premiumIcon = getResourceId(
+                R.styleable.ITWingMediaItemsView_ITWingMediaPremiumIcon,
+                itemStyle.premiumIcon
+            )
+            if (hasValue(R.styleable.ITWingMediaItemsView_ITWingMediaPremiumIconTint)) {
+                itemStyle.premiumIconTint =
+                    getColor(R.styleable.ITWingMediaItemsView_ITWingMediaPremiumIconTint, Color.WHITE)
+            }
+        }
+        readWallpaperItemCompatAttrs(attrs)
         adapter.showTitle = showTitle
         adapter.customLayoutRes = customLayoutRes
+        adapter.style = itemStyle
+    }
+
+    private fun readWallpaperItemCompatAttrs(attrs: AttributeSet?) {
+        if (attrs == null) return
+        context.withStyledAttributes(attrs, R.styleable.ITWingWallpapersView) {
+            placementName = placementName
+                ?: getString(R.styleable.ITWingWallpapersView_ITWingWallpaperPlacement)
+            columns = getInt(
+                R.styleable.ITWingWallpapersView_ITWingWallpaperColumns,
+                columns
+            ).coerceAtLeast(1)
+            horizontal =
+                getBoolean(R.styleable.ITWingWallpapersView_ITWingWallpaperHorizontal, horizontal)
+            limit = getInt(R.styleable.ITWingWallpapersView_ITWingWallpaperLimit, limit).coerceIn(
+                1,
+                500
+            )
+            showTrending = getBoolean(
+                R.styleable.ITWingWallpapersView_ITWingWallpaperTopTrending,
+                showTrending
+            )
+            showTitle =
+                getBoolean(R.styleable.ITWingWallpapersView_ITWingWallpaperShowTitle, showTitle)
+            if (customLayoutRes == 0) customLayoutRes =
+                getResourceId(R.styleable.ITWingWallpapersView_ITWingWallpaperItemLayout, 0)
+            premiumUnlockPlacement =
+                getString(R.styleable.ITWingWallpapersView_ITWingWallpaperPremiumUnlockPlacement)
+                    ?: premiumUnlockPlacement
+            itemStyle.widthPx = getDimensionPixelSize(
+                R.styleable.ITWingWallpapersView_ITWingWallpaperItemWidth,
+                itemStyle.widthPx
+            )
+            itemStyle.heightPx = getDimensionPixelSize(
+                R.styleable.ITWingWallpapersView_ITWingWallpaperItemHeight,
+                itemStyle.heightPx
+            )
+            itemStyle.spacingPx = getDimensionPixelSize(
+                R.styleable.ITWingWallpapersView_ITWingWallpaperItemSpacing,
+                itemStyle.spacingPx
+            )
+            itemStyle.cornerPx = getDimensionPixelSize(
+                R.styleable.ITWingWallpapersView_ITWingWallpaperCornerRadius,
+                itemStyle.cornerPx
+            )
+            itemStyle.titleColor = getColor(
+                R.styleable.ITWingWallpapersView_ITWingWallpaperTitleTextColor,
+                itemStyle.titleColor
+            )
+            itemStyle.backgroundColor = getColor(
+                R.styleable.ITWingWallpapersView_ITWingWallpaperItemBackgroundColor,
+                itemStyle.backgroundColor
+            )
+            itemStyle.strokeColor = getColor(
+                R.styleable.ITWingWallpapersView_ITWingWallpaperItemStrokeColor,
+                itemStyle.strokeColor
+            )
+            itemStyle.premiumMode = getInt(
+                R.styleable.ITWingWallpapersView_ITWingWallpaperPremiumMode,
+                itemStyle.premiumMode
+            )
+            itemStyle.premiumIcon = getResourceId(
+                R.styleable.ITWingWallpapersView_ITWingWallpaperPremiumIcon,
+                itemStyle.premiumIcon
+            )
+            if (hasValue(R.styleable.ITWingWallpapersView_ITWingWallpaperPremiumIconTint)) {
+                itemStyle.premiumIconTint = getColor(
+                    R.styleable.ITWingWallpapersView_ITWingWallpaperPremiumIconTint,
+                    Color.WHITE
+                )
+            }
+        }
     }
 
     private fun resolvePlacement(): MediaPlacementConfig? {
@@ -325,6 +474,7 @@ open class ITWingMediaCategoriesView @JvmOverloads constructor(
     private var customLayoutRes = 0
     private var clickListener: ((ITWingMediaCategory) -> Unit)? = null
     private var customBinder: ITWingMediaCategoryBinder? = null
+    private val categoryStyle = MediaCategoryStyle()
 
     init {
         readAttrs(attrs)
@@ -364,6 +514,7 @@ open class ITWingMediaCategoriesView @JvmOverloads constructor(
                     adapter.displayMode = displayMode
                     adapter.customLayoutRes = customLayoutRes
                     adapter.customBinder = customBinder
+                    adapter.style = categoryStyle
                     adapter.submit(listOf(all) + response.categories)
                 }
 
@@ -393,18 +544,60 @@ open class ITWingMediaCategoriesView @JvmOverloads constructor(
     }
 
     private fun readAttrs(attrs: AttributeSet?) {
-        val a = context.obtainStyledAttributes(attrs, R.styleable.ITWingMediaCategoriesView)
-        placementName = a.getString(R.styleable.ITWingMediaCategoriesView_ITWingMediaPlacement)
-        columns = a.getInt(R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryColumns, columns).coerceAtLeast(1)
-        horizontal = a.getBoolean(R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryHorizontal, horizontal)
-        linkedViewId = a.getResourceId(R.styleable.ITWingMediaCategoriesView_ITWingMediaLinkedView, 0)
-        customLayoutRes = a.getResourceId(R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryItemLayout, 0)
-        displayMode = when (a.getInt(R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryDisplayMode, 0)) {
-            1 -> DisplayMode.IMAGE
-            2 -> DisplayMode.BOTH
-            else -> DisplayMode.TEXT
+        context.withStyledAttributes(attrs, R.styleable.ITWingMediaCategoriesView) {
+            placementName = getString(R.styleable.ITWingMediaCategoriesView_ITWingMediaPlacement)
+            columns = getInt(
+                R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryColumns,
+                columns
+            ).coerceAtLeast(1)
+            horizontal = getBoolean(
+                R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryHorizontal,
+                horizontal
+            )
+            linkedViewId =
+                getResourceId(R.styleable.ITWingMediaCategoriesView_ITWingMediaLinkedView, 0)
+            categoryStyle.widthPx = getDimensionPixelSize(
+                R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryItemWidth,
+                categoryStyle.widthPx
+            )
+            categoryStyle.heightPx = getDimensionPixelSize(
+                R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryItemHeight,
+                categoryStyle.heightPx
+            )
+            customLayoutRes = getResourceId(
+                R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryItemLayout,
+                0
+            )
+            categoryStyle.selectedDrawable = getResourceId(
+                R.styleable.ITWingMediaCategoriesView_ITWingMediaCategorySelectedDrawable,
+                categoryStyle.selectedDrawable
+            )
+            categoryStyle.unselectedDrawable = getResourceId(
+                R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryUnselectedDrawable,
+                categoryStyle.unselectedDrawable
+            )
+            categoryStyle.selectedColor = getColor(
+                R.styleable.ITWingMediaCategoriesView_ITWingMediaCategorySelectedColor,
+                categoryStyle.selectedColor
+            )
+            categoryStyle.textColor = getColor(
+                R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryTextColor,
+                categoryStyle.textColor
+            )
+            categoryStyle.showTitle = getBoolean(
+                R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryShowTitle,
+                categoryStyle.showTitle
+            )
+            displayMode = when (getInt(
+                R.styleable.ITWingMediaCategoriesView_ITWingMediaCategoryDisplayMode,
+                0
+            )) {
+                1 -> DisplayMode.IMAGE
+                2 -> DisplayMode.BOTH
+                else -> DisplayMode.TEXT
+            }
         }
-        a.recycle()
+        readWallpaperCategoryCompatAttrs(attrs)
         resolvePlacement()?.let { placement ->
             placement.columns?.let { columns = it.coerceAtLeast(1) }
             placement.horizontal?.let { horizontal = it }
@@ -414,6 +607,65 @@ open class ITWingMediaCategoriesView @JvmOverloads constructor(
                     "both" -> DisplayMode.BOTH
                     else -> DisplayMode.TEXT
                 }
+            }
+        }
+    }
+
+    private fun readWallpaperCategoryCompatAttrs(attrs: AttributeSet?) {
+        if (attrs == null) return
+        context.withStyledAttributes(attrs, R.styleable.ITWingWallpaperCategoriesView) {
+            placementName = placementName
+                ?: getString(R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperPlacement)
+                        ?: getString(R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperCategoryPlacement)
+            columns = getInt(
+                R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperCategoryColumns,
+                columns
+            ).coerceAtLeast(1)
+            horizontal = getBoolean(
+                R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperCategoryHorizontal,
+                horizontal
+            )
+            if (linkedViewId == 0) linkedViewId = getResourceId(
+                R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperLinkedView,
+                0
+            )
+            categoryStyle.widthPx = getDimensionPixelSize(
+                R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperCategoryItemWidth,
+                categoryStyle.widthPx
+            )
+            categoryStyle.heightPx = getDimensionPixelSize(
+                R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperCategoryItemHeight,
+                categoryStyle.heightPx
+            )
+            if (customLayoutRes == 0) customLayoutRes = getResourceId(
+                R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperCategoryItemLayout,
+                0
+            )
+            categoryStyle.selectedDrawable = getResourceId(
+                R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperCategorySelectedDrawable,
+                categoryStyle.selectedDrawable
+            )
+            categoryStyle.unselectedDrawable = getResourceId(
+                R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperCategoryUnselectedDrawable,
+                categoryStyle.unselectedDrawable
+            )
+            categoryStyle.selectedColor = getColor(
+                R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperCategorySelectedColor,
+                categoryStyle.selectedColor
+            )
+            categoryStyle.textColor = getColor(
+                R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperCategoryTextColor,
+                categoryStyle.textColor
+            )
+            categoryStyle.showTitle = getBoolean(R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperCategoryShowTitle, categoryStyle.showTitle)
+            displayMode = when (getInt(R.styleable.ITWingWallpaperCategoriesView_ITWingWallpaperCategoryDisplayMode, when (displayMode) {
+                DisplayMode.IMAGE -> 1
+                DisplayMode.BOTH -> 2
+                else -> 0
+            })) {
+                1 -> DisplayMode.IMAGE
+                2 -> DisplayMode.BOTH
+                else -> DisplayMode.TEXT
             }
         }
     }
@@ -472,6 +724,7 @@ private class MediaItemAdapter(
     var showTitle = true
     var customLayoutRes = 0
     var customBinder: ITWingMediaItemBinder? = null
+    var style = MediaItemStyle()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
         val view = if (customLayoutRes != 0) {
@@ -479,6 +732,7 @@ private class MediaItemAdapter(
         } else {
             defaultMediaItem(parent.context)
         }
+        view.applyMediaItemLayout(style)
         return Holder(view)
     }
 
@@ -486,7 +740,7 @@ private class MediaItemAdapter(
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
         val item = items[position]
-        customBinder?.bind(holder.itemView, item, position) ?: holder.itemView.bindMediaItem(item, kind, showTitle)
+        customBinder?.bind(holder.itemView, item, position) ?: holder.itemView.bindMediaItem(item, kind, showTitle, style)
         holder.itemView.setOnClickListener { onClick(it, item) }
     }
 
@@ -507,9 +761,11 @@ private class MediaCategoryAdapter(
     var displayMode = ITWingMediaCategoriesView.DisplayMode.TEXT
     var customLayoutRes = 0
     var customBinder: ITWingMediaCategoryBinder? = null
+    var style = MediaCategoryStyle()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
         val view = if (customLayoutRes != 0) LayoutInflater.from(parent.context).inflate(customLayoutRes, parent, false) else defaultCategoryItem(parent.context)
+        view.applyMediaCategoryLayout(style)
         return Holder(view)
     }
 
@@ -518,7 +774,7 @@ private class MediaCategoryAdapter(
     override fun onBindViewHolder(holder: Holder, position: Int) {
         val item = items[position]
         val isSelected = item.id == selected || (selected.isBlank() && item.id.isBlank())
-        customBinder?.bind(holder.itemView, item, isSelected, position) ?: holder.itemView.bindMediaCategory(item, displayMode, isSelected)
+        customBinder?.bind(holder.itemView, item, isSelected, position) ?: holder.itemView.bindMediaCategory(item, displayMode, isSelected, style)
         holder.itemView.setOnClickListener {
             val old = selected
             selected = item.id
@@ -593,14 +849,20 @@ private fun defaultCategoryItem(context: Context): View = FrameLayout(context).a
     }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 }
 
-private fun View.bindMediaItem(item: ITWingMediaItem, kind: String, showTitle: Boolean) {
+private fun View.bindMediaItem(item: ITWingMediaItem, kind: String, showTitle: Boolean, style: MediaItemStyle) {
     val image = findViewByName<ImageView>("itwing_media_image", "media_image", "thumbnail")
     val icon = findViewByName<TextView>("itwing_media_icon")
     val title = findViewByName<TextView>("itwing_media_title", "media_title", "title")
     val premium = findViewByName<TextView>("itwing_media_premium", "media_premium", "premium")
     title?.text = item.title
+    title?.setTextColor(style.titleColor)
     title?.visibility = if (showTitle) View.VISIBLE else View.GONE
     premium?.visibility = if (item.isPremium) View.VISIBLE else View.GONE
+    if (premium != null && item.isPremium && style.premiumIcon != 0 && style.premiumMode != 0) {
+        premium.text = if (style.premiumMode == 1) "" else premium.text
+        premium.setCompoundDrawablesWithIntrinsicBounds(style.premiumIcon, 0, 0, 0)
+        style.premiumIconTint?.let { premium.compoundDrawableTintList = ColorStateList.valueOf(it) }
+    }
     val artwork = item.thumbnailUrl?.takeIf(String::isNotBlank)
     if (artwork != null && image != null) {
         image.visibility = View.VISIBLE
@@ -617,17 +879,44 @@ private fun View.bindMediaItem(item: ITWingMediaItem, kind: String, showTitle: B
     }
 }
 
-private fun View.bindMediaCategory(item: ITWingMediaCategory, mode: ITWingMediaCategoriesView.DisplayMode, selected: Boolean) {
+private fun View.bindMediaCategory(item: ITWingMediaCategory, mode: ITWingMediaCategoriesView.DisplayMode, selected: Boolean, style: MediaCategoryStyle) {
     val image = findViewByName<ImageView>("itwing_media_category_image", "media_category_image", "category_image")
     val title = findViewByName<TextView>("itwing_media_category_title", "media_category_title", "category_title", "title")
-    background = rounded(if (selected) ITWingSDK.sdkPrimaryColorInt() else Color.WHITE, dp(999).toFloat(), Color.parseColor("#E5E7EB"), 1)
+    if (selected && style.selectedDrawable != 0) {
+        setBackgroundResource(style.selectedDrawable)
+    } else if (!selected && style.unselectedDrawable != 0) {
+        setBackgroundResource(style.unselectedDrawable)
+    } else {
+        background = rounded(if (selected) style.selectedColor else Color.WHITE, dp(999).toFloat(), Color.parseColor("#E5E7EB"), 1)
+    }
     title?.text = item.name
-    title?.setTextColor(if (selected) Color.WHITE else Color.parseColor("#111827"))
-    title?.visibility = if (mode == ITWingMediaCategoriesView.DisplayMode.IMAGE) View.GONE else View.VISIBLE
+    title?.setTextColor(if (selected) Color.WHITE else style.textColor)
+    title?.visibility = if (!style.showTitle || mode == ITWingMediaCategoriesView.DisplayMode.IMAGE) View.GONE else View.VISIBLE
     image?.visibility = if (mode == ITWingMediaCategoriesView.DisplayMode.TEXT || item.imageUrl.isNullOrBlank()) View.GONE else View.VISIBLE
     if (!item.imageUrl.isNullOrBlank() && image != null) {
         Glide.with(image).load(item.imageUrl).centerCrop().into(image)
     }
+}
+
+private fun View.applyMediaItemLayout(style: MediaItemStyle) {
+    val width = style.widthPx.takeIf { it > 0 }
+    val height = style.heightPx.takeIf { it > 0 }
+    if (width != null || height != null) {
+        layoutParams = RecyclerView.LayoutParams(width ?: ViewGroup.LayoutParams.WRAP_CONTENT, height ?: ViewGroup.LayoutParams.WRAP_CONTENT)
+    }
+    (layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+        val spacing = style.spacingPx.coerceAtLeast(0)
+        it.setMargins(spacing, spacing, spacing, spacing)
+    }
+    if (style.cornerPx > 0) {
+        background = rounded(style.backgroundColor, style.cornerPx.toFloat(), style.strokeColor, 1)
+    }
+}
+
+private fun View.applyMediaCategoryLayout(style: MediaCategoryStyle) {
+    val width = style.widthPx.takeIf { it > 0 } ?: ViewGroup.LayoutParams.WRAP_CONTENT
+    val height = style.heightPx.takeIf { it > 0 } ?: ViewGroup.LayoutParams.MATCH_PARENT
+    layoutParams = RecyclerView.LayoutParams(width, height)
 }
 
 private inline fun <reified T : View> View.findViewByName(vararg names: String): T? {

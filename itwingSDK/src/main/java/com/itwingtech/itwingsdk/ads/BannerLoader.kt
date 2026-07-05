@@ -22,9 +22,11 @@ import com.facebook.shimmer.ShimmerFrameLayout
 import com.google.android.libraries.ads.mobile.sdk.banner.AdSize
 import com.google.android.libraries.ads.mobile.sdk.banner.AdView
 import com.google.android.libraries.ads.mobile.sdk.banner.BannerAd
+import com.google.android.libraries.ads.mobile.sdk.banner.BannerAdEventCallback
 import com.google.android.libraries.ads.mobile.sdk.banner.BannerAdRefreshCallback
 import com.google.android.libraries.ads.mobile.sdk.banner.BannerAdRequest
 import com.google.android.libraries.ads.mobile.sdk.common.AdLoadCallback
+import com.google.android.libraries.ads.mobile.sdk.common.AdValue
 import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.AdPlacementConfig
@@ -182,6 +184,21 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                                 loadingView = loadingView,
                                 realView = adView
                             )
+
+                            ad.adEventCallback = object : BannerAdEventCallback {
+                                override fun onAdPaid(adValue: AdValue) {
+                                    AdEventTracker.log(
+                                        "ad_paid",
+                                        placement,
+                                        mapOf(
+                                            "revenue_micros" to adValue.valueMicros,
+                                            "currency" to adValue.currencyCode,
+                                            "precision" to adValue.precisionType,
+                                            "ad_unit_id" to unit.adUnitId,
+                                        ),
+                                    )
+                                }
+                            }
 
                             ad.bannerAdRefreshCallback = object : BannerAdRefreshCallback {
                                 override fun onAdRefreshed() {}

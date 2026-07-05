@@ -16,10 +16,12 @@ import android.widget.TextView
 import androidx.annotation.LayoutRes
 import com.bumptech.glide.Glide
 import com.facebook.shimmer.ShimmerFrameLayout
+import com.google.android.libraries.ads.mobile.sdk.common.AdValue
 import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
 import com.google.android.libraries.ads.mobile.sdk.common.VideoController
 import com.google.android.libraries.ads.mobile.sdk.nativead.MediaContent
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAd
+import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdEventCallback
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdLoader
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdLoaderCallback
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdRequest
@@ -200,6 +202,21 @@ class NativeLoader(
                                 nativeAds[container] = nativeAd
                             }
                             AdEventTracker.log("ad_loaded", placement)
+
+                            nativeAd.adEventCallback = object : NativeAdEventCallback {
+                                override fun onAdPaid(adValue: AdValue) {
+                                    AdEventTracker.log(
+                                        "ad_paid",
+                                        placement,
+                                        mapOf(
+                                            "revenue_micros" to adValue.valueMicros,
+                                            "currency" to adValue.currencyCode,
+                                            "precision" to adValue.precisionType,
+                                            "ad_unit_id" to unit.adUnitId,
+                                        ),
+                                    )
+                                }
+                            }
 
                             @LayoutRes
                             val layoutRes =

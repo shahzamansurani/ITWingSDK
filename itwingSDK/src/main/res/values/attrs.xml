@@ -113,7 +113,15 @@
         <attr name="ITWingMediaLimit" format="integer" />
         <attr name="ITWingMediaTopTrending" format="boolean" />
         <attr name="ITWingMediaShowTitle" format="boolean" />
+        <attr name="ITWingMediaItemWidth" format="dimension" />
+        <attr name="ITWingMediaItemHeight" format="dimension" />
+        <attr name="ITWingMediaItemSpacing" format="dimension" />
+        <attr name="ITWingMediaCornerRadius" format="dimension" />
         <attr name="ITWingMediaItemLayout" format="reference" />
+        <attr name="ITWingMediaTitleTextColor" format="color" />
+        <attr name="ITWingMediaMutedTextColor" format="color" />
+        <attr name="ITWingMediaItemBackgroundColor" format="color" />
+        <attr name="ITWingMediaItemStrokeColor" format="color" />
         <attr name="ITWingMediaPremiumUnlockPlacement" format="string" />
         <attr name="ITWingMediaPremiumMode">
             <enum name="text" value="0" />
@@ -129,6 +137,8 @@
         <attr name="ITWingMediaCategoryColumns" format="integer" />
         <attr name="ITWingMediaCategoryHorizontal" format="boolean" />
         <attr name="ITWingMediaLinkedView" format="reference" />
+        <attr name="ITWingMediaCategoryItemWidth" format="dimension" />
+        <attr name="ITWingMediaCategoryItemHeight" format="dimension" />
         <attr name="ITWingMediaCategoryItemLayout" format="reference" />
         <attr name="ITWingMediaCategoryDisplayMode">
             <enum name="text" value="0" />
@@ -138,6 +148,16 @@
         <attr name="ITWingMediaCategoryShowTitle" format="boolean" />
         <attr name="ITWingMediaCategorySelectedDrawable" format="reference" />
         <attr name="ITWingMediaCategoryUnselectedDrawable" format="reference" />
+        <attr name="ITWingMediaCategorySelectedColor" format="color" />
+        <attr name="ITWingMediaCategoryTextColor" format="color" />
+        <attr name="ITWingMediaCategoryMutedTextColor" format="color" />
+        <attr name="ITWingMediaCategoryTextPosition">
+            <enum name="top" value="0" />
+            <enum name="center" value="1" />
+            <enum name="bottom" value="2" />
+            <enum name="overlay_bottom" value="3" />
+            <enum name="overlay_top" value="4" />
+        </attr>
     </declare-styleable>
 
 </resources>

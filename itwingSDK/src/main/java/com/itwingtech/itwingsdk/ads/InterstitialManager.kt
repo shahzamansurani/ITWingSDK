@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import com.google.android.libraries.ads.mobile.sdk.common.AdRequest
+import com.google.android.libraries.ads.mobile.sdk.common.AdValue
 import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
 import com.google.android.libraries.ads.mobile.sdk.common.PreloadConfiguration
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAd
@@ -182,6 +183,19 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
 
             override fun onAdImpression() {
                 AdEventTracker.log("ad_impression_recorded", placement)
+            }
+
+            override fun onAdPaid(adValue: AdValue) {
+                AdEventTracker.log(
+                    "ad_paid",
+                    placement,
+                    mapOf(
+                        "revenue_micros" to adValue.valueMicros,
+                        "currency" to adValue.currencyCode,
+                        "precision" to adValue.precisionType,
+                        "ad_unit_id" to (placement.units.firstOrNull { it.network == "admob" }?.adUnitId ?: ""),
+                    ),
+                )
             }
         }
 
