@@ -744,6 +744,10 @@ private class OnboardingAdapter(
         } else {
             content
         }
+        view.layoutParams = RecyclerView.LayoutParams(
+            RecyclerView.LayoutParams.MATCH_PARENT,
+            RecyclerView.LayoutParams.MATCH_PARENT,
+        )
         return Holder(view, pageAdsEnabled)
     }
 
