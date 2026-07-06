@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -381,6 +382,7 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
             root = findViewById(R.id.itwing_flow_root),
             back = backButton,
             bottomBar = findViewById(R.id.itwing_flow_bottom_bar),
+            bottomAd = bottomAdContainer,
             margin = current.flowOptions.onboardingUi.controlsMargin,
             marginDp = current.flowOptions.onboardingControlsMarginDp,
         )
@@ -721,7 +723,28 @@ private class OnboardingAdapter(
     override fun getItemViewType(position: Int): Int = pages[position].layoutResId.takeIf { it != 0 } ?: R.layout.item_itwing_flow_onboarding
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
-        return Holder(LayoutInflater.from(parent.context).inflate(viewType, parent, false), pageAdsEnabled)
+        val content = LayoutInflater.from(parent.context).inflate(viewType, parent, false)
+        val view = if (pageAdsEnabled && content.findViewById<FrameLayout?>(R.id.itwing_flow_page_ad_container) == null) {
+            FrameLayout(parent.context).apply {
+                addView(content, FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                ))
+                addView(FrameLayout(parent.context).apply {
+                    id = R.id.itwing_flow_page_ad_container
+                    visibility = View.GONE
+                }, FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM,
+                ).apply {
+                    bottomMargin = parent.context.dp(78)
+                })
+            }
+        } else {
+            content
+        }
+        return Holder(view, pageAdsEnabled)
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
@@ -807,7 +830,7 @@ private fun applyInsets(root: View) {
     }
 }
 
-private fun applyOnboardingInsets(root: View, back: View, bottomBar: View, margin: ITWingDimen?, marginDp: Int?) {
+private fun applyOnboardingInsets(root: View, back: View, bottomBar: View, bottomAd: View, margin: ITWingDimen?, marginDp: Int?) {
     ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
         val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
         val marginPx = root.context.dimensionPx(margin) ?: root.context.dp(marginDp ?: 20)
@@ -821,6 +844,13 @@ private fun applyOnboardingInsets(root: View, back: View, bottomBar: View, margi
             params.rightMargin = bars.right + marginPx
             params.bottomMargin = bars.bottom + marginPx
             bottomBar.layoutParams = params
+        }
+        (bottomAd.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+            val bottomBarHeight = bottomBar.measuredHeight.takeIf { it > 0 } ?: root.context.dp(35)
+            params.leftMargin = bars.left
+            params.rightMargin = bars.right
+            params.bottomMargin = bars.bottom + marginPx + bottomBarHeight + root.context.dp(8)
+            bottomAd.layoutParams = params
         }
         insets
     }
@@ -845,12 +875,19 @@ private fun applyTermsInsets(root: View, content: View, controls: View, padding:
 }
 
 private fun resolvePages(options: ITWingAppFlowOptions): List<ITWingOnboardingPage> {
+    val remotePageMaps = ITWingSDK.currentConfig().app["onboarding_pages"].asListOfMaps()
+        .ifEmpty { ITWingSDK.currentConfig().app["onboarding"].asListOfMaps() }
     fun hostXmlPages(): List<ITWingOnboardingPage> = options.splashOnboardings.layouts.mapIndexed { index, layout ->
+            val remote = remotePageMaps.getOrNull(index)
             ITWingOnboardingPage(
-                title = "",
-                description = "",
+                title = remote?.value("title") ?: "",
+                description = remote?.value("description") ?: remote?.value("body") ?: "",
                 imageResId = options.onboardingImages.getOrElse(index) { 0 },
                 layoutResId = layout,
+                nativePlacement = remote?.value("native_placement")
+                    ?: remote?.value("native_ad_placement")
+                    ?: remote?.value("ad_placement")
+                    ?: options.onboardingActivityAdPlacement,
             )
         }
 
@@ -859,9 +896,7 @@ private fun resolvePages(options: ITWingAppFlowOptions): List<ITWingOnboardingPa
     if (source == "host_xml" && hostPages.isNotEmpty()) return hostPages
     if (options.onboardingPages.isNotEmpty()) return options.onboardingPages
 
-    val remotePages = ITWingSDK.currentConfig().app["onboarding_pages"].asListOfMaps()
-        .ifEmpty { ITWingSDK.currentConfig().app["onboarding"].asListOfMaps() }
-        .mapNotNull { item ->
+    val remotePages = remotePageMaps.mapNotNull { item ->
             val title = item.value("title") ?: ""
             val description = item.value("description") ?: item.value("body") ?: ""
             val imageUrl = item.value("image_url") ?: item.value("image")
