@@ -3,8 +3,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:layout_gravity="center"
-    android:background="@color/white"
-    android:padding="@dimen/_5sdp">
+    android:background="@drawable/itwing_purchase_dialog_bg"
+    android:padding="@dimen/_7sdp">
 
     <RelativeLayout
         android:id="@+id/ad_unit_content"
@@ -12,7 +12,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:gravity="center"
-        android:background="@color/white"
+        android:background="@android:color/transparent"
         android:orientation="vertical">
 
         <LinearLayout
@@ -45,7 +45,7 @@
                         android:ellipsize="end"
                         android:maxLines="2"
                         android:text="Headline"
-                        android:textColor="@color/black"
+                        android:textColor="#F8FAFC"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
@@ -58,7 +58,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:gravity="center"
-                            android:textColor="@color/black"
+                            android:textColor="#CBD5E1"
                             android:textSize="14sp"
                             android:textStyle="bold" />
 
@@ -71,7 +71,7 @@
                             android:paddingEnd="5dp"
                             android:paddingRight="5dp"
                             android:text="Free"
-                            android:textColor="@color/black"
+                            android:textColor="#CBD5E1"
                             android:textSize="12sp" />
 
                         <RatingBar
@@ -93,7 +93,7 @@
                             android:paddingEnd="5dp"
                             android:paddingRight="5dp"
                             android:text="Google play"
-                            android:textColor="@color/black"
+                            android:textColor="#CBD5E1"
                             android:textSize="12sp" />
                     </LinearLayout>
 
@@ -106,7 +106,7 @@
                 android:layout_height="wrap_content"
                 android:maxLines="3"
                 android:text="This is Ad Body"
-                android:textColor="@color/black"
+                android:textColor="#CBD5E1"
                 android:textSize="@dimen/_10ssp" />
 
             <com.google.android.libraries.ads.mobile.sdk.nativead.MediaView

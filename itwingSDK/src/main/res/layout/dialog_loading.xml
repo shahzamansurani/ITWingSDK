@@ -14,11 +14,13 @@
         android:layout_width="@dimen/_90sdp"
         android:layout_height="@dimen/_90sdp"
         android:layout_centerInParent="true"
-        app:cardBackgroundColor="@color/white"
+        app:cardBackgroundColor="#D0111827"
         app:cardCornerRadius="@dimen/_45sdp"
         app:cardElevation="@dimen/_2sdp"
         app:cardPreventCornerOverlap="false"
-        app:cardUseCompatPadding="true">
+        app:cardUseCompatPadding="true"
+        app:strokeColor="#55FFFFFF"
+        app:strokeWidth="1dp">
 
         <com.airbnb.lottie.LottieAnimationView
             android:id="@+id/lottieAnimationView"

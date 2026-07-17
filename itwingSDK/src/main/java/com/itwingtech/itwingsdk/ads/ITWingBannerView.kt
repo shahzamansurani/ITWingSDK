@@ -263,7 +263,11 @@ class ITWingBannerView @JvmOverloads constructor(
                     return@post
                 }
 
-                if (width <= 0) {
+                if (!isVisibleForAdRequest()) {
+                    return@post
+                }
+
+                if (!isMeasuredForAdRequest()) {
                     postDelayed({ postLoadBanner(force) }, 150)
                     return@post
                 }
@@ -342,6 +346,18 @@ class ITWingBannerView @JvmOverloads constructor(
         }
         lastAutoLoadAtMs = now
         return true
+    }
+
+    private fun isVisibleForAdRequest(): Boolean {
+        return isShown &&
+            windowVisibility == VISIBLE
+    }
+
+    private fun isMeasuredForAdRequest(): Boolean {
+        return width > 0 &&
+            height > 0 &&
+            bannerContainer.width > 0 &&
+            bannerContainer.height > 0
     }
 
     private fun runOnMain(

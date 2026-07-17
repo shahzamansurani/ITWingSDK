@@ -278,6 +278,15 @@ class ITWingNativeAdView @JvmOverloads constructor(
                     return@post
                 }
 
+                if (!isVisibleForAdRequest()) {
+                    return@post
+                }
+
+                if (!isMeasuredForAdRequest()) {
+                    postDelayed({ postLoadAd(force) }, 150)
+                    return@post
+                }
+
                 val activity =
                     context.findActivitySafe()
                         ?: return@post
@@ -346,6 +355,16 @@ class ITWingNativeAdView @JvmOverloads constructor(
         }
         lastAutoLoadAtMs = now
         return true
+    }
+
+    private fun isVisibleForAdRequest(): Boolean {
+        return isShown &&
+            windowVisibility == VISIBLE
+    }
+
+    private fun isMeasuredForAdRequest(): Boolean {
+        return width > 0 &&
+            height > 0
     }
 
     private fun runOnMain(

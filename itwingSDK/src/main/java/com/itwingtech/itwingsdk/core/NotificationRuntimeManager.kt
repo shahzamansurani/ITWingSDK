@@ -283,6 +283,11 @@ internal object NotificationRuntimeManager {
     }
 
     private fun registerFirebaseToken(context: Context) {
+        if (!FirebaseRuntimeManager.isAvailable(context)) {
+            SDKTelemetry.track("fcm_token_fetch_skipped", mapOf("reason" to "firebase_not_configured"))
+            return
+        }
+
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.getString(KEY_PENDING_FCM_TOKEN, null)?.takeIf { it.isNotBlank() }?.let {
             registerDeviceToken(it, "fcm", repository)

@@ -8,6 +8,7 @@ import android.view.Window
 import android.view.WindowManager
 import com.airbnb.lottie.LottieAnimationView
 import com.itwingtech.itwingsdk.R
+import com.itwingtech.itwingsdk.ui.GlassDialogWindow
 
 internal class AdLoadingDialog(
     private val activity: Activity
@@ -49,11 +50,6 @@ internal class AdLoadingDialog(
                             android.R.color.transparent
                         )
 
-                        window?.setLayout(
-                            WindowManager.LayoutParams.WRAP_CONTENT,
-                            WindowManager.LayoutParams.WRAP_CONTENT
-                        )
-
                         findViewById<LottieAnimationView?>(
                             R.id.lottieAnimationView
                         )?.let { lottie ->
@@ -73,6 +69,11 @@ internal class AdLoadingDialog(
 
                         if (isActivityUsable()) {
                             show()
+                            GlassDialogWindow.apply(
+                                window,
+                                WindowManager.LayoutParams.WRAP_CONTENT,
+                                WindowManager.LayoutParams.WRAP_CONTENT
+                            )
                         }
                     }
 

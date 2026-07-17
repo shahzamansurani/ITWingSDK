@@ -23,6 +23,12 @@ internal object FirebaseRuntimeManager {
         cached?.firebase?.let { configure(context.applicationContext, it) }
     }
 
+    fun isAvailable(context: Context): Boolean {
+        if (!config.enabled) return false
+        return runCatching { FirebaseApp.getApps(context.applicationContext).isNotEmpty() }
+            .getOrDefault(false)
+    }
+
     private fun ensureFirebaseApp(context: Context, firebaseConfig: FirebaseConfig): FirebaseApp? {
         runCatching { FirebaseApp.getInstance() }.getOrNull()?.let { return it }
 

@@ -60,4 +60,25 @@
     <string name="itwing_in_app_notification_ok">Got it</string>
     <string name="app_name">IT Wing Technologies</string>
     <string name="splash_desc">This is IT Wing Official SDK</string>
+    <string name="itwing_wallpapers_empty">No wallpapers available</string>
+    <string name="itwing_wallpapers_unavailable">Wallpapers unavailable</string>
+    <string name="itwing_media_empty">No media available</string>
+    <string name="itwing_media_unavailable">Media unavailable</string>
+    <string name="itwing_categories_unavailable">Categories unavailable</string>
+    <string name="itwing_sdk_not_ready_title">SDK not ready</string>
+    <string name="itwing_sdk_not_ready_message">Check internet connection and SDK initialization.</string>
+    <string name="itwing_cached_content_title">Offline content</string>
+    <string name="itwing_cached_content_message">Internet is not available, so cached content is shown. When internet is available, updated content will be loaded automatically.</string>
+    <string name="itwing_premium_badge">Premium</string>
+    <string name="itwing_media_player_loading">Loading media...</string>
+    <string name="itwing_media_player_error">Media could not be played</string>
+    <string name="itwing_media_player_mute">Mute</string>
+    <string name="itwing_media_player_unmute">Unmute</string>
+    <string name="itwing_action_review_title">Enjoying this app?</string>
+    <string name="itwing_action_review_message">Tap a star to share your feedback.</string>
+    <string name="itwing_action_review_low_hint">Tell us what should be improved.</string>
+    <string name="itwing_action_review_send_feedback">Send feedback</string>
+    <string name="itwing_action_review_thanks">Thanks for your feedback.</string>
+    <string name="itwing_action_review_email_subject">%1$s app feedback</string>
+    <string name="itwing_action_review_email_body">Stars: %1$s\n\nFeedback:\n%2$s\n\nDevice Info:\nOS API: %3$s\nDevice: %4$s\nModel: %5$s</string>
 </resources>

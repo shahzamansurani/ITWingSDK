@@ -2,16 +2,24 @@ package com.itwingtech.itwingsdk.ui
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
+import android.net.Uri
+import android.os.Build
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
+import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.RatingBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.graphics.ColorUtils
 import com.google.android.material.button.MaterialButton
+import com.google.android.play.core.review.ReviewManagerFactory
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.ads.NativeType
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
@@ -27,6 +35,16 @@ class ITWingActionDialog internal constructor(
     private var dialog: AlertDialog? = null
     private var nativeContainer: FrameLayout? = null
     private var restoreHiddenInlineAds: (() -> Unit)? = null
+    private var reviewEnabledOverride: Boolean? = null
+    private var feedbackEmailOverride: String? = null
+
+    fun setReviewEnabled(enabled: Boolean): ITWingActionDialog = apply {
+        reviewEnabledOverride = enabled
+    }
+
+    fun setFeedbackEmail(email: String?): ITWingActionDialog = apply {
+        feedbackEmailOverride = email?.trim()?.takeIf { it.isNotBlank() }
+    }
 
     @JvmOverloads
     fun show(
@@ -66,6 +84,10 @@ class ITWingActionDialog internal constructor(
         val resolvedDescription = description ?: defaults.string("description", "body", "message", "host_dialog_description") ?: "Choose how you want to continue."
         val resolvedPositive = positiveText ?: defaults.string("positive_text", "positiveText", "positive_button", "positiveButton", "host_dialog_positive_text") ?: "Continue"
         val resolvedNegative = negativeText ?: defaults.string("negative_text", "negativeText", "negative_button", "negativeButton", "host_dialog_negative_text") ?: "Cancel"
+        val resolvedReviewEnabled = reviewEnabledOverride
+            ?: defaults.boolean("review_enabled", defaults.boolean("host_dialog_review_enabled", true))
+        val resolvedFeedbackEmail = feedbackEmailOverride
+            ?: defaults.string("feedback_email", "review_email", "support_email", "contact_email", "developer_email")
         val resolvedNativePlacement = nativePlacement ?: defaults.string(
             "native_placement",
             "nativePlacement",
@@ -92,9 +114,18 @@ class ITWingActionDialog internal constructor(
             deliverCallback("cancel_close", onCancel)
         }
 
+        val isReviewSectionVisible = configureReviewSection(
+            content = content,
+            enabled = resolvedReviewEnabled,
+            primaryColor = primaryColor,
+            onPrimary = onPrimary,
+            feedbackEmail = resolvedFeedbackEmail,
+        )
+
         nativeContainer = content.findViewById(R.id.itwing_action_native_container)
         val shouldLoadNative =
-            !resolvedNativePlacement.isNullOrBlank() &&
+            !isReviewSectionVisible &&
+                !resolvedNativePlacement.isNullOrBlank() &&
                 normalizedNativeType != null
         nativeContainer?.visibility = if (shouldLoadNative) View.VISIBLE else View.GONE
         if (shouldLoadNative) {
@@ -136,8 +167,7 @@ class ITWingActionDialog internal constructor(
             restoreHiddenInlineAds = null
         }
         alert.setOnShowListener {
-            alert.window?.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
-            alert.window?.setLayout(activity.dialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT)
+            GlassDialogWindow.apply(alert.window, activity.dialogWidth())
             if (shouldLoadNative && activity.isUsable()) {
                 nativeContainer?.let { container ->
                     runCatching {
@@ -225,6 +255,121 @@ class ITWingActionDialog internal constructor(
             !placement.isNullOrBlank() -> NativeType.LARGE
             else -> null
         }
+    }
+
+    private fun configureReviewSection(
+        content: View,
+        enabled: Boolean,
+        primaryColor: Int,
+        onPrimary: Int,
+        feedbackEmail: String?,
+    ): Boolean {
+        val section = content.findViewById<LinearLayout>(R.id.itwing_action_review_section)
+        if (!enabled || hasSubmittedReviewFeedback()) {
+            section.visibility = View.GONE
+            return false
+        }
+
+        val feedbackInput = content.findViewById<EditText>(R.id.itwing_action_review_feedback)
+        val sendFeedback = content.findViewById<MaterialButton>(R.id.itwing_action_review_send)
+        val ratingBar = content.findViewById<RatingBar>(R.id.itwing_action_rating_bar)
+        val message = content.findViewById<TextView>(R.id.itwing_action_review_message)
+
+        section.visibility = View.VISIBLE
+        sendFeedback.backgroundTintList = ColorStateList.valueOf(primaryColor)
+        sendFeedback.setTextColor(onPrimary)
+        sendFeedback.rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(primaryColor, 44))
+
+        ratingBar.setOnRatingBarChangeListener { _, rating, fromUser ->
+            if (!fromUser || rating <= 0f) return@setOnRatingBarChangeListener
+            if (rating >= 4f) {
+                feedbackInput.visibility = View.GONE
+                sendFeedback.visibility = View.GONE
+                launchInAppReview()
+            } else {
+                feedbackInput.visibility = View.VISIBLE
+                sendFeedback.visibility = View.VISIBLE
+                message.text = activity.getString(R.string.itwing_action_review_low_hint)
+                sendFeedback.setOnClickListener {
+                    sendFeedbackEmail(feedbackEmail, rating, feedbackInput.text?.toString().orEmpty())
+                }
+            }
+        }
+        return true
+    }
+
+    private fun launchInAppReview() {
+        if (!activity.isUsable()) return
+        val manager = ReviewManagerFactory.create(activity)
+        manager.requestReviewFlow()
+            .addOnSuccessListener { reviewInfo ->
+                if (!activity.isUsable()) return@addOnSuccessListener
+                manager.launchReviewFlow(activity, reviewInfo)
+                    .addOnCompleteListener {
+                        markReviewFeedbackSubmitted()
+                        Toast.makeText(activity, R.string.itwing_action_review_thanks, Toast.LENGTH_SHORT).show()
+                    }
+            }
+            .addOnFailureListener { error ->
+                SDKTelemetry.recordNonFatal(error, mapOf("operation" to "action_dialog_in_app_review"))
+                openPlayStore()
+            }
+    }
+
+    private fun openPlayStore() {
+        val packageName = activity.packageName
+        val marketUri = Uri.parse("market://details?id=$packageName")
+        val webUri = Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+        try {
+            activity.startActivity(Intent(Intent.ACTION_VIEW, marketUri))
+            markReviewFeedbackSubmitted()
+        } catch (_: ActivityNotFoundException) {
+            runCatching {
+                activity.startActivity(Intent(Intent.ACTION_VIEW, webUri))
+                markReviewFeedbackSubmitted()
+            }.onFailure { error ->
+                SDKTelemetry.recordNonFatal(error, mapOf("operation" to "action_dialog_play_store_fallback"))
+            }
+        }
+    }
+
+    private fun sendFeedbackEmail(email: String?, rating: Float, feedback: String) {
+        val appLabel = runCatching {
+            activity.applicationInfo.loadLabel(activity.packageManager).toString()
+        }.getOrDefault(activity.packageName)
+        val body = activity.getString(
+            R.string.itwing_action_review_email_body,
+            rating.toInt().toString(),
+            feedback,
+            Build.VERSION.SDK_INT.toString(),
+            Build.DEVICE,
+            "${Build.MODEL} (${Build.PRODUCT})",
+        )
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            data = Uri.parse("mailto:")
+            email?.takeIf { it.isNotBlank() }?.let { putExtra(Intent.EXTRA_EMAIL, arrayOf(it)) }
+            putExtra(Intent.EXTRA_SUBJECT, activity.getString(R.string.itwing_action_review_email_subject, appLabel))
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+        runCatching {
+            activity.startActivity(Intent.createChooser(intent, activity.getString(R.string.itwing_action_review_send_feedback)))
+            markReviewFeedbackSubmitted()
+            Toast.makeText(activity, R.string.itwing_action_review_thanks, Toast.LENGTH_SHORT).show()
+        }.onFailure { error ->
+            SDKTelemetry.recordNonFatal(error, mapOf("operation" to "action_dialog_feedback_email"))
+        }
+    }
+
+    private fun hasSubmittedReviewFeedback(): Boolean {
+        return activity.getSharedPreferences("itwing_action_dialog", Activity.MODE_PRIVATE)
+            .getBoolean("review_feedback_submitted_${activity.packageName}", false)
+    }
+
+    private fun markReviewFeedbackSubmitted() {
+        activity.getSharedPreferences("itwing_action_dialog", Activity.MODE_PRIVATE)
+            .edit()
+            .putBoolean("review_feedback_submitted_${activity.packageName}", true)
+            .apply()
     }
 
     private fun safeCallback(name: String, callback: Runnable?) {

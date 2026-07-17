@@ -77,9 +77,15 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             return
         }
 
+        if (!AdLoadBackoff.canRequest(placement)) {
+            destroy(container)
+            return
+        }
+
         val activeKey = listOf(placementName, bannerType?.name.orEmpty()).joinToString("|")
         synchronized(activeLoadKeys) {
             if (activeLoadKeys[container] == activeKey && container.childCount > 0) {
+                container.visibility = View.VISIBLE
                 return
             }
             activeLoadKeys[container] = activeKey
@@ -94,7 +100,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         val customAd = selectedCustomAd(config, placement)
 
         if (customAd != null) {
-            AdEventTracker.log("ad_requested", placement)
+            AdEventTracker.log("ad_load_requested", placement)
             preloadCustomBanner(
                 activity = activity,
                 container = container,
@@ -142,7 +148,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                 .setGoogleExtrasBundle(extras)
                 .build()
 
-            AdEventTracker.log("ad_requested", placement)
+            AdEventTracker.log("ad_load_requested", placement)
 
             adView.loadAd(
                 request,
@@ -167,6 +173,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                             }
 
                             AdEventTracker.log("ad_loaded", placement)
+                            AdLoadBackoff.recordSuccess(placement)
 
                             adView.registerBannerAd(ad, activity)
 
@@ -184,6 +191,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                                 loadingView = loadingView,
                                 realView = adView
                             )
+                            AdEventTracker.log("ad_impression", placement)
 
                             ad.adEventCallback = object : BannerAdEventCallback {
                                 override fun onAdPaid(adValue: AdValue) {
@@ -237,6 +245,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                                 placement,
                                 mapOf("message" to adError.message)
                             )
+                            AdLoadBackoff.recordFailure(placement, adError.message)
                         }
                     }
                 }
@@ -254,6 +263,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                     placement,
                     mapOf("message" to "banner_exception")
                 )
+                AdLoadBackoff.recordFailure(placement, "banner_exception")
             }
         }
     }
@@ -542,6 +552,16 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         container.let {
             releaseMediaViews(it)
             it.removeAllViews()
+        }
+    }
+
+    fun pause(container: ViewGroup) {
+        container.visibility = View.GONE
+    }
+
+    fun resume(container: ViewGroup) {
+        if (container.childCount > 0) {
+            container.visibility = View.VISIBLE
         }
     }
 

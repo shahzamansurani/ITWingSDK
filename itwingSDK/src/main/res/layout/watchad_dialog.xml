@@ -3,10 +3,10 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    app:cardBackgroundColor="@android:color/white"
-    app:cardCornerRadius="20dp"
+    app:cardBackgroundColor="#D0111827"
+    app:cardCornerRadius="28dp"
     app:cardElevation="0dp"
-    app:strokeColor="#E2E8F0"
+    app:strokeColor="#55FFFFFF"
     app:strokeWidth="1dp">
 
     <LinearLayout
@@ -32,7 +32,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="@string/rewarded_intro_title"
-                    android:textColor="#0F172A"
+                    android:textColor="#F8FAFC"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
@@ -42,7 +42,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="5dp"
                     android:text="@string/watch_video_ad_to_proceed"
-                    android:textColor="#64748B"
+                    android:textColor="#CBD5E1"
                     android:textSize="13sp" />
             </LinearLayout>
 
@@ -54,7 +54,7 @@
                 android:background="@drawable/itwing_purchase_card_bg"
                 android:gravity="center"
                 android:text="X"
-                android:textColor="#475569"
+                android:textColor="#F8FAFC"
                 android:textSize="14sp"
                 android:textStyle="bold" />
         </LinearLayout>

@@ -24,9 +24,13 @@ import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.core.MediaLibraryConfig
 import com.itwingtech.itwingsdk.core.MediaPlacementConfig
+import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdAdapter
+import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 import com.itwingtech.itwingsdk.utils.NetworkState
+import com.itwingtech.itwingsdk.utils.SDKUi
 import java.util.concurrent.CopyOnWriteArraySet
 import androidx.core.content.withStyledAttributes
+import androidx.core.graphics.toColorInt
 
 fun interface ITWingMediaItemBinder {
     fun bind(view: View, item: ITWingMediaItem, position: Int)
@@ -67,9 +71,9 @@ private data class MediaItemStyle(
     var heightPx: Int = 0,
     var spacingPx: Int = 0,
     var cornerPx: Int = 0,
-    var titleColor: Int = Color.parseColor("#111827"),
-    var backgroundColor: Int = Color.WHITE,
-    var strokeColor: Int = Color.parseColor("#E5E7EB"),
+    var titleColor: Int = 0,
+    var backgroundColor: Int = 0,
+    var strokeColor: Int = 0,
     var premiumMode: Int = 0,
     var premiumIcon: Int = 0,
     var premiumIconTint: Int? = null,
@@ -80,8 +84,8 @@ private data class MediaCategoryStyle(
     var heightPx: Int = 0,
     var selectedDrawable: Int = 0,
     var unselectedDrawable: Int = 0,
-    var selectedColor: Int = ITWingSDK.sdkPrimaryColorInt(),
-    var textColor: Int = Color.parseColor("#111827"),
+    var selectedColor: Int = 0,
+    var textColor: Int = 0,
     var showTitle: Boolean = true,
 )
 
@@ -97,9 +101,9 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
     private val shimmer = ShimmerFrameLayout(context)
     private val emptyView = TextView(context).apply {
         gravity = Gravity.CENTER
-        setTextColor(Color.parseColor("#667085"))
+        setTextColor(SDKUi.mutedTextColor(context))
         textSize = 14f
-        text = "No media available"
+        text = context.getString(R.string.itwing_media_empty)
         visibility = GONE
     }
     private val adapter = MediaItemAdapter(mediaKind, ::handleItemClick)
@@ -115,9 +119,18 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
     private var categorySlug: String? = null
     private var clickListener: ((ITWingMediaItem) -> Unit)? = null
     private var customBinder: ITWingMediaItemBinder? = null
+    private var inlineAdEnabled = false
+    private var inlineAdPlacement: String? = null
+    private var inlineAdInterval = 0
+    private var inlineAdStartAfter = 0
+    private var inlineAdMaxAds = 0
+    private var cachedOfflineNoticeShown = false
     private val itemStyle = MediaItemStyle()
 
     init {
+        itemStyle.titleColor = SDKUi.primaryTextColor(context)
+        itemStyle.backgroundColor = SDKUi.surfaceColor(context)
+        itemStyle.strokeColor = SDKUi.strokeColor(context)
         readAttrs(attrs)
         addView(shimmer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         shimmer.addView(LinearLayout(context).apply {
@@ -126,7 +139,6 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
         })
         addView(recyclerView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(emptyView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        recyclerView.adapter = adapter
         applyLayoutManager()
     }
 
@@ -137,14 +149,7 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
 
     fun reload() {
         showLoading()
-        if (!NetworkState.isOnline(context)) {
-            hideLoading()
-            adapter.submit(emptyList())
-            emptyView.text = NetworkState.offlineMessage()
-            emptyView.visibility = VISIBLE
-            ITWingSDK.showSdkFeatureError(context, "${mediaKind.featureTitle()} unavailable", NetworkState.offlineMessage()) { reload() }
-            return
-        }
+        val offlineAtStart = !NetworkState.isOnline(context)
         waitForReady(20) {
             val placement = resolvePlacement()
             if (!applyPlacement(placement)) return@waitForReady
@@ -160,7 +165,9 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
                 callback = object : ITWingMediaCallback() {
                     override fun onLoaded(response: ITWingMediaResponse) {
                         val source = if (showTrending || placement?.type == "top_trends") response.trending else response.items
-                        submit(source.take(placement?.limit ?: limit))
+                        val items = source.take(placement?.limit ?: limit)
+                        submit(items)
+                        if (offlineAtStart && items.isNotEmpty()) showCachedContentNotice()
                     }
 
                     override fun onError(error: String) {
@@ -172,6 +179,16 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
                 },
             )
         }
+    }
+
+    private fun showCachedContentNotice() {
+        if (cachedOfflineNoticeShown) return
+        cachedOfflineNoticeShown = true
+        ITWingSDK.showSdkFeatureError(
+            context,
+            context.getString(R.string.itwing_cached_content_title),
+            context.getString(R.string.itwing_cached_content_message),
+        ) { reload() }
     }
 
     fun filterCategory(category: ITWingMediaCategory?) {
@@ -404,7 +421,7 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
 
     private fun applyPlacement(placement: MediaPlacementConfig?): Boolean {
         if (placement == null) return true
-        if (placement.enabled == false) {
+        if (!placement.enabled) {
             emptyView.text = "This placement is disabled"
             emptyView.visibility = VISIBLE
             shimmer.stopShimmer()
@@ -417,6 +434,11 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
         placement.horizontal?.let { horizontal = it }
         placement.showTitle?.let { showTitle = it }
         placement.premiumUnlockPlacement?.takeIf(String::isNotBlank)?.let { premiumUnlockPlacement = it }
+        inlineAdEnabled = placement.inlineAdEnabled
+        inlineAdPlacement = placement.inlineAdPlacement?.takeIf(String::isNotBlank)
+        inlineAdInterval = placement.inlineAdInterval.coerceAtLeast(0)
+        inlineAdStartAfter = placement.inlineAdStartAfter.coerceAtLeast(0)
+        inlineAdMaxAds = placement.inlineAdMaxAds.coerceAtLeast(0)
         applyLayoutManager()
         return true
     }
@@ -429,6 +451,33 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
         }
         recyclerView.overScrollMode = OVER_SCROLL_NEVER
         recyclerView.clipToPadding = false
+        recyclerView.adapter = adWrappedAdapterOrContent()
+    }
+
+    private fun adWrappedAdapterOrContent(): RecyclerView.Adapter<out RecyclerView.ViewHolder> {
+        val activity = context.findActivity()
+        val placement = inlineAdPlacement
+        if (
+            activity == null ||
+            !inlineAdEnabled ||
+            placement.isNullOrBlank() ||
+            inlineAdInterval <= 0 ||
+            inlineAdMaxAds <= 0
+        ) {
+            return adapter
+        }
+        return ITWingRecyclerAdAdapter.wrap(
+            activity = activity,
+            recyclerView = recyclerView,
+            contentAdapter = adapter,
+            placement = placement,
+            options = ITWingRecyclerAdOptions(
+                enabled = true,
+                interval = inlineAdInterval,
+                startAfter = inlineAdStartAfter,
+                maxAds = inlineAdMaxAds,
+            ),
+        )
     }
 
     private fun waitForReady(attempts: Int, block: () -> Unit) {
@@ -438,9 +487,13 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
             postDelayed({ waitForReady(attempts - 1, block) }, 250)
         } else {
             hideLoading()
-            emptyView.text = "SDK is not ready. Check internet connection and SDK initialization."
+            emptyView.text = context.getString(R.string.itwing_sdk_not_ready_message)
             emptyView.visibility = VISIBLE
-            ITWingSDK.showSdkFeatureError(context, "SDK not ready", "Check internet connection and SDK initialization.")
+            ITWingSDK.showSdkFeatureError(
+                context,
+                context.getString(R.string.itwing_sdk_not_ready_title),
+                context.getString(R.string.itwing_sdk_not_ready_message),
+            )
         }
     }
 
@@ -449,7 +502,7 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
         setPadding(dp(4), dp(4), dp(4), dp(4))
         repeat(if (horizontal) 3 else columns.coerceAtLeast(1)) {
             addView(View(context).apply {
-                background = rounded(Color.parseColor("#E5E7EB"), dp(14).toFloat())
+                background = rounded(SDKUi.shimmerBaseColor(context), dp(14).toFloat())
             }, LinearLayout.LayoutParams(0, dp(118), 1f).apply { setMargins(dp(4), dp(4), dp(4), dp(4)) })
         }
     }
@@ -464,7 +517,7 @@ open class ITWingMediaCategoriesView @JvmOverloads constructor(
     enum class DisplayMode { TEXT, IMAGE, BOTH }
 
     private val recyclerView = RecyclerView(context)
-    private val adapter = MediaCategoryAdapter(::handleCategoryClick)
+    private val adapter = MediaCategoryAdapter(mediaKind, ::handleCategoryClick)
     private var placementName: String? = null
     private var columns = 1
     private var horizontal = true
@@ -477,6 +530,8 @@ open class ITWingMediaCategoriesView @JvmOverloads constructor(
     private val categoryStyle = MediaCategoryStyle()
 
     init {
+        categoryStyle.selectedColor = SDKUi.primaryColor()
+        categoryStyle.textColor = SDKUi.primaryTextColor(context)
         readAttrs(attrs)
         addView(recyclerView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         recyclerView.adapter = adapter
@@ -490,11 +545,6 @@ open class ITWingMediaCategoriesView @JvmOverloads constructor(
     }
 
     fun reload() {
-        if (!NetworkState.isOnline(context)) {
-            adapter.submit(emptyList())
-            ITWingSDK.showSdkFeatureError(context, "${mediaKind.featureTitle()} categories", NetworkState.offlineMessage()) { reload() }
-            return
-        }
         waitForReady(20) {
             resolvePlacement()?.let { placement ->
                 placement.columns?.let { columns = it.coerceAtLeast(1) }
@@ -519,7 +569,7 @@ open class ITWingMediaCategoriesView @JvmOverloads constructor(
                 }
 
                 override fun onError(error: String) {
-                    ITWingSDK.showSdkFeatureError(context, "Categories unavailable", error)
+                    adapter.submit(emptyList())
                 }
             })
         }
@@ -754,6 +804,7 @@ private class MediaItemAdapter(
 }
 
 private class MediaCategoryAdapter(
+    private val kind: String,
     private val onClick: (ITWingMediaCategory) -> Unit,
 ) : RecyclerView.Adapter<MediaCategoryAdapter.Holder>() {
     private val items = mutableListOf<ITWingMediaCategory>()
@@ -774,7 +825,7 @@ private class MediaCategoryAdapter(
     override fun onBindViewHolder(holder: Holder, position: Int) {
         val item = items[position]
         val isSelected = item.id == selected || (selected.isBlank() && item.id.isBlank())
-        customBinder?.bind(holder.itemView, item, isSelected, position) ?: holder.itemView.bindMediaCategory(item, displayMode, isSelected, style)
+        customBinder?.bind(holder.itemView, item, isSelected, position) ?: holder.itemView.bindMediaCategory(item, kind, displayMode, isSelected, style)
         holder.itemView.setOnClickListener {
             val old = selected
             selected = item.id
@@ -841,6 +892,12 @@ private fun defaultCategoryItem(context: Context): View = FrameLayout(context).a
         visibility = View.GONE
     }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     addView(TextView(context).apply {
+        id = R.id.itwing_media_category_flag
+        textSize = 24f
+        gravity = Gravity.CENTER
+        visibility = View.GONE
+    }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    addView(TextView(context).apply {
         id = R.id.itwing_media_category_title
         typeface = Typeface.DEFAULT_BOLD
         setTextColor(Color.parseColor("#111827"))
@@ -850,15 +907,21 @@ private fun defaultCategoryItem(context: Context): View = FrameLayout(context).a
 }
 
 private fun View.bindMediaItem(item: ITWingMediaItem, kind: String, showTitle: Boolean, style: MediaItemStyle) {
-    val image = findViewByName<ImageView>("itwing_media_image", "media_image", "thumbnail")
+    val image = findViewByName<ImageView>("itwing_media_image", "media_image", "thumbnail", "country_flag")
     val icon = findViewByName<TextView>("itwing_media_icon")
-    val title = findViewByName<TextView>("itwing_media_title", "media_title", "title")
-    val premium = findViewByName<TextView>("itwing_media_premium", "media_premium", "premium")
-    title?.text = item.title
+    val title = findViewByName<TextView>("itwing_media_title", "media_title", "title", "country_name")
+    val premium = findViewByName<TextView>("itwing_media_premium", "media_premium", "premium", "cost")
+    val vpnLabel = if (kind == "vpn_servers") item.vpnCountryName() else item.title
+    title?.text = vpnLabel
     title?.setTextColor(style.titleColor)
     title?.visibility = if (showTitle) View.VISIBLE else View.GONE
-    premium?.visibility = if (item.isPremium) View.VISIBLE else View.GONE
-    if (premium != null && item.isPremium && style.premiumIcon != 0 && style.premiumMode != 0) {
+    premium?.visibility = if (item.isPremium || kind == "vpn_servers") View.VISIBLE else View.GONE
+    if (kind == "vpn_servers" && premium != null) {
+        premium.text = if (item.isPremium) "★" else "▰▰▰"
+        premium.setTextColor(if (item.isPremium) Color.parseColor("#F59E0B") else Color.parseColor("#22C55E"))
+        premium.background = null
+        premium.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0)
+    } else if (premium != null && item.isPremium && style.premiumIcon != 0 && style.premiumMode != 0) {
         premium.text = if (style.premiumMode == 1) "" else premium.text
         premium.setCompoundDrawablesWithIntrinsicBounds(style.premiumIcon, 0, 0, 0)
         style.premiumIconTint?.let { premium.compoundDrawableTintList = ColorStateList.valueOf(it) }
@@ -873,14 +936,27 @@ private fun View.bindMediaItem(item: ITWingMediaItem, kind: String, showTitle: B
         icon?.visibility = View.VISIBLE
         icon?.text = when (kind) {
             "videos" -> "Video"
-            "vpn_servers" -> "VPN"
+            "vpn_servers" -> item.vpnFlagEmoji ?: item.vpnCountryCode ?: "VPN"
             else -> "Audio"
         }
     }
 }
 
-private fun View.bindMediaCategory(item: ITWingMediaCategory, mode: ITWingMediaCategoriesView.DisplayMode, selected: Boolean, style: MediaCategoryStyle) {
+private fun ITWingMediaItem.vpnCountryName(): String =
+    listOf(
+        metadata["country_name"],
+        metadata["country"],
+        metadata["vpn_country"],
+        metadata["server_country"],
+        title,
+        vpnCountryCode,
+    ).firstNotNullOfOrNull { value ->
+        value?.toString()?.trim()?.takeIf { it.isNotBlank() }
+    } ?: "VPN Server"
+
+private fun View.bindMediaCategory(item: ITWingMediaCategory, kind: String, mode: ITWingMediaCategoriesView.DisplayMode, selected: Boolean, style: MediaCategoryStyle) {
     val image = findViewByName<ImageView>("itwing_media_category_image", "media_category_image", "category_image")
+    val flag = findViewByName<TextView>("itwing_media_category_flag", "media_category_flag", "category_flag")
     val title = findViewByName<TextView>("itwing_media_category_title", "media_category_title", "category_title", "title")
     if (selected && style.selectedDrawable != 0) {
         setBackgroundResource(style.selectedDrawable)
@@ -892,10 +968,22 @@ private fun View.bindMediaCategory(item: ITWingMediaCategory, mode: ITWingMediaC
     title?.text = item.name
     title?.setTextColor(if (selected) Color.WHITE else style.textColor)
     title?.visibility = if (!style.showTitle || mode == ITWingMediaCategoriesView.DisplayMode.IMAGE) View.GONE else View.VISIBLE
-    image?.visibility = if (mode == ITWingMediaCategoriesView.DisplayMode.TEXT || item.imageUrl.isNullOrBlank()) View.GONE else View.VISIBLE
+    val derivedFlag = if (kind == "vpn_servers" && item.id.isNotBlank()) item.countryFlagEmoji() else null
+    val shouldShowImage = mode != ITWingMediaCategoriesView.DisplayMode.TEXT && !item.imageUrl.isNullOrBlank()
+    val shouldShowFlag = mode != ITWingMediaCategoriesView.DisplayMode.TEXT && item.imageUrl.isNullOrBlank() && !derivedFlag.isNullOrBlank()
+    image?.visibility = if (shouldShowImage) View.VISIBLE else View.GONE
+    flag?.visibility = if (shouldShowFlag) View.VISIBLE else View.GONE
+    flag?.text = derivedFlag.orEmpty()
     if (!item.imageUrl.isNullOrBlank() && image != null) {
         Glide.with(image).load(item.imageUrl).centerCrop().into(image)
     }
+}
+
+private fun ITWingMediaCategory.countryFlagEmoji(): String? {
+    if (name.equals("All", ignoreCase = true)) return "🌐"
+    return listOfNotNull(slug, name)
+        .map { it.trim().take(2).uppercase() }
+        .firstNotNullOfOrNull { it.toFlagEmoji() }
 }
 
 private fun View.applyMediaItemLayout(style: MediaItemStyle) {

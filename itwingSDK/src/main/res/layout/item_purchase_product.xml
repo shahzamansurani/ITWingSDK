@@ -13,7 +13,7 @@
         android:id="@+id/itwing_purchase_product_name"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#0F172A"
+        android:textColor="#F8FAFC"
         android:textSize="16sp"
         android:textStyle="bold" />
 
@@ -22,7 +22,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingTop="6dp"
-        android:textColor="#2563EB"
+        android:textColor="#FFFFFF"
         android:textSize="23sp"
         android:textStyle="bold" />
 
@@ -42,7 +42,7 @@
         android:layout_height="wrap_content"
         android:paddingTop="2dp"
         android:paddingBottom="8dp"
-        android:textColor="#64748B"
+        android:textColor="#CBD5E1"
         android:textSize="12sp" />
 
     <TextView
@@ -51,7 +51,7 @@
         android:layout_height="wrap_content"
         android:lineSpacingMultiplier="1.08"
         android:paddingBottom="12dp"
-        android:textColor="#475569"
+        android:textColor="#CBD5E1"
         android:textSize="12sp" />
 
     <com.google.android.material.button.MaterialButton

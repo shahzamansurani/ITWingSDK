@@ -2,6 +2,7 @@ package com.itwingtech.itwingsdk.media
 
 import org.json.JSONArray
 import org.json.JSONObject
+import com.itwingtech.itwingsdk.wallpapers.toUsableMediaUrl
 
 data class ITWingMediaCategory(
     val id: String,
@@ -36,7 +37,24 @@ data class ITWingMediaItem(
     val sortOrder: Int,
     val stats: ITWingMediaStats,
     val metadata: Map<String, Any?> = emptyMap(),
-)
+) {
+    val vpnCountryCode: String?
+        get() = metadata["country_code"]?.toString()?.trim()?.uppercase()?.takeIf { it.length == 2 }
+
+    val vpnFlagEmoji: String?
+        get() = vpnCountryCode?.toFlagEmoji()
+
+    val vpnProtocolType: String?
+        get() = metadata["vpn_protocol_type"]?.toString()?.takeIf { it.isNotBlank() }
+
+    val vpnFreeDurationMinutes: Int
+        get() = metadata["free_connect_duration"]?.toString()?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+}
+
+fun String.toFlagEmoji(): String? {
+    val code = trim().uppercase().takeIf { it.length == 2 && it.all(Char::isLetter) } ?: return null
+    return code.map { Character.toChars(0x1F1E6 + (it.code - 'A'.code)).concatToString() }.joinToString("")
+}
 
 data class ITWingMediaResponse(
     val enabled: Boolean,
@@ -74,7 +92,7 @@ private fun JSONArray?.toCategoryList(): List<ITWingMediaCategory> {
             name = item.optString("name"),
             slug = item.optString("slug").takeIf(String::isNotBlank),
             description = item.optString("description").takeIf(String::isNotBlank),
-            imageUrl = item.optString("image_url").takeIf(String::isNotBlank),
+            imageUrl = item.optCleanUrl("image_url"),
             sortOrder = item.optInt("sort_order", 100),
         )
     }
@@ -91,8 +109,10 @@ private fun JSONArray?.toItemList(): List<ITWingMediaItem> {
             categorySlug = item.optString("category_slug").takeIf(String::isNotBlank),
             title = item.optString("title"),
             slug = item.optString("slug").takeIf(String::isNotBlank),
-            mediaUrl = item.optString("media_url"),
-            thumbnailUrl = item.optString("thumbnail_url").takeIf(String::isNotBlank),
+            mediaUrl = item.optCleanUrl("media_url") ?: item.optCleanUrl("url") ?: "",
+            thumbnailUrl = item.optCleanUrl("thumbnail_url")
+                ?: item.optCleanUrl("thumb_url")
+                ?: item.optCleanUrl("thumbnail"),
             mimeType = item.optString("mime_type").takeIf(String::isNotBlank),
             durationMs = if (item.has("duration_ms") && !item.isNull("duration_ms")) item.optInt("duration_ms") else null,
             tags = item.optJSONArray("tags")?.let { tags -> (0 until tags.length()).mapNotNull { tags.optString(it).takeIf(String::isNotBlank) } } ?: emptyList(),
@@ -109,6 +129,14 @@ private fun JSONArray?.toItemList(): List<ITWingMediaItem> {
             metadata = item.optJSONObject("metadata")?.toMap() ?: emptyMap(),
         )
     }
+}
+
+private fun JSONObject.optCleanUrl(key: String): String? {
+    val raw = optString(key)
+        .trim()
+        .takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+        ?: return null
+    return raw.toUsableMediaUrl()
 }
 
 private fun JSONObject.toMap(): Map<String, Any?> {

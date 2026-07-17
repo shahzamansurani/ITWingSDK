@@ -61,7 +61,7 @@ class RewardedManager(
         }
 
         val unit = placement.units.firstOrNull { it.network == "admob" } ?: return
-        if (!canStartLoad(placementName, placement)) return
+        if (!canStartLoad(placementName, placement, forceRequest)) return
         val request = AdRequest.Builder(unit.adUnitId).build()
         AdEventTracker.log("ad_load_requested", placement)
         startPreloader(placementName, unit.adUnitId, request)
@@ -143,7 +143,7 @@ class RewardedManager(
                     AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
                     showFailure(activity, placementName, placement, "Another full-screen ad is already showing.", onReward, onComplete, onUnavailableOrSkipped)
                 } else {
-                    AdEventTracker.log("ad_requested", placement)
+                    AdEventTracker.log("ad_show_started", placement)
                     frequency.markShown(placement)
                     AdEventTracker.log("ad_impression", placement)
                 }
@@ -183,7 +183,7 @@ class RewardedManager(
             showFailure(activity, placementName, placement, "Another full-screen ad is already showing.", onReward, onComplete, onUnavailableOrSkipped)
             return
         }
-        AdEventTracker.log("ad_requested", placement)
+        AdEventTracker.log("ad_show_started", placement)
         ad.adEventCallback = object : RewardedAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
@@ -365,7 +365,11 @@ class RewardedManager(
         }
     }
 
-    private fun canStartLoad(placementName: String, placement: AdPlacementConfig): Boolean {
+    private fun canStartLoad(placementName: String, placement: AdPlacementConfig, forceRequest: Boolean = false): Boolean {
+        if (forceRequest) {
+            lastLoadAttemptAt[placementName] = SystemClock.elapsedRealtime()
+            return true
+        }
         val now = SystemClock.elapsedRealtime()
         val previous = lastLoadAttemptAt[placementName] ?: 0L
         if (now - previous < minLoadIntervalMs) {

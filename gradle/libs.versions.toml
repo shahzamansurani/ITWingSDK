@@ -2,6 +2,7 @@
 adsMobileSdk = "1.2.1"
 agp = "9.2.1"
 appUpdateKtx = "2.1.0"
+appReviewKtx = "2.0.2"
 billingKtx = "9.1.0"
 coreKtx = "1.18.0"
 firebaseMessaging = "25.1.0"
@@ -38,6 +39,7 @@ androidx-security-crypto = { module = "androidx.security:security-crypto", versi
 androidx-viewpager2 = { module = "androidx.viewpager2:viewpager2", version.ref = "viewpager2" }
 app-update = { module = "com.google.android.play:app-update", version.ref = "appUpdateKtx" }
 app-update-ktx = { module = "com.google.android.play:app-update-ktx", version.ref = "appUpdateKtx" }
+app-review-ktx = { module = "com.google.android.play:review-ktx", version.ref = "appReviewKtx" }
 glide = { module = "com.github.bumptech.glide:glide", version.ref = "glide" }
 billing-ktx = { module = "com.android.billingclient:billing-ktx", version.ref = "billingKtx" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }

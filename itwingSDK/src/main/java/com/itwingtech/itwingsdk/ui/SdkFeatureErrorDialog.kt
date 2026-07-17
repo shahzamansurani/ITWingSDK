@@ -74,8 +74,7 @@ internal object SdkFeatureErrorDialog {
                 }
 
                 dialog.setOnShowListener {
-                    dialog.window?.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
-                    dialog.window?.setLayout(activity.dialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT)
+                    GlassDialogWindow.apply(dialog.window, activity.dialogWidth())
                 }
                 dialog.show()
             }

@@ -134,6 +134,11 @@ data class WallpaperPlacementConfig(
     val timeRange: String? = null,
     val selectedWallpaperIds: List<String> = emptyList(),
     val selectedCategoryIds: List<String> = emptyList(),
+    val inlineAdEnabled: Boolean = false,
+    val inlineAdPlacement: String? = null,
+    val inlineAdInterval: Int = 0,
+    val inlineAdStartAfter: Int = 0,
+    val inlineAdMaxAds: Int = 0,
 )
 
 data class MediaLibraryConfig(
@@ -160,6 +165,11 @@ data class MediaPlacementConfig(
     val contentSource: String? = null,
     val categoryId: String? = null,
     val selectedItemIds: List<String> = emptyList(),
+    val inlineAdEnabled: Boolean = false,
+    val inlineAdPlacement: String? = null,
+    val inlineAdInterval: Int = 0,
+    val inlineAdStartAfter: Int = 0,
+    val inlineAdMaxAds: Int = 0,
 )
 
 data class ApiKeyConfig(

@@ -105,7 +105,7 @@ data class ITWingStartAppFlowConfig @JvmOverloads constructor(
     val endpoint: String? = null,
     val autoApplyResponsiveLayout: Boolean = true,
     val analyticsEnabled: Boolean = true,
-    val bootstrapTimeoutMs: Long = 4_000,
+    val bootstrapTimeoutMs: Long = 8_000,
     val strictSslPinning: Boolean = false,
     val finishCurrent: Boolean = true,
     val showSplash: Boolean = true,

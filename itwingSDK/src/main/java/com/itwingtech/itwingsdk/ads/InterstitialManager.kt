@@ -64,7 +64,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         if (loadedAds.containsKey(placementName)) {
             return
         }
-        if (!canStartLoad(placementName, placement)) {
+        if (!canStartLoad(placementName, placement, forceRequest)) {
             return
         }
 
@@ -118,7 +118,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 frequency.refundTrigger(placement)
                 safeCallback(onComplete)
             } else {
-                AdEventTracker.log("ad_requested", placement)
+                AdEventTracker.log("ad_show_started", placement)
                 frequency.markShown(placement)
                 AdEventTracker.log("ad_impression", placement)
             }
@@ -151,7 +151,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             completion.complete()
             return
         }
-        AdEventTracker.log("ad_requested", placement)
+        AdEventTracker.log("ad_show_started", placement)
         ad.adEventCallback = object : InterstitialAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
@@ -259,7 +259,12 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     private fun canStartLoad(
         placementName: String,
         placement: com.itwingtech.itwingsdk.core.AdPlacementConfig,
+        forceRequest: Boolean = false,
     ): Boolean {
+        if (forceRequest) {
+            lastLoadAttemptAt[placementName] = SystemClock.elapsedRealtime()
+            return true
+        }
         val now = SystemClock.elapsedRealtime()
         val previous = lastLoadAttemptAt[placementName] ?: 0L
         if (now - previous < minLoadIntervalMs) {

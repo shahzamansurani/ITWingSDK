@@ -30,10 +30,15 @@ import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.target.Target
+import com.facebook.shimmer.ShimmerFrameLayout
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.core.WallpaperPlacementConfig
+import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdAdapter
+import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 import com.itwingtech.itwingsdk.utils.NetworkState
+import com.itwingtech.itwingsdk.utils.SDKUi
+import com.itwingtech.itwingsdk.utils.withAlpha
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -61,13 +66,13 @@ private data class WallpaperUiStyle(
     var itemSpacingPx: Int? = null,
     var cornerRadiusPx: Int? = null,
     var strokeWidthDp: Int = 0,
-    var strokeColor: Int = 0x1A000000,
-    var backgroundColor: Int = Color.WHITE,
-    var selectedColor: Int = 0xFF4C00FF.toInt(),
+    var strokeColor: Int = 0,
+    var backgroundColor: Int = 0,
+    var selectedColor: Int = 0,
     var textColor: Int = Color.WHITE,
     var mutedTextColor: Int = Color.WHITE,
     var showTitle: Boolean = false,
-    var premiumBadgeColor: Int = 0xFFFFB020.toInt(),
+    var premiumBadgeColor: Int = 0,
     var premiumBadgeTextColor: Int = Color.WHITE,
     var premiumIconRes: Int = 0,
     var premiumIconTint: Int? = null,
@@ -171,10 +176,13 @@ open class ITWingWallpapersView @JvmOverloads constructor(
         itemAnimator = null
         clipToPadding = false
     }
+    private val shimmer = ShimmerFrameLayout(context).apply {
+        visibility = GONE
+    }
     private val emptyText = TextView(context).apply {
         gravity = Gravity.CENTER
-        text = "No wallpapers available"
-        setTextColor(0xFF6B7280.toInt())
+        text = context.getString(R.string.itwing_wallpapers_empty)
+        setTextColor(SDKUi.mutedTextColor(context))
         visibility = GONE
     }
     private val wallpaperAdapter = WallpaperAdapter(
@@ -197,10 +205,22 @@ open class ITWingWallpapersView @JvmOverloads constructor(
     private var clickListener: ((ITWingWallpaperItem) -> Unit)? = null
     private var placementName: String? = null
     private var selectedWallpaperIds: List<String> = emptyList()
+    private var inlineAdEnabled = false
+    private var inlineAdPlacement: String? = null
+    private var inlineAdInterval = 0
+    private var inlineAdStartAfter = 0
+    private var inlineAdMaxAds = 0
+    private var cachedOfflineNoticeShown = false
 
     init {
+        style.strokeColor = SDKUi.strokeColor(context)
+        style.backgroundColor = SDKUi.surfaceColor(context)
+        style.selectedColor = SDKUi.primaryColor()
+        style.premiumBadgeColor = ContextCompat.getColor(context, R.color.itwing_sdk_wallpaper_premium)
         readWallpaperAttrs(attrs)
         addView(recyclerView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(shimmer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        buildShimmerRows()
         addView(
             emptyText,
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER)
@@ -343,18 +363,13 @@ open class ITWingWallpapersView @JvmOverloads constructor(
     fun reload() {
         applyRemotePlacement()
         if (limit <= 0) {
+            hideLoading()
             recyclerView.adapter = wallpaperAdapter
             wallpaperAdapter.submit(emptyList())
             emptyText.visibility = VISIBLE
             return
         }
-        if (!NetworkState.isOnline(context)) {
-            showWallpaperItems(emptyList())
-            emptyText.text = NetworkState.offlineMessage()
-            emptyText.visibility = VISIBLE
-            showFeatureError(NetworkState.offlineMessage()) { reload() }
-            return
-        }
+        val offlineAtStart = !NetworkState.isOnline(context)
         renderLoading()
         WallpaperResponseCache.load(
             limit = limit,
@@ -371,9 +386,10 @@ open class ITWingWallpapersView @JvmOverloads constructor(
                         .take(
                             if (showTrending) (trendingLimit
                                 ?: response.topLimit).coerceAtLeast(1) else limit
-                        )
+                    )
                     emptyText.visibility = if (items.isEmpty()) VISIBLE else GONE
                     preloadImagesThenShow(items)
+                    if (offlineAtStart && items.isNotEmpty()) showCachedContentNotice()
                     items.take(8).forEach {
                         if (WallpaperResponseCache.markViewTracked(it.id)) {
                             ITWingSDK.trackWallpaperView(it.id)
@@ -382,9 +398,12 @@ open class ITWingWallpapersView @JvmOverloads constructor(
                     preloadImages(items)
                 }.onFailure { throwable ->
                     showWallpaperItems(emptyList())
-                    emptyText.text = throwable.message ?: "Wallpapers unavailable"
+                    emptyText.text = throwable.message ?: context.getString(R.string.itwing_wallpapers_unavailable)
                     emptyText.visibility = VISIBLE
-                    showFeatureError(throwable.message ?: "Wallpaper content could not be loaded.") { reload() }
+                    showFeatureError(
+                        reason = throwable.message ?: context.getString(R.string.itwing_wallpapers_unavailable),
+                        onRetry = { reload() },
+                    )
                 }
             }
         }
@@ -616,6 +635,11 @@ open class ITWingWallpapersView @JvmOverloads constructor(
             showTrending = true
             style.horizontal = true
         }
+        inlineAdEnabled = remote.inlineAdEnabled
+        inlineAdPlacement = remote.inlineAdPlacement?.takeIf { it.isNotBlank() }
+        inlineAdInterval = remote.inlineAdInterval.coerceAtLeast(0)
+        inlineAdStartAfter = remote.inlineAdStartAfter.coerceAtLeast(0)
+        inlineAdMaxAds = remote.inlineAdMaxAds.coerceAtLeast(0)
     }
 
     private fun configureLayout() {
@@ -624,26 +648,53 @@ open class ITWingWallpapersView @JvmOverloads constructor(
         } else {
             GridLayoutManager(context, style.columns)
         }
-        recyclerView.adapter = wallpaperAdapter
+        buildShimmerRows()
+        recyclerView.adapter = adWrappedAdapterOrContent()
+    }
+
+    private fun adWrappedAdapterOrContent(): RecyclerView.Adapter<out RecyclerView.ViewHolder> {
+        val activity = context.findActivity()
+        val placement = inlineAdPlacement
+        if (
+            activity == null ||
+            !inlineAdEnabled ||
+            placement.isNullOrBlank() ||
+            inlineAdInterval <= 0 ||
+            inlineAdMaxAds <= 0
+        ) {
+            return wallpaperAdapter
+        }
+        return ITWingRecyclerAdAdapter.wrap(
+            activity = activity,
+            recyclerView = recyclerView,
+            contentAdapter = wallpaperAdapter,
+            placement = placement,
+            options = ITWingRecyclerAdOptions(
+                enabled = true,
+                interval = inlineAdInterval,
+                startAfter = inlineAdStartAfter,
+                maxAds = inlineAdMaxAds,
+            ),
+        )
     }
 
     private fun renderLoading() {
         if (wallpaperAdapter.itemCount > 0) return
         emptyText.visibility = GONE
-        recyclerView.animate().cancel()
-        recyclerView.alpha = 1f
-        recyclerView.adapter = placeholderAdapter
-        placeholderAdapter.count = if (style.horizontal) 6 else (style.columns * 3).coerceAtLeast(6)
+        shimmer.visibility = VISIBLE
+        shimmer.bringToFront()
+        shimmer.startShimmer()
     }
 
     private fun showWallpaperItems(items: List<ITWingWallpaperItem>) {
-        val wasLoading = recyclerView.adapter === placeholderAdapter
+        val wasLoading = shimmer.visibility == VISIBLE
         recyclerView.animate().cancel()
-        recyclerView.adapter = wallpaperAdapter
+        recyclerView.adapter = adWrappedAdapterOrContent()
         if (wasLoading && items.isNotEmpty()) {
             recyclerView.alpha = 0f
         }
         wallpaperAdapter.submit(items)
+        hideLoading()
         if (wasLoading && items.isNotEmpty()) {
             recyclerView.animate()
                 .alpha(1f)
@@ -652,6 +703,26 @@ open class ITWingWallpapersView @JvmOverloads constructor(
         } else {
             recyclerView.alpha = 1f
         }
+    }
+
+    private fun hideLoading() {
+        shimmer.stopShimmer()
+        shimmer.visibility = GONE
+    }
+
+    private fun buildShimmerRows() {
+        shimmer.removeAllViews()
+        shimmer.addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            val rows = if (style.horizontal) 1 else 4
+            repeat(rows) {
+                addView(
+                    LayoutInflater.from(context)
+                        .inflate(R.layout.itwing_wallpaper_shimmer_row, this, false)
+                        .apply { tintSdkShimmer(context) }
+                )
+            }
+        })
     }
 
     private fun preloadImagesThenShow(items: List<ITWingWallpaperItem>) {
@@ -728,14 +799,28 @@ open class ITWingWallpapersView @JvmOverloads constructor(
         }
     }
 
-    private fun showFeatureError(reason: String, onRetry: () -> Unit) {
+    private fun showCachedContentNotice() {
+        if (cachedOfflineNoticeShown) return
+        cachedOfflineNoticeShown = true
+        showFeatureError(
+            reason = context.getString(R.string.itwing_cached_content_message),
+            onRetry = { reload() },
+            feature = context.getString(R.string.itwing_cached_content_title),
+        )
+    }
+
+    private fun showFeatureError(
+        reason: String,
+        onRetry: () -> Unit,
+        feature: String = "Wallpaper content",
+    ) {
         val activity = context.findActivity() ?: return
         val now = System.currentTimeMillis()
         if (now - lastErrorDialogAt < 5_000L || activity.isFinishing || activity.isDestroyed) return
         lastErrorDialogAt = now
         ITWingSDK.showSdkFeatureError(
             context = activity,
-            feature = "Wallpaper content",
+            feature = feature,
             reason = reason.ifBlank {
                 "Wallpaper content could not be loaded. Check your internet connection and try again."
             },
@@ -746,6 +831,7 @@ open class ITWingWallpapersView @JvmOverloads constructor(
     private fun notifyStyleChanged() {
         wallpaperAdapter.notifyDataSetChanged()
         placeholderAdapter.notifyDataSetChanged()
+        buildShimmerRows()
     }
 
     private fun preloadImages(items: List<ITWingWallpaperItem>) {
@@ -830,9 +916,9 @@ open class ITWingWallpapersView @JvmOverloads constructor(
             }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PlaceholderHolder {
-            return PlaceholderHolder(
-                LayoutInflater.from(parent.context).inflate(R.layout.items_shimmer, parent, false)
-            )
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.items_shimmer, parent, false)
+            view.tintSdkShimmer(parent.context)
+            return PlaceholderHolder(view)
         }
 
         override fun onBindViewHolder(holder: PlaceholderHolder, position: Int) {
@@ -996,13 +1082,6 @@ class ITWingWallpaperCategoriesView @JvmOverloads constructor(
         applyRemotePlacement()
         if (!placementEnabled) {
             adapter.submit(emptyList())
-            return
-        }
-        if (!NetworkState.isOnline(context)) {
-            val all = ITWingWallpaperCategory("", "All", "", "All wallpapers", null, -1)
-            adapter.submit(listOf(all))
-            adapter.select("")
-            ITWingSDK.showSdkFeatureError(context, "Wallpaper categories", NetworkState.offlineMessage()) { reload() }
             return
         }
         adapter.submitPlaceholders()
@@ -1714,6 +1793,7 @@ private fun <T : View> View.findViewByType(type: Class<T>): T? {
 }
 
 private fun View.dpLocal(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
+private fun Context.dpLocal(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
 
 private fun View.radiusPx(style: WallpaperUiStyle): Int =
     style.cornerRadiusPx ?: dpLocal(style.cornerRadiusDp)
@@ -1772,8 +1852,15 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-private fun Int.withAlpha(alpha: Int): Int =
-    Color.argb(alpha.coerceIn(0, 255), Color.red(this), Color.green(this), Color.blue(this))
+private fun View.tintSdkShimmer(context: Context) {
+    if (this is ViewGroup) {
+        for (index in 0 until childCount) {
+            getChildAt(index).tintSdkShimmer(context)
+        }
+        return
+    }
+    background = rounded(SDKUi.shimmerBaseColor(context), 0, 0, context.dpLocal(10))
+}
 
 private fun rounded(fill: Int, strokeColor: Int, strokeWidth: Int, radius: Int): GradientDrawable =
     GradientDrawable().apply {

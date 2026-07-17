@@ -68,7 +68,7 @@ internal object ITWingInAppNotificationDialog {
         }
         content.findViewById<TextView>(R.id.itwing_in_app_notification_badge).apply {
             text = payload.optString("badge").takeIf { it.isNotBlank() } ?: activity.getString(R.string.itwing_in_app_notification_badge)
-            setTextColor(accentColor)
+            setTextColor(Color.WHITE)
         }
 
         val mediaFrame = content.findViewById<FrameLayout>(R.id.itwing_in_app_notification_media_frame)
@@ -132,9 +132,9 @@ internal object ITWingInAppNotificationDialog {
                     isAllCaps = false
                     cornerRadius = activity.dp(14)
                     textSize = 14f
-                    setTextColor(if (index == 0) onPrimary else accentColor)
-                    backgroundTintList = ColorStateList.valueOf(if (index == 0) accentColor else Color.WHITE)
-                    strokeColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(accentColor, 120))
+                    setTextColor(if (index == 0) onPrimary else Color.WHITE)
+                    backgroundTintList = ColorStateList.valueOf(if (index == 0) accentColor else ColorUtils.setAlphaComponent(Color.WHITE, 34))
+                    strokeColor = ColorStateList.valueOf(if (index == 0) accentColor else ColorUtils.setAlphaComponent(Color.WHITE, 72))
                     strokeWidth = if (index == 0) 0 else activity.dp(1)
                     rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(accentColor, 36))
                     setOnClickListener {
@@ -150,8 +150,7 @@ internal object ITWingInAppNotificationDialog {
             currentDialog?.dismiss()
             currentDialog = alert
             alert.show()
-            alert.window?.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
-            alert.window?.setLayout(activity.dialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT)
+            GlassDialogWindow.apply(alert.window, activity.dialogWidth())
             SDKTelemetry.track("notification_in_app_shown", mapOf("notification_id" to id))
             true
         }.getOrElse {

@@ -13,6 +13,7 @@ import androidx.core.graphics.ColorUtils
 import com.google.android.material.button.MaterialButton
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.AdPlacementConfig
+import com.itwingtech.itwingsdk.ui.GlassDialogWindow
 import com.itwingtech.itwingsdk.utils.safeCallback
 
 internal object RewardedIntroDialog {
@@ -181,10 +182,7 @@ internal object RewardedIntroDialog {
 
                 runCatching {
                     dialog.show()
-                    dialog.window?.setLayout(
-                        activity.dialogWidth(),
-                        WindowManager.LayoutParams.WRAP_CONTENT
-                    )
+                    GlassDialogWindow.apply(dialog.window, activity.dialogWidth())
                 }.onFailure {
                     callSkipOnce()
                 }

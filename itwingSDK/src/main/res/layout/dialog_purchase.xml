@@ -22,6 +22,7 @@
             android:background="@drawable/itwing_purchase_card_bg"
             android:contentDescription="@android:string/cancel"
             android:padding="9dp"
+            android:tint="#F8FAFC"
             android:src="@drawable/itwing_ic_close" />
 
         <TextView
@@ -35,7 +36,7 @@
             android:paddingBottom="6dp"
             android:text="Premium"
             android:textAllCaps="false"
-            android:textColor="#475569"
+            android:textColor="#E2E8F0"
             android:textSize="12sp"
             android:textStyle="bold" />
 
@@ -45,7 +46,7 @@
             android:layout_height="wrap_content"
             android:paddingTop="12dp"
             android:text="Upgrade your app"
-            android:textColor="#0F172A"
+            android:textColor="#F8FAFC"
             android:textSize="21sp"
             android:textStyle="bold" />
 
@@ -56,7 +57,7 @@
             android:paddingTop="6dp"
             android:paddingBottom="16dp"
             android:text="Plans and prices are loaded from Google Play and controlled from ITWing admin."
-            android:textColor="#475569"
+            android:textColor="#CBD5E1"
             android:textSize="13sp" />
 
         <LinearLayout
@@ -72,7 +73,7 @@
             android:layout_marginBottom="10dp"
             android:background="@drawable/itwing_purchase_card_bg"
             android:padding="12dp"
-            android:textColor="#475569"
+            android:textColor="#CBD5E1"
             android:textSize="12sp"
             android:visibility="gone" />
 
@@ -84,7 +85,7 @@
             android:layout_marginTop="2dp"
             android:text="Restore purchases"
             android:textAllCaps="false"
-            android:textColor="#2563EB"
+            android:textColor="#F8FAFC"
             app:cornerRadius="14dp"
             app:strokeWidth="1dp" />
 
@@ -96,7 +97,7 @@
             android:layout_marginTop="4dp"
             android:text="Not now"
             android:textAllCaps="false"
-            android:textColor="#64748B"
+            android:textColor="#CBD5E1"
             android:visibility="gone"
             app:cornerRadius="14dp" />
 

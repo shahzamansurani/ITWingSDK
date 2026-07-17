@@ -61,6 +61,9 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import java.util.concurrent.atomic.AtomicBoolean
 import androidx.core.graphics.toColorInt
+import androidx.recyclerview.widget.RecyclerView
+import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdAdapter
+import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 
 object ITWingSDK {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -277,7 +280,7 @@ object ITWingSDK {
         endpoint: String? = null,
         autoApplyResponsiveLayout: Boolean = true,
         analyticsEnabled: Boolean = true,
-        bootstrapTimeoutMs: Long = 4_000,
+        bootstrapTimeoutMs: Long = 8_000,
         strictSslPinning: Boolean = false,
         finishCurrent: Boolean = true,
         showSplash: Boolean = true,
@@ -1437,6 +1440,10 @@ object ITWingSDK {
         }
 
     @JvmStatic
+    fun showInterstitial(activity: Activity, placement: String, onComplete: Runnable) =
+        showInterstitial(activity, placement) { onComplete.run() }
+
+    @JvmStatic
     fun showRewarded(
         activity: Activity,
         placement: String,
@@ -1455,6 +1462,10 @@ object ITWingSDK {
         }
 
     @JvmStatic
+    fun showRewarded(activity: Activity, placement: String, onComplete: Runnable) =
+        showRewarded(activity, placement) { onComplete.run() }
+
+    @JvmStatic
     fun showRewardedInterstitial(
         activity: Activity,
         placement: String,
@@ -1470,6 +1481,23 @@ object ITWingSDK {
         runSdkCall("show_app_open", mapOf("placement" to placement)) {
             ads.showAppOpen(activity, placement, onComplete)
         }
+
+    @JvmStatic
+    fun wrapRecyclerViewWithAds(
+        activity: Activity,
+        recyclerView: RecyclerView,
+        contentAdapter: RecyclerView.Adapter<*>,
+        placement: String,
+        options: ITWingRecyclerAdOptions = ITWingRecyclerAdOptions(),
+    ): RecyclerView.Adapter<RecyclerView.ViewHolder> {
+        return ITWingRecyclerAdAdapter.wrap(
+            activity = activity,
+            recyclerView = recyclerView,
+            contentAdapter = contentAdapter,
+            placement = placement,
+            options = options,
+        )
+    }
 
     @JvmStatic
     fun getCustomAds(format: String? = null): List<CustomAdConfig> {
@@ -1800,13 +1828,18 @@ object ITWingSDK {
                 completeOnce("activity_unavailable_before_ready")
                 return
             }
-            if ((bootstrapFinished && config.configVersion > 0) || (!bootstrapInFlight && config.configVersion > 0) || waitedMs >= 4000L) {
+            if ((bootstrapFinished && config.configVersion > 0) || (!bootstrapInFlight && config.configVersion > 0) || waitedMs >= 8000L) {
                 showRuntimeSplash()
                 return
             }
             mainHandler.postDelayed({ runWhenReady() }, 100L)
         }
         runWhenReady()
+    }
+
+    @JvmStatic
+    fun showSplash(activity: Activity, onComplete: Runnable) {
+        showSplash(activity) { onComplete.run() }
     }
 
     @JvmStatic
@@ -2336,6 +2369,16 @@ object ITWingSDK {
                     config.app["host_dialog_native_type"]
                         ?: config.remoteConfig["host_dialog_native_type"]
                         ?: config.features["host_dialog_native_type"]
+                    ),
+            "review_enabled" to (
+                    config.app["host_dialog_review_enabled"]
+                        ?: config.remoteConfig["host_dialog_review_enabled"]
+                        ?: config.features["host_dialog_review_enabled"]
+                    ),
+            "feedback_email" to (
+                    config.app["host_dialog_feedback_email"]
+                        ?: config.remoteConfig["host_dialog_feedback_email"]
+                        ?: config.features["host_dialog_feedback_email"]
                     ),
         )
         return flat.filterValues { it != null }

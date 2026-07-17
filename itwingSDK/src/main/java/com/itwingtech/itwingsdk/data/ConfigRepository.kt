@@ -53,6 +53,7 @@ class ConfigRepository(
         .build()
     private val signer = RequestSigner(apiKey)
     private val store =EncryptedConfigStore(context)
+    private val mediaCache = MediaDiskCache(context)
 
     suspend fun bootstrap(): ITWingConfig = postConfig("/bootstrap", null)
 
@@ -271,9 +272,8 @@ class ConfigRepository(
         trendingLimit: Int? = null,
         sort: String? = null,
         selectedWallpaperIds: List<String> = emptyList(),
-    ): JSONObject = signedPost(
-        "/wallpapers",
-        JSONObject()
+    ): JSONObject {
+        val payload = JSONObject()
             .put("install_id", installId())
             .apply {
                 if (!categoryId.isNullOrBlank()) put("category_id", categoryId)
@@ -284,8 +284,17 @@ class ConfigRepository(
                 if (selectedWallpaperIds.isNotEmpty()) {
                     put("wallpaper_ids", org.json.JSONArray(selectedWallpaperIds.distinct().take(500)))
                 }
-            },
-    )
+            }
+        val cacheKey = mediaCacheKey("wallpapers", payload)
+        return runCatching {
+            signedPost("/wallpapers", payload).also {
+                mediaCache.saveResponse(cacheKey, it)
+                mediaCache.prefetchResponseMedia(it)
+            }
+        }.getOrElse { throwable ->
+            mediaCache.loadResponse(cacheKey) ?: throw throwable
+        }
+    }
 
     suspend fun submitWallpaperEvent(
         wallpaperId: String,
@@ -308,9 +317,9 @@ class ConfigRepository(
         trendingLimit: Int? = null,
         sort: String? = null,
         selectedItemIds: List<String> = emptyList(),
-    ): JSONObject = signedPost(
-        "/media/${kind.trim('/')}",
-        JSONObject()
+    ): JSONObject {
+        val cleanKind = kind.trim('/')
+        val payload = JSONObject()
             .put("install_id", installId())
             .apply {
                 if (!categoryId.isNullOrBlank()) put("category_id", categoryId)
@@ -321,8 +330,17 @@ class ConfigRepository(
                 if (selectedItemIds.isNotEmpty()) {
                     put("item_ids", org.json.JSONArray(selectedItemIds.distinct().take(500)))
                 }
-            },
-    )
+            }
+        val cacheKey = mediaCacheKey("media_$cleanKind", payload)
+        return runCatching {
+            signedPost("/media/$cleanKind", payload).also {
+                mediaCache.saveResponse(cacheKey, it)
+                mediaCache.prefetchResponseMedia(it)
+            }
+        }.getOrElse { throwable ->
+            mediaCache.loadResponse(cacheKey) ?: throw throwable
+        }
+    }
 
     suspend fun submitMediaLibraryEvent(
         kind: String,
@@ -689,6 +707,11 @@ class ConfigRepository(
                 selectedCategoryIds = item.optJSONArray("selected_category_ids")
                     ?.let { array -> (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) } }
                     ?: emptyList(),
+                inlineAdEnabled = item.optBoolean("inline_ad_enabled", false),
+                inlineAdPlacement = item.optCleanString("inline_ad_placement"),
+                inlineAdInterval = item.optInt("inline_ad_interval", 0),
+                inlineAdStartAfter = item.optInt("inline_ad_start_after", 0),
+                inlineAdMaxAds = item.optInt("inline_ad_max_ads", 0),
             )
         }.toMap()
     }
@@ -725,6 +748,11 @@ class ConfigRepository(
                 selectedItemIds = item.optJSONArray("selected_item_ids")
                     ?.let { array -> (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) } }
                     ?: emptyList(),
+                inlineAdEnabled = item.optBoolean("inline_ad_enabled", false),
+                inlineAdPlacement = item.optCleanString("inline_ad_placement"),
+                inlineAdInterval = item.optInt("inline_ad_interval", 0),
+                inlineAdStartAfter = item.optInt("inline_ad_start_after", 0),
+                inlineAdMaxAds = item.optInt("inline_ad_max_ads", 0),
             )
         }.toMap()
     }
@@ -804,6 +832,12 @@ class ConfigRepository(
                 e,
             )
         }
+    }
+
+    private fun mediaCacheKey(type: String, payload: JSONObject): String {
+        val filtered = JSONObject(payload.toString())
+        filtered.remove("install_id")
+        return "$type:${filtered.toString()}"
     }
 
     private fun installId(): String {

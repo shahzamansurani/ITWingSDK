@@ -68,8 +68,8 @@ class AppOpenManager(
                                 val placement = automaticPlacementName() ?: return
                                 if (validAppOpenAd() != null || hasLoadedCustomAd(placement)) {
                                     show(currentActivity, placement, waitForLoad = false)
-                                } else if (automaticPlacement()?.metadata.safeValue("preload_on_resume").isTruthy()) {
-                                    preload(currentActivity, placement)
+                                } else {
+                                    show(currentActivity, placement, waitForLoad = true)
                                 }
                             }
                         }
@@ -116,7 +116,7 @@ class AppOpenManager(
         val unit = placement.units.firstOrNull {
             it.network == "admob"
         } ?: return
-        if (!canStartLoad(placementName, placement)) return
+        if (!canStartLoad(placementName, placement, forceRequest)) return
         loading.set(true)
         AdEventTracker.log("ad_load_requested", placement)
         AppOpenAd.load(
@@ -184,7 +184,7 @@ class AppOpenManager(
                 safeCallback(onComplete)
             })
             if (shown) {
-                AdEventTracker.log("ad_requested", placement)
+                AdEventTracker.log("ad_show_started", placement)
                 frequency.markShown(placement)
                 AdEventTracker.log("ad_impression", placement)
             } else {
@@ -251,7 +251,7 @@ class AppOpenManager(
         appOpenAd = null
         appOpenLoadedAtMs = 0L
         loadedPlacement = null
-        AdEventTracker.log("ad_requested", placement)
+        AdEventTracker.log("ad_show_started", placement)
         ad.adEventCallback =
             object : AppOpenAdEventCallback {
                 override fun onAdShowedFullScreenContent() {
@@ -316,7 +316,12 @@ class AppOpenManager(
     private fun canStartLoad(
         placementName: String,
         placement: com.itwingtech.itwingsdk.core.AdPlacementConfig,
+        forceRequest: Boolean = false,
     ): Boolean {
+        if (forceRequest) {
+            lastLoadAttemptAt[placementName] = SystemClock.elapsedRealtime()
+            return true
+        }
         val now = SystemClock.elapsedRealtime()
         val previous = lastLoadAttemptAt[placementName] ?: 0L
         if (now - previous < minLoadIntervalMs) {

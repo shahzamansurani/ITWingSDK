@@ -12,4 +12,13 @@
 
     <color name="buttonColor">#F3F4F8</color>
     <color name="green">#ffffff</color>
+
+    <color name="itwing_sdk_text_primary">#111827</color>
+    <color name="itwing_sdk_text_muted">#667085</color>
+    <color name="itwing_sdk_surface">#FFFFFF</color>
+    <color name="itwing_sdk_stroke">#E5E7EB</color>
+    <color name="itwing_sdk_shimmer_base">#E5E7EB</color>
+    <color name="itwing_sdk_shimmer_highlight">#F1F5F9</color>
+    <color name="itwing_sdk_premium">#7C3AED</color>
+    <color name="itwing_sdk_wallpaper_premium">#FFB020</color>
 </resources>

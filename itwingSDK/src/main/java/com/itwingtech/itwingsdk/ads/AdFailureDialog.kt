@@ -15,6 +15,7 @@ import androidx.core.graphics.drawable.toDrawable
 import com.google.android.material.button.MaterialButton
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.ITWingConfig
+import com.itwingtech.itwingsdk.ui.GlassDialogWindow
 import com.itwingtech.itwingsdk.utils.safeCallback
 
 internal object AdFailureDialog {
@@ -64,8 +65,7 @@ internal object AdFailureDialog {
                     }
 
                     dialog.setOnShowListener {
-                        dialog.window?.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
-                        dialog.window?.setLayout(activity.dialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT)
+                        GlassDialogWindow.apply(dialog.window, activity.dialogWidth())
                     }
                     dialog.show()
                 }

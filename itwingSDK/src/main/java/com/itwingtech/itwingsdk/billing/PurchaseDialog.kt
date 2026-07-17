@@ -4,7 +4,6 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
@@ -18,6 +17,7 @@ import com.google.android.material.button.MaterialButton
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.SubscriptionProductConfig
 import com.itwingtech.itwingsdk.core.SubscriptionPlanInfo
+import com.itwingtech.itwingsdk.ui.GlassDialogWindow
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -210,8 +210,7 @@ internal object PurchaseDialog {
             deliverCancellation()
         }
         dialog.setOnShowListener {
-            dialog.window?.setBackgroundDrawable(rounded(Color.rgb(248, 250, 252), activity.dp(22).toFloat()))
-            dialog.window?.setLayout(activity.dialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT)
+            GlassDialogWindow.apply(dialog.window, activity.dialogWidth())
             cancelButton.setOnClickListener {
                 deliverCancellation()
                 dialog.dismiss()
@@ -386,16 +385,6 @@ internal object PurchaseDialog {
             .setResponseCode(BillingClient.BillingResponseCode.ERROR)
             .setDebugMessage(message)
             .build()
-
-    private fun rounded(
-        color: Int,
-        radius: Float,
-        strokeColor: Int? = null,
-    ): GradientDrawable = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = radius
-        strokeColor?.let { setStroke(1, it) }
-    }
 
     private fun Int.withAlpha(alpha: Int): Int =
         Color.argb(alpha, Color.red(this), Color.green(this), Color.blue(this))

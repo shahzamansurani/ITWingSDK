@@ -3,13 +3,13 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_gravity="center"
-    android:background="@color/white"
-    android:padding="@dimen/_2sdp">
+    android:background="@drawable/itwing_purchase_dialog_bg"
+    android:padding="@dimen/_6sdp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/white"
+        android:background="@android:color/transparent"
         android:gravity="center"
         android:orientation="vertical">
 
@@ -43,7 +43,7 @@
                 android:layout_toRightOf="@+id/ad_ic"
                 android:maxLines="3"
                 android:text="Discription"
-                android:textColor="@color/black"
+                android:textColor="#CBD5E1"
                 android:textSize="12sp" />
 
         </RelativeLayout>
@@ -75,7 +75,7 @@
                         android:layout_height="wrap_content"
                         android:paddingLeft="3dp"
                         android:text="App Name"
-                        android:textColor="@color/black"
+                        android:textColor="#F8FAFC"
                         android:textSize="12dp"
                         android:textStyle="bold" />
 
@@ -105,7 +105,7 @@
                             android:layout_height="wrap_content"
                             android:gravity="center"
                             android:text="Google Play"
-                            android:textColor="@color/black"
+                            android:textColor="#CBD5E1"
                             android:textSize="12dp"
                             android:textStyle="bold" />
 
@@ -134,7 +134,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Ad Price"
-                        android:textColor="@color/black"
+                        android:textColor="#CBD5E1"
                         android:textSize="12sp" />
 
                     <TextView
@@ -143,7 +143,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginLeft="@dimen/_2sdp"
                         android:text="Advertiser"
-                        android:textColor="@color/black"
+                        android:textColor="#CBD5E1"
                         android:textSize="12sp" />
                 </LinearLayout>
 

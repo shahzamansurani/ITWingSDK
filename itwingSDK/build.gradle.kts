@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 val sdkPublicationGroup = providers.gradleProperty("group")
     .orElse("com.github.shahzamansurani")
 val sdkPublicationVersion = providers.gradleProperty("version")
-    .orElse("v1.21")
+    .orElse("v1.27")
 
 plugins {
     alias(libs.plugins.android.library)
@@ -33,13 +33,13 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlin {
         compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_21)
+            jvmTarget.set(JvmTarget.JVM_17)
         }
     }
 
@@ -85,12 +85,12 @@ dependencies {
     api(libs.lottie)
     implementation(libs.app.update)
     implementation(libs.app.update.ktx)
+    implementation(libs.app.review.ktx)
     implementation(libs.shimmer)
     implementation(libs.material)
     implementation(libs.glide)
     api(libs.billing.ktx)
     implementation(libs.installreferrer)
-//    implementation(platform("com.google.firebase:firebase-bom:34.15.0"))
     implementation(libs.firebase.messaging)
 
     api(libs.androidx.media3.exoplayer)

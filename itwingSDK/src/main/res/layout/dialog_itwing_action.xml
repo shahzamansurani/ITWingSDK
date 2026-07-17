@@ -3,10 +3,10 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    app:cardBackgroundColor="@android:color/white"
-    app:cardCornerRadius="20dp"
+    app:cardBackgroundColor="#D0111827"
+    app:cardCornerRadius="28dp"
     app:cardElevation="0dp"
-    app:strokeColor="#E2E8F0"
+    app:strokeColor="#55FFFFFF"
     app:strokeWidth="1dp">
 
     <LinearLayout
@@ -31,7 +31,7 @@
                     android:id="@+id/itwing_action_title"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textColor="#0F172A"
+                    android:textColor="#F8FAFC"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
@@ -40,7 +40,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="5dp"
-                    android:textColor="#64748B"
+                    android:textColor="#CBD5E1"
                     android:textSize="13sp" />
             </LinearLayout>
 
@@ -52,7 +52,7 @@
                 android:background="@drawable/itwing_purchase_card_bg"
                 android:gravity="center"
                 android:text="X"
-                android:textColor="#475569"
+                android:textColor="#F8FAFC"
                 android:textSize="14sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -63,6 +63,77 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
             android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/itwing_action_review_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/itwing_purchase_card_bg"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="14dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/itwing_action_review_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/itwing_action_review_title"
+                android:textColor="#F8FAFC"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <RatingBar
+                android:id="@+id/itwing_action_rating_bar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="8dp"
+                android:isIndicator="false"
+                android:numStars="5"
+                android:progressDrawable="@drawable/itwing_review_ratingbar"
+                android:rating="0"
+                android:stepSize="1" />
+
+            <TextView
+                android:id="@+id/itwing_action_review_message"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="@string/itwing_action_review_message"
+                android:textColor="#CBD5E1"
+                android:textSize="12sp" />
+
+            <EditText
+                android:id="@+id/itwing_action_review_feedback"
+                android:layout_width="match_parent"
+                android:layout_height="92dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/itwing_purchase_dialog_bg"
+                android:gravity="top|start"
+                android:hint="@string/itwing_action_review_low_hint"
+                android:inputType="textMultiLine|textCapSentences"
+                android:maxLines="4"
+                android:padding="12dp"
+                android:textColor="#F8FAFC"
+                android:textColorHint="#94A3B8"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/itwing_action_review_send"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="10dp"
+                android:text="@string/itwing_action_review_send_feedback"
+                android:textAllCaps="false"
+                android:textStyle="bold"
+                android:visibility="gone"
+                app:cornerRadius="12dp" />
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/itwing_action_buttons"

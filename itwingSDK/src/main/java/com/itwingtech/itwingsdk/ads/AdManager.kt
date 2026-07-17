@@ -170,7 +170,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
                 },
             )
         ) {
-            destroyBanner(container)
+            container.visibility = android.view.View.GONE
             return
         }
         bannerLoader.load(activity = activity, container = container, placementName = placement, bannerType = bannerType)
@@ -237,7 +237,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
                 },
             )
         ) {
-            destroyNative(container)
+            container.visibility = android.view.View.GONE
             return
         }
         runCatching {
@@ -267,7 +267,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         val hiddenBanners = synchronized(bannerRecords) {
             bannerRecords.entries.mapNotNull { (container, record) ->
                 if (container.context.findActivity() === activity && container.isAttachedToWindow) {
-                    destroyBanner(container)
+                    bannerLoader.pause(container)
                     container to record
                 } else {
                     null
@@ -277,7 +277,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         val hiddenNatives = synchronized(nativeRecords) {
             nativeRecords.entries.mapNotNull { (container, record) ->
                 if (container.context.findActivity() === activity && container.isAttachedToWindow) {
-                    destroyNative(container)
+                    nativeLoader.pause(container)
                     container to record
                 } else {
                     null
@@ -294,24 +294,13 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
             hiddenBanners.forEach { (container, record) ->
                 val owner = container.context.findActivity()
                 if (owner != null && !owner.isFinishing && !owner.isDestroyed && container.isAttachedToWindow) {
-                    loadBanner(owner, container, record.placement, record.bannerType)
+                    bannerLoader.resume(container)
                 }
             }
             hiddenNatives.forEach { (container, record) ->
                 val owner = container.context.findActivity()
                 if (owner != null && !owner.isFinishing && !owner.isDestroyed && container.isAttachedToWindow) {
-                    runCatching {
-                        loadNative(owner, container, record.placement, record.nativeType)
-                    }.onFailure { throwable ->
-                        SDKTelemetry.track(
-                            "native_restore_exception",
-                            mapOf(
-                                "placement" to record.placement,
-                                "error" to (throwable.message ?: throwable::class.java.simpleName),
-                            ),
-                        )
-                        destroyNative(container)
-                    }
+                    nativeLoader.resume(container)
                 }
             }
         }

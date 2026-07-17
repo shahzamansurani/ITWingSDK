@@ -22,6 +22,7 @@
             android:background="@drawable/itwing_purchase_card_bg"
             android:contentDescription="@android:string/cancel"
             android:padding="9dp"
+            android:tint="#F8FAFC"
             android:src="@drawable/itwing_ic_close" />
 
         <FrameLayout
@@ -52,7 +53,7 @@
             android:paddingEnd="12dp"
             android:paddingBottom="6dp"
             android:text="@string/itwing_in_app_notification_badge"
-            android:textColor="#475569"
+            android:textColor="#E2E8F0"
             android:textSize="12sp"
             android:textStyle="bold" />
 
@@ -61,7 +62,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:paddingTop="12dp"
-            android:textColor="#0F172A"
+            android:textColor="#F8FAFC"
             android:textSize="21sp"
             android:textStyle="bold" />
 
@@ -70,7 +71,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:paddingTop="8dp"
-            android:textColor="#475569"
+            android:textColor="#CBD5E1"
             android:textSize="14sp" />
 
         <LinearLayout
