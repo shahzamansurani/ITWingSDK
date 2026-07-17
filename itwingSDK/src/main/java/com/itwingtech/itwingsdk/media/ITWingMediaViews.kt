@@ -880,6 +880,13 @@ private fun defaultMediaItem(context: Context): View = LinearLayout(context).app
         maxLines = 2
         setPadding(dp(2), dp(8), dp(2), 0)
     })
+    addView(TextView(context).apply {
+        id = R.id.itwing_media_subtitle
+        setTextColor(Color.parseColor("#64748B"))
+        textSize = 12f
+        maxLines = 1
+        setPadding(dp(2), dp(2), dp(2), 0)
+    })
 }
 
 private fun defaultCategoryItem(context: Context): View = FrameLayout(context).apply {
@@ -910,11 +917,18 @@ private fun View.bindMediaItem(item: ITWingMediaItem, kind: String, showTitle: B
     val image = findViewByName<ImageView>("itwing_media_image", "media_image", "thumbnail", "country_flag")
     val icon = findViewByName<TextView>("itwing_media_icon")
     val title = findViewByName<TextView>("itwing_media_title", "media_title", "title", "country_name")
+    val subtitle = findViewByName<TextView>("itwing_media_subtitle", "media_subtitle", "subtitle", "server_name", "vpn_server_name")
     val premium = findViewByName<TextView>("itwing_media_premium", "media_premium", "premium", "cost")
-    val vpnLabel = if (kind == "vpn_servers") item.vpnCountryName() else item.title
+    val vpnLabel = if (kind == "vpn_servers") item.vpnListTitle() else item.title
     title?.text = vpnLabel
     title?.setTextColor(style.titleColor)
     title?.visibility = if (showTitle) View.VISIBLE else View.GONE
+    if (kind == "vpn_servers") {
+        subtitle?.text = item.title.takeIf { it.isNotBlank() } ?: item.vpnProtocolType.orEmpty()
+        subtitle?.visibility = if (showTitle && !subtitle?.text.isNullOrBlank()) View.VISIBLE else View.GONE
+    } else {
+        subtitle?.visibility = View.GONE
+    }
     premium?.visibility = if (item.isPremium || kind == "vpn_servers") View.VISIBLE else View.GONE
     if (kind == "vpn_servers" && premium != null) {
         premium.text = if (item.isPremium) "★" else "▰▰▰"
@@ -942,17 +956,11 @@ private fun View.bindMediaItem(item: ITWingMediaItem, kind: String, showTitle: B
     }
 }
 
-private fun ITWingMediaItem.vpnCountryName(): String =
-    listOf(
-        metadata["country_name"],
-        metadata["country"],
-        metadata["vpn_country"],
-        metadata["server_country"],
-        title,
-        vpnCountryCode,
-    ).firstNotNullOfOrNull { value ->
-        value?.toString()?.trim()?.takeIf { it.isNotBlank() }
-    } ?: "VPN Server"
+private fun ITWingMediaItem.vpnListTitle(): String {
+    val country = vpnCountryName ?: "VPN Server"
+    val flag = vpnFlagEmoji
+    return if (flag.isNullOrBlank()) country else "$flag $country"
+}
 
 private fun View.bindMediaCategory(item: ITWingMediaCategory, kind: String, mode: ITWingMediaCategoriesView.DisplayMode, selected: Boolean, style: MediaCategoryStyle) {
     val image = findViewByName<ImageView>("itwing_media_category_image", "media_category_image", "category_image")

@@ -3,6 +3,7 @@ package com.itwingtech.itwingsdk.media
 import org.json.JSONArray
 import org.json.JSONObject
 import com.itwingtech.itwingsdk.wallpapers.toUsableMediaUrl
+import java.util.Locale
 
 data class ITWingMediaCategory(
     val id: String,
@@ -42,7 +43,19 @@ data class ITWingMediaItem(
         get() = metadata["country_code"]?.toString()?.trim()?.uppercase()?.takeIf { it.length == 2 }
 
     val vpnFlagEmoji: String?
-        get() = vpnCountryCode?.toFlagEmoji()
+        get() = metadata["country_flag"]?.toString()?.takeIf { it.isNotBlank() } ?: vpnCountryCode?.toFlagEmoji()
+
+    val vpnCountryName: String?
+        get() = listOf(
+            metadata["country_name"],
+            metadata["country"],
+            metadata["vpn_country"],
+            metadata["server_country"],
+            vpnCountryCode?.let { Locale.Builder().setRegion(it).build().displayCountry },
+            vpnCountryCode,
+        ).firstNotNullOfOrNull { value ->
+            value?.toString()?.trim()?.takeIf { it.isNotBlank() }
+        }
 
     val vpnProtocolType: String?
         get() = metadata["vpn_protocol_type"]?.toString()?.takeIf { it.isNotBlank() }
