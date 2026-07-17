@@ -5,6 +5,7 @@
     <item name="itwing_media_icon" type="id" />
     <item name="itwing_media_premium" type="id" />
     <item name="itwing_media_title" type="id" />
+    <item name="itwing_media_subtitle" type="id" />
     <item name="itwing_media_category_image" type="id" />
     <item name="itwing_media_category_flag" type="id" />
     <item name="itwing_media_category_title" type="id" />
