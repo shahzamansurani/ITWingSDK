@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/white"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="@dimen/_1sdp">
+
+    <!-- MEDIA -->
+
+    <com.itwingtech.itwingsdk.utils.SDKMediaView
+        android:id="@+id/ad_media"
+        android:layout_width="@dimen/_70sdp"
+        android:layout_height="@dimen/_50sdp"
+        android:paddingHorizontal="@dimen/_2sdp"
+        android:layout_marginEnd="@dimen/_2sdp" />
+
+
+    <!-- CONTENT -->
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- TOP -->
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+
+            <TextView
+                android:id="@+id/ad_advertiser"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/_2sdp"
+                android:maxLines="1"
+                android:text="IT Wing Technologies"
+                android:textColor="@android:color/black"
+                android:textSize="@dimen/_8ssp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <!-- HEADLINE -->
+
+        <TextView
+            android:id="@+id/ad_headline"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/_1sdp"
+            android:maxLines="1"
+            android:text="this is headline of the ad"
+            android:textColor="@android:color/black"
+            android:textSize="@dimen/_7ssp"
+            android:textStyle="bold" />
+
+        <!-- BODY -->
+
+        <TextView
+            android:id="@+id/ad_body"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="2"
+            android:textColor="#666666"
+            android:textSize="@dimen/_7ssp" />
+
+        <!-- BOTTOM -->
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/_1sdp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <!--            <ImageView-->
+            <!--                android:id="@+id/ad_app_icon"-->
+            <!--                android:layout_width="@dimen/_15sdp"-->
+            <!--                android:layout_height="@dimen/_15sdp"-->
+            <!--                android:scaleType="fitCenter" />-->
+
+            <RatingBar
+                android:id="@+id/ad_stars"
+                style="?android:attr/ratingBarStyleSmall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/_1sdp"
+                android:isIndicator="true"
+                android:numStars="5"
+                android:stepSize="0.5"
+                android:theme="@style/RatingBar" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/ad_call_to_action"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/_15sdp"
+                android:layout_marginStart="@dimen/_2sdp"
+                android:background="@drawable/start_bg"
+                android:paddingHorizontal="@dimen/_5sdp"
+                android:paddingVertical="@dimen/_1sdp"
+                android:text="Install"
+                android:textColor="@android:color/white"
+                android:textSize="@dimen/_7ssp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="@dimen/_30sdp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginEnd="@dimen/_5sdp">
+
+        <TextView
+            android:id="@+id/ad_ic"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/ads_icon"
+            android:paddingHorizontal="@dimen/_4sdp"
+            android:paddingVertical="@dimen/_2sdp"
+            android:layout_gravity="end"
+            android:text="AD"
+            android:textColor="@android:color/white"
+            android:textSize="@dimen/_8ssp" />
+
+        <ImageView
+            android:id="@+id/ad_app_icon"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/_30sdp"
+            android:layout_marginEnd="@dimen/_2sdp"
+            android:scaleType="fitCenter" />
+    </LinearLayout>
+
+
+</LinearLayout>

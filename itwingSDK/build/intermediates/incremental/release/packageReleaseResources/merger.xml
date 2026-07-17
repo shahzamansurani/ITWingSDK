@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merger version="3"><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main" generated-set="main$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!&lt;dir>navigation"><source path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res"><file name="ads_icon" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\ads_icon.xml" qualifiers="" type="drawable"/><file name="ad_back" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\ad_back.xml" qualifiers="" type="drawable"/><file name="banner_btn" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\banner_btn.xml" qualifiers="" type="drawable"/><file name="btn_skip" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\btn_skip.xml" qualifiers="" type="drawable"/><file name="icon_back" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\icon_back.xml" qualifiers="" type="drawable"/><file name="ic_back" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\ic_back.xml" qualifiers="" type="drawable"/><file name="ic_mute" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\ic_mute.xml" qualifiers="" type="drawable"/><file name="instgradient" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\instgradient.xml" qualifiers="" type="drawable"/><file name="itwing_flow_dot_active" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_flow_dot_active.xml" qualifiers="" type="drawable"/><file name="itwing_flow_dot_inactive" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_flow_dot_inactive.xml" qualifiers="" type="drawable"/><file name="itwing_flow_intro_default_1" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_flow_intro_default_1.xml" qualifiers="" type="drawable"/><file name="itwing_flow_intro_default_2" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_flow_intro_default_2.xml" qualifiers="" type="drawable"/><file name="itwing_flow_intro_default_3" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_flow_intro_default_3.xml" qualifiers="" type="drawable"/><file name="itwing_flow_splash_bg" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_flow_splash_bg.xml" qualifiers="" type="drawable"/><file name="itwing_flow_splash_bg_ref" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_flow_splash_bg_ref.webp" qualifiers="" type="drawable"/><file name="itwing_flow_splash_logo" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_flow_splash_logo.webp" qualifiers="" type="drawable"/><file name="itwing_flow_tint_selector" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_flow_tint_selector.xml" qualifiers="" type="drawable"/><file name="itwing_ic_close" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_ic_close.xml" qualifiers="" type="drawable"/><file name="itwing_ic_premium" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_ic_premium.xml" qualifiers="" type="drawable"/><file name="itwing_premium_badge_bg" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_premium_badge_bg.xml" qualifiers="" type="drawable"/><file name="itwing_premium_icon_bg" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_premium_icon_bg.xml" qualifiers="" type="drawable"/><file name="itwing_purchase_card_bg" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_purchase_card_bg.xml" qualifiers="" type="drawable"/><file name="itwing_purchase_dialog_bg" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_purchase_dialog_bg.xml" qualifiers="" type="drawable"/><file name="itwing_review_ratingbar" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_review_ratingbar.xml" qualifiers="" type="drawable"/><file name="itwing_review_star_empty" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_review_star_empty.xml" qualifiers="" type="drawable"/><file name="itwing_review_star_filled" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\itwing_review_star_filled.xml" qualifiers="" type="drawable"/><file name="no_sound" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\no_sound.webp" qualifiers="" type="drawable"/><file name="ok_btn" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\ok_btn.xml" qualifiers="" type="drawable"/><file name="start_bg" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\start_bg.xml" qualifiers="" type="drawable"/><file name="unmute" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\drawable\unmute.webp" qualifiers="" type="drawable"/><file name="itwing_flow_proxima_nova" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\font\itwing_flow_proxima_nova.otf" qualifiers="" type="font"/><file name="monasans" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\font\monasans.ttf" qualifiers="" type="font"/><file name="activity_itwing_flow_onboarding" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\activity_itwing_flow_onboarding.xml" qualifiers="" type="layout"/><file name="activity_itwing_flow_splash" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\activity_itwing_flow_splash.xml" qualifiers="" type="layout"/><file name="activity_itwing_flow_terms" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\activity_itwing_flow_terms.xml" qualifiers="" type="layout"/><file name="banner_shimmer" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\banner_shimmer.xml" qualifiers="" type="layout"/><file name="custom_banner" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\custom_banner.xml" qualifiers="" type="layout"/><file name="custom_interstitial" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\custom_interstitial.xml" qualifiers="" type="layout"/><file name="custom_native_large" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\custom_native_large.xml" qualifiers="" type="layout"/><file name="custom_native_small" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\custom_native_small.xml" qualifiers="" type="layout"/><file name="dialog_itwing_action" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\dialog_itwing_action.xml" qualifiers="" type="layout"/><file name="dialog_itwing_in_app_notification" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\dialog_itwing_in_app_notification.xml" qualifiers="" type="layout"/><file name="dialog_loading" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\dialog_loading.xml" qualifiers="" type="layout"/><file name="dialog_purchase" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\dialog_purchase.xml" qualifiers="" type="layout"/><file name="items_shimmer" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\items_shimmer.xml" qualifiers="" type="layout"/><file name="item_delete" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\item_delete.xml" qualifiers="" type="layout"/><file name="item_itwing_flow_onboarding" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\item_itwing_flow_onboarding.xml" qualifiers="" type="layout"/><file name="item_purchase_product" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\item_purchase_product.xml" qualifiers="" type="layout"/><file name="itwing_wallpaper_shimmer_row" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\itwing_wallpaper_shimmer_row.xml" qualifiers="" type="layout"/><file name="large_shimmer" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\large_shimmer.xml" qualifiers="" type="layout"/><file name="native_admob_large" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\native_admob_large.xml" qualifiers="" type="layout"/><file name="native_admob_small" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\native_admob_small.xml" qualifiers="" type="layout"/><file name="sdk_media_view" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\sdk_media_view.xml" qualifiers="" type="layout"/><file name="small_shimmer" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\small_shimmer.xml" qualifiers="" type="layout"/><file name="view_itwing_premium" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\view_itwing_premium.xml" qualifiers="" type="layout"/><file name="watchad_dialog" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\layout\watchad_dialog.xml" qualifiers="" type="layout"/><file name="itwing_flow_anim_loading" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\raw\itwing_flow_anim_loading.json" qualifiers="" type="raw"/><file name="loading" path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\raw\loading.json" qualifiers="" type="raw"/><file path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\values\attrs.xml" qualifiers=""><declare-styleable name="ITWingBannerView">
+        <attr format="string" name="ITWingBannerPlacement"/>
+        <attr format="string" name="ITWingBannerText"/>
+        <attr format="color" name="ITWingBannerTextColor"/>
+        <attr format="dimension" name="ITWingBannerTextSize"/>
+        <attr format="color" name="ITWingBannerStrokeColor"/>
+        <attr format="color" name="ITWingBannerBackgroundColor"/>
+        <attr format="dimension" name="ITWingBannerStrokeWidth"/>
+        <attr format="dimension" name="ITWingBannerCornerRadius"/>
+        <attr name="ITWingBannerType">
+            <enum name="adaptive" value="0"/>
+            <enum name="collapsible_top" value="1"/>
+            <enum name="collapsible_bottom" value="2"/>
+        </attr>
+    </declare-styleable><declare-styleable name="ITWingNativeAdView">
+        <attr format="string" name="ITWingNativeAdViewPlacement"/>
+        <attr format="string" name="ITWingNativeAdViewText"/>
+        <attr format="color" name="ITWingNativeAdViewTextColor"/>
+        <attr format="dimension" name="ITWingNativeAdViewTextSize"/>
+        <attr format="color" name="ITWingNativeAdViewStrokeColor"/>
+        <attr format="color" name="ITWingNativeAdViewBackgroundColor"/>
+        <attr format="dimension" name="ITWingNativeAdViewStrokeWidth"/>
+        <attr format="dimension" name="ITWingNativeAdViewCornerRadius"/>
+        <attr name="ITWingNativeAdViewType">
+            <enum name="small" value="0"/>
+            <enum name="large" value="1"/>
+        </attr>
+    </declare-styleable><declare-styleable name="ITWingPremiumView">
+        <attr format="string" name="ITWingPremiumTitle"/>
+        <attr format="string" name="ITWingPremiumDescription"/>
+        <attr format="boolean" name="ITWingPremiumShowRestore"/>
+    </declare-styleable><declare-styleable name="ITWingMediaPlayerView">
+        <attr format="string" name="ITWingMediaPlayerUrl"/>
+        <attr format="string" name="ITWingMediaPlayerPosterUrl"/>
+        <attr format="boolean" name="ITWingMediaPlayerAutoPlay"/>
+        <attr format="boolean" name="ITWingMediaPlayerLoop"/>
+        <attr format="boolean" name="ITWingMediaPlayerMuted"/>
+        <attr format="boolean" name="ITWingMediaPlayerShowControls"/>
+        <attr format="boolean" name="ITWingMediaPlayerShowMuteButton"/>
+        <attr format="boolean" name="ITWingMediaPlayerKeepScreenOn"/>
+        <attr format="integer" name="ITWingMediaPlayerControllerTimeout"/>
+        <attr name="ITWingMediaPlayerMediaType">
+            <enum name="auto" value="0"/>
+            <enum name="video" value="1"/>
+            <enum name="audio" value="2"/>
+        </attr>
+        <attr name="ITWingMediaPlayerResizeMode">
+            <enum name="fit" value="0"/>
+            <enum name="fixed_width" value="1"/>
+            <enum name="fixed_height" value="2"/>
+            <enum name="fill" value="3"/>
+            <enum name="zoom" value="4"/>
+        </attr>
+        <attr format="color" name="ITWingMediaPlayerBackgroundColor"/>
+        <attr format="dimension" name="ITWingMediaPlayerCornerRadius"/>
+        <attr format="color" name="ITWingMediaPlayerLoadingColor"/>
+        <attr format="color" name="ITWingMediaPlayerErrorTextColor"/>
+        <attr format="dimension" name="ITWingMediaPlayerErrorTextSize"/>
+        <attr format="reference" name="ITWingMediaPlayerMuteIcon"/>
+        <attr format="reference" name="ITWingMediaPlayerUnmuteIcon"/>
+        <attr format="color" name="ITWingMediaPlayerMuteIconTint"/>
+        <attr format="reference" name="ITWingMediaPlayerMuteButtonBackground"/>
+    </declare-styleable><declare-styleable name="ITWingWallpapersView">
+        <attr format="string" name="ITWingWallpaperPlacement"/>
+        <attr format="integer" name="ITWingWallpaperColumns"/>
+        <attr format="boolean" name="ITWingWallpaperHorizontal"/>
+        <attr format="integer" name="ITWingWallpaperLimit"/>
+        <attr format="integer" name="ITWingWallpaperTrendingLimit"/>
+        <attr format="string" name="ITWingWallpaperSort"/>
+        <attr format="string" name="ITWingWallpaperPremiumUnlockPlacement"/>
+        <attr format="boolean" name="ITWingWallpaperTopTrending"/>
+        <attr format="dimension" name="ITWingWallpaperItemWidth"/>
+        <attr format="dimension" name="ITWingWallpaperItemHeight"/>
+        <attr format="dimension" name="ITWingWallpaperItemSpacing"/>
+        <attr format="dimension" name="ITWingWallpaperCornerRadius"/>
+        <attr format="integer" name="ITWingWallpaperItemWidthDp"/>
+        <attr format="integer" name="ITWingWallpaperItemHeightDp"/>
+        <attr format="integer" name="ITWingWallpaperItemSpacingDp"/>
+        <attr format="integer" name="ITWingWallpaperCornerRadiusDp"/>
+        <attr format="boolean" name="ITWingWallpaperShowTitle"/>
+        <attr format="color" name="ITWingWallpaperTitleTextColor"/>
+        <attr format="color" name="ITWingWallpaperMutedTextColor"/>
+        <attr name="ITWingWallpaperTitlePosition">
+            <enum name="top" value="0"/>
+            <enum name="center" value="1"/>
+            <enum name="bottom" value="2"/>
+            <enum name="outside_bottom" value="3"/>
+        </attr>
+        <attr name="ITWingWallpaperPremiumMode">
+            <enum name="text" value="0"/>
+            <enum name="icon" value="1"/>
+            <enum name="hidden" value="2"/>
+        </attr>
+        <attr format="color" name="ITWingWallpaperPremiumColor"/>
+        <attr format="color" name="ITWingWallpaperPremiumTextColor"/>
+        <attr format="reference" name="ITWingWallpaperPremiumIcon"/>
+        <attr format="color" name="ITWingWallpaperPremiumIconTint"/>
+        <attr format="color" name="ITWingWallpaperItemBackgroundColor"/>
+        <attr format="color" name="ITWingWallpaperItemStrokeColor"/>
+        <attr format="reference" name="ITWingWallpaperItemLayout"/>
+    </declare-styleable><declare-styleable name="ITWingWallpaperCategoriesView">
+        <attr name="ITWingWallpaperPlacement"/>
+        <attr format="string" name="ITWingWallpaperCategoryPlacement"/>
+        <attr format="integer" name="ITWingWallpaperCategoryColumns"/>
+        <attr format="boolean" name="ITWingWallpaperCategoryHorizontal"/>
+        <attr format="reference" name="ITWingWallpaperLinkedView"/>
+        <attr format="dimension" name="ITWingWallpaperCategoryItemWidth"/>
+        <attr format="dimension" name="ITWingWallpaperCategoryItemHeight"/>
+        <attr format="reference" name="ITWingWallpaperCategorySelectedDrawable"/>
+        <attr format="reference" name="ITWingWallpaperCategoryUnselectedDrawable"/>
+        <attr format="integer" name="ITWingWallpaperCategoryItemWidthDp"/>
+        <attr format="integer" name="ITWingWallpaperCategoryItemHeightDp"/>
+        <attr format="color" name="ITWingWallpaperCategorySelectedColor"/>
+        <attr format="color" name="ITWingWallpaperCategoryTextColor"/>
+        <attr format="color" name="ITWingWallpaperCategoryMutedTextColor"/>
+        <attr format="boolean" name="ITWingWallpaperCategoryShowTitle"/>
+        <attr name="ITWingWallpaperCategoryTextPosition">
+            <enum name="top" value="0"/>
+            <enum name="center" value="1"/>
+            <enum name="bottom" value="2"/>
+            <enum name="outside_bottom" value="3"/>
+        </attr>
+        <attr format="reference" name="ITWingWallpaperCategoryItemLayout"/>
+        <attr name="ITWingWallpaperCategoryDisplayMode">
+            <enum name="text" value="0"/>
+            <enum name="image" value="1"/>
+            <enum name="both" value="2"/>
+        </attr>
+    </declare-styleable><declare-styleable name="ITWingMediaItemsView">
+        <attr format="string" name="ITWingMediaPlacement"/>
+        <attr format="integer" name="ITWingMediaColumns"/>
+        <attr format="boolean" name="ITWingMediaHorizontal"/>
+        <attr format="integer" name="ITWingMediaLimit"/>
+        <attr format="boolean" name="ITWingMediaTopTrending"/>
+        <attr format="boolean" name="ITWingMediaShowTitle"/>
+        <attr format="dimension" name="ITWingMediaItemWidth"/>
+        <attr format="dimension" name="ITWingMediaItemHeight"/>
+        <attr format="dimension" name="ITWingMediaItemSpacing"/>
+        <attr format="dimension" name="ITWingMediaCornerRadius"/>
+        <attr format="reference" name="ITWingMediaItemLayout"/>
+        <attr format="color" name="ITWingMediaTitleTextColor"/>
+        <attr format="color" name="ITWingMediaMutedTextColor"/>
+        <attr format="color" name="ITWingMediaItemBackgroundColor"/>
+        <attr format="color" name="ITWingMediaItemStrokeColor"/>
+        <attr format="string" name="ITWingMediaPremiumUnlockPlacement"/>
+        <attr name="ITWingMediaPremiumMode">
+            <enum name="text" value="0"/>
+            <enum name="icon" value="1"/>
+            <enum name="both" value="2"/>
+        </attr>
+        <attr format="reference" name="ITWingMediaPremiumIcon"/>
+        <attr format="color" name="ITWingMediaPremiumIconTint"/>
+    </declare-styleable><declare-styleable name="ITWingMediaCategoriesView">
+        <attr name="ITWingMediaPlacement"/>
+        <attr format="integer" name="ITWingMediaCategoryColumns"/>
+        <attr format="boolean" name="ITWingMediaCategoryHorizontal"/>
+        <attr format="reference" name="ITWingMediaLinkedView"/>
+        <attr format="dimension" name="ITWingMediaCategoryItemWidth"/>
+        <attr format="dimension" name="ITWingMediaCategoryItemHeight"/>
+        <attr format="reference" name="ITWingMediaCategoryItemLayout"/>
+        <attr name="ITWingMediaCategoryDisplayMode">
+            <enum name="text" value="0"/>
+            <enum name="image" value="1"/>
+            <enum name="both" value="2"/>
+        </attr>
+        <attr format="boolean" name="ITWingMediaCategoryShowTitle"/>
+        <attr format="reference" name="ITWingMediaCategorySelectedDrawable"/>
+        <attr format="reference" name="ITWingMediaCategoryUnselectedDrawable"/>
+        <attr format="color" name="ITWingMediaCategorySelectedColor"/>
+        <attr format="color" name="ITWingMediaCategoryTextColor"/>
+        <attr format="color" name="ITWingMediaCategoryMutedTextColor"/>
+        <attr name="ITWingMediaCategoryTextPosition">
+            <enum name="top" value="0"/>
+            <enum name="center" value="1"/>
+            <enum name="bottom" value="2"/>
+            <enum name="overlay_bottom" value="3"/>
+            <enum name="overlay_top" value="4"/>
+        </attr>
+    </declare-styleable></file><file path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\values\colors.xml" qualifiers=""><color name="black">#000000</color><color name="white">#FFFFFF</color><color name="orange">#FFAB00</color><color name="grey">#686B6B6B</color><color name="colorPrimary">#0438b5</color><color name="colorAccent">#0438b5</color><color name="shimmer_placeholder_color">#8C9A8C</color><color name="gray_transparent">#80000000</color><color name="buttonColor">#F3F4F8</color><color name="green">#ffffff</color><color name="itwing_sdk_text_primary">#111827</color><color name="itwing_sdk_text_muted">#667085</color><color name="itwing_sdk_surface">#FFFFFF</color><color name="itwing_sdk_stroke">#E5E7EB</color><color name="itwing_sdk_shimmer_base">#E5E7EB</color><color name="itwing_sdk_shimmer_highlight">#F1F5F9</color><color name="itwing_sdk_premium">#7C3AED</color><color name="itwing_sdk_wallpaper_premium">#FFB020</color></file><file path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\values\ids.xml" qualifiers=""><item name="itwing_media_art" type="id"/><item name="itwing_media_image" type="id"/><item name="itwing_media_icon" type="id"/><item name="itwing_media_premium" type="id"/><item name="itwing_media_title" type="id"/><item name="itwing_media_category_image" type="id"/><item name="itwing_media_category_flag" type="id"/><item name="itwing_media_category_title" type="id"/></file><file path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\values\strings.xml" qualifiers=""><string name="ad_failed_title">Ad unavailable</string><string name="ad_failed_reason">The ad could not be shown. %1$s</string><string name="ad_not_ready">Sorry Ad isn’t Ready Yet, Please Check your Internet Connection and Try Again. thanks</string><string name="go_back">Go Back</string><string name="try_again">Try Again</string><string name="native_small_text">Native Ad Area..</string><string name="native_large_text">Large Native Ad Area..</string><string name="collapsable_banner_text">Collapsable Banner Ad Area..</string><string name="watch_ad">Watch ad</string><string name="skip">No thanks</string><string name="rewarded_intro_title">Rewarded ad</string><string name="watch_video_ad_to_proceed">Watch a rewarded ad to continue and earn this reward.</string><string name="loading_ad">Loading Ad...</string><string name="confim_delete_action">Title</string><string name="description">Desctiption</string><string name="delete">Confirm</string><string name="cancel">Cancel</string><string name="title">Check Your internet Connection!</string><string name="banner_ad_loading">Banner Ad Loading...</string><string name="ad">AD</string><string name="install">Install</string><string name="premium_title">Premium</string><string name="premium_description">Remove ads and unlock the premium experience.</string><string name="premium_status_active">ACTIVE</string><string name="premium_status_expired">EXPIRED</string><string name="premium_status_available">AVAILABLE</string><string name="premium_plan_label">Plan</string><string name="premium_billing_label">Billing</string><string name="premium_price_label">Price</string><string name="premium_expiry_label">Expiry</string><string name="premium_purchase">Remove Ads</string><string name="premium_renew">Renew Premium</string><string name="premium_active_button">Premium Active</string><string name="premium_change_plan">Change Plan</string><string name="premium_restore">Restore purchase</string><string name="premium_manage_subscription">Manage subscription</string><string name="premium_manage_subscription_failed">Could not open Google Play subscription management.</string><string name="premium_checking">Checking your Google Play purchase...</string><string name="premium_restored">Purchase restored</string><string name="premium_not_found">No active purchase was found</string><string name="premium_expiry_syncing">Managed by Google Play</string><string name="premium_lifetime">Never expires</string><string name="premium_price_play">See price in Google Play</string><string name="premium_subscription">Subscription</string><string name="premium_one_time">One-time purchase</string><string name="premium_screen_closing">Purchase is unavailable while this screen is closing</string><string name="itwing_flow_app_logo">App logo</string><string name="itwing_flow_back">Back</string><string name="itwing_flow_next">Next</string><string name="itwing_flow_finish">Finish</string><string name="itwing_flow_accept">Accept</string><string name="itwing_flow_accept_terms">I accept the Terms of Use</string><string name="itwing_flow_accept_required">Please accept the Terms of Use</string><string name="itwing_flow_loading">Loading app configuration</string><string name="itwing_in_app_notification_badge">Update</string><string name="itwing_in_app_notification_image">Notification image</string><string name="itwing_in_app_notification_open">Open</string><string name="itwing_in_app_notification_ok">Got it</string><string name="app_name">IT Wing Technologies</string><string name="splash_desc">This is IT Wing Official SDK</string><string name="itwing_wallpapers_empty">No wallpapers available</string><string name="itwing_wallpapers_unavailable">Wallpapers unavailable</string><string name="itwing_media_empty">No media available</string><string name="itwing_media_unavailable">Media unavailable</string><string name="itwing_categories_unavailable">Categories unavailable</string><string name="itwing_sdk_not_ready_title">SDK not ready</string><string name="itwing_sdk_not_ready_message">Check internet connection and SDK initialization.</string><string name="itwing_cached_content_title">Offline content</string><string name="itwing_cached_content_message">Internet is not available, so cached content is shown. When internet is available, updated content will be loaded automatically.</string><string name="itwing_premium_badge">Premium</string><string name="itwing_media_player_loading">Loading media...</string><string name="itwing_media_player_error">Media could not be played</string><string name="itwing_media_player_mute">Mute</string><string name="itwing_media_player_unmute">Unmute</string><string name="itwing_action_review_title">Enjoying this app?</string><string name="itwing_action_review_message">Tap a star to share your feedback.</string><string name="itwing_action_review_low_hint">Tell us what should be improved.</string><string name="itwing_action_review_send_feedback">Send feedback</string><string name="itwing_action_review_thanks">Thanks for your feedback.</string><string name="itwing_action_review_email_subject">%1$s app feedback</string><string name="itwing_action_review_email_body">Stars: %1$s\n\nFeedback:\n%2$s\n\nDevice Info:\nOS API: %3$s\nDevice: %4$s\nModel: %5$s</string></file><file path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\res\values\styles.xml" qualifiers=""><style name="RatingBar" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorControlNormal">@color/grey</item>
+        <item name="colorControlActivated">@color/orange</item>
+    </style><style name="CustomCardShape" parent="ShapeAppearance.MaterialComponents.SmallComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">15dp</item>
+        <item name="cornerSizeBottomLeft">15dp</item>
+        <item name="cornerSizeTopRight">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style><style name="FullScreen" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+    </style><style name="RoundedWallpaperImage">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/_10sdp</item>
+    </style></file></source></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="release$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\release\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="release" generated-set="release$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!&lt;dir>navigation"><source path="D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\release\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"/><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated" generated-set="generated$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!&lt;dir>navigation"/><mergedItems><configuration qualifiers=""><declare-styleable name="ITWingMediaPlayerView">
+        <attr format="string" name="ITWingMediaPlayerUrl"/>
+        <attr format="string" name="ITWingMediaPlayerPosterUrl"/>
+        <attr format="boolean" name="ITWingMediaPlayerAutoPlay"/>
+        <attr format="boolean" name="ITWingMediaPlayerLoop"/>
+        <attr format="boolean" name="ITWingMediaPlayerMuted"/>
+        <attr format="boolean" name="ITWingMediaPlayerShowControls"/>
+        <attr format="boolean" name="ITWingMediaPlayerShowMuteButton"/>
+        <attr format="boolean" name="ITWingMediaPlayerKeepScreenOn"/>
+        <attr format="integer" name="ITWingMediaPlayerControllerTimeout"/>
+        <attr name="ITWingMediaPlayerMediaType">
+            <enum name="auto" value="0"/>
+            <enum name="video" value="1"/>
+            <enum name="audio" value="2"/>
+        </attr>
+        <attr name="ITWingMediaPlayerResizeMode">
+            <enum name="fit" value="0"/>
+            <enum name="fixed_width" value="1"/>
+            <enum name="fixed_height" value="2"/>
+            <enum name="fill" value="3"/>
+            <enum name="zoom" value="4"/>
+        </attr>
+        <attr format="color" name="ITWingMediaPlayerBackgroundColor"/>
+        <attr format="dimension" name="ITWingMediaPlayerCornerRadius"/>
+        <attr format="color" name="ITWingMediaPlayerLoadingColor"/>
+        <attr format="color" name="ITWingMediaPlayerErrorTextColor"/>
+        <attr format="dimension" name="ITWingMediaPlayerErrorTextSize"/>
+        <attr format="reference" name="ITWingMediaPlayerMuteIcon"/>
+        <attr format="reference" name="ITWingMediaPlayerUnmuteIcon"/>
+        <attr format="color" name="ITWingMediaPlayerMuteIconTint"/>
+        <attr format="reference" name="ITWingMediaPlayerMuteButtonBackground"/>
+    </declare-styleable><declare-styleable name="ITWingPremiumView">
+        <attr format="string" name="ITWingPremiumTitle"/>
+        <attr format="string" name="ITWingPremiumDescription"/>
+        <attr format="boolean" name="ITWingPremiumShowRestore"/>
+    </declare-styleable><declare-styleable name="ITWingNativeAdView">
+        <attr format="string" name="ITWingNativeAdViewPlacement"/>
+        <attr format="string" name="ITWingNativeAdViewText"/>
+        <attr format="color" name="ITWingNativeAdViewTextColor"/>
+        <attr format="dimension" name="ITWingNativeAdViewTextSize"/>
+        <attr format="color" name="ITWingNativeAdViewStrokeColor"/>
+        <attr format="color" name="ITWingNativeAdViewBackgroundColor"/>
+        <attr format="dimension" name="ITWingNativeAdViewStrokeWidth"/>
+        <attr format="dimension" name="ITWingNativeAdViewCornerRadius"/>
+        <attr name="ITWingNativeAdViewType">
+            <enum name="small" value="0"/>
+            <enum name="large" value="1"/>
+        </attr>
+    </declare-styleable><declare-styleable name="ITWingBannerView">
+        <attr format="string" name="ITWingBannerPlacement"/>
+        <attr format="string" name="ITWingBannerText"/>
+        <attr format="color" name="ITWingBannerTextColor"/>
+        <attr format="dimension" name="ITWingBannerTextSize"/>
+        <attr format="color" name="ITWingBannerStrokeColor"/>
+        <attr format="color" name="ITWingBannerBackgroundColor"/>
+        <attr format="dimension" name="ITWingBannerStrokeWidth"/>
+        <attr format="dimension" name="ITWingBannerCornerRadius"/>
+        <attr name="ITWingBannerType">
+            <enum name="adaptive" value="0"/>
+            <enum name="collapsible_top" value="1"/>
+            <enum name="collapsible_bottom" value="2"/>
+        </attr>
+    </declare-styleable><declare-styleable name="ITWingMediaItemsView">
+        <attr format="string" name="ITWingMediaPlacement"/>
+        <attr format="integer" name="ITWingMediaColumns"/>
+        <attr format="boolean" name="ITWingMediaHorizontal"/>
+        <attr format="integer" name="ITWingMediaLimit"/>
+        <attr format="boolean" name="ITWingMediaTopTrending"/>
+        <attr format="boolean" name="ITWingMediaShowTitle"/>
+        <attr format="dimension" name="ITWingMediaItemWidth"/>
+        <attr format="dimension" name="ITWingMediaItemHeight"/>
+        <attr format="dimension" name="ITWingMediaItemSpacing"/>
+        <attr format="dimension" name="ITWingMediaCornerRadius"/>
+        <attr format="reference" name="ITWingMediaItemLayout"/>
+        <attr format="color" name="ITWingMediaTitleTextColor"/>
+        <attr format="color" name="ITWingMediaMutedTextColor"/>
+        <attr format="color" name="ITWingMediaItemBackgroundColor"/>
+        <attr format="color" name="ITWingMediaItemStrokeColor"/>
+        <attr format="string" name="ITWingMediaPremiumUnlockPlacement"/>
+        <attr name="ITWingMediaPremiumMode">
+            <enum name="text" value="0"/>
+            <enum name="icon" value="1"/>
+            <enum name="both" value="2"/>
+        </attr>
+        <attr format="reference" name="ITWingMediaPremiumIcon"/>
+        <attr format="color" name="ITWingMediaPremiumIconTint"/>
+    </declare-styleable><declare-styleable name="ITWingWallpaperCategoriesView">
+        <attr name="ITWingWallpaperPlacement"/>
+        <attr format="string" name="ITWingWallpaperCategoryPlacement"/>
+        <attr format="integer" name="ITWingWallpaperCategoryColumns"/>
+        <attr format="boolean" name="ITWingWallpaperCategoryHorizontal"/>
+        <attr format="reference" name="ITWingWallpaperLinkedView"/>
+        <attr format="dimension" name="ITWingWallpaperCategoryItemWidth"/>
+        <attr format="dimension" name="ITWingWallpaperCategoryItemHeight"/>
+        <attr format="reference" name="ITWingWallpaperCategorySelectedDrawable"/>
+        <attr format="reference" name="ITWingWallpaperCategoryUnselectedDrawable"/>
+        <attr format="integer" name="ITWingWallpaperCategoryItemWidthDp"/>
+        <attr format="integer" name="ITWingWallpaperCategoryItemHeightDp"/>
+        <attr format="color" name="ITWingWallpaperCategorySelectedColor"/>
+        <attr format="color" name="ITWingWallpaperCategoryTextColor"/>
+        <attr format="color" name="ITWingWallpaperCategoryMutedTextColor"/>
+        <attr format="boolean" name="ITWingWallpaperCategoryShowTitle"/>
+        <attr name="ITWingWallpaperCategoryTextPosition">
+            <enum name="top" value="0"/>
+            <enum name="center" value="1"/>
+            <enum name="bottom" value="2"/>
+            <enum name="outside_bottom" value="3"/>
+        </attr>
+        <attr format="reference" name="ITWingWallpaperCategoryItemLayout"/>
+        <attr name="ITWingWallpaperCategoryDisplayMode">
+            <enum name="text" value="0"/>
+            <enum name="image" value="1"/>
+            <enum name="both" value="2"/>
+        </attr>
+    </declare-styleable><declare-styleable name="ITWingMediaCategoriesView">
+        <attr name="ITWingMediaPlacement"/>
+        <attr format="integer" name="ITWingMediaCategoryColumns"/>
+        <attr format="boolean" name="ITWingMediaCategoryHorizontal"/>
+        <attr format="reference" name="ITWingMediaLinkedView"/>
+        <attr format="dimension" name="ITWingMediaCategoryItemWidth"/>
+        <attr format="dimension" name="ITWingMediaCategoryItemHeight"/>
+        <attr format="reference" name="ITWingMediaCategoryItemLayout"/>
+        <attr name="ITWingMediaCategoryDisplayMode">
+            <enum name="text" value="0"/>
+            <enum name="image" value="1"/>
+            <enum name="both" value="2"/>
+        </attr>
+        <attr format="boolean" name="ITWingMediaCategoryShowTitle"/>
+        <attr format="reference" name="ITWingMediaCategorySelectedDrawable"/>
+        <attr format="reference" name="ITWingMediaCategoryUnselectedDrawable"/>
+        <attr format="color" name="ITWingMediaCategorySelectedColor"/>
+        <attr format="color" name="ITWingMediaCategoryTextColor"/>
+        <attr format="color" name="ITWingMediaCategoryMutedTextColor"/>
+        <attr name="ITWingMediaCategoryTextPosition">
+            <enum name="top" value="0"/>
+            <enum name="center" value="1"/>
+            <enum name="bottom" value="2"/>
+            <enum name="overlay_bottom" value="3"/>
+            <enum name="overlay_top" value="4"/>
+        </attr>
+    </declare-styleable><declare-styleable name="ITWingWallpapersView">
+        <attr format="string" name="ITWingWallpaperPlacement"/>
+        <attr format="integer" name="ITWingWallpaperColumns"/>
+        <attr format="boolean" name="ITWingWallpaperHorizontal"/>
+        <attr format="integer" name="ITWingWallpaperLimit"/>
+        <attr format="integer" name="ITWingWallpaperTrendingLimit"/>
+        <attr format="string" name="ITWingWallpaperSort"/>
+        <attr format="string" name="ITWingWallpaperPremiumUnlockPlacement"/>
+        <attr format="boolean" name="ITWingWallpaperTopTrending"/>
+        <attr format="dimension" name="ITWingWallpaperItemWidth"/>
+        <attr format="dimension" name="ITWingWallpaperItemHeight"/>
+        <attr format="dimension" name="ITWingWallpaperItemSpacing"/>
+        <attr format="dimension" name="ITWingWallpaperCornerRadius"/>
+        <attr format="integer" name="ITWingWallpaperItemWidthDp"/>
+        <attr format="integer" name="ITWingWallpaperItemHeightDp"/>
+        <attr format="integer" name="ITWingWallpaperItemSpacingDp"/>
+        <attr format="integer" name="ITWingWallpaperCornerRadiusDp"/>
+        <attr format="boolean" name="ITWingWallpaperShowTitle"/>
+        <attr format="color" name="ITWingWallpaperTitleTextColor"/>
+        <attr format="color" name="ITWingWallpaperMutedTextColor"/>
+        <attr name="ITWingWallpaperTitlePosition">
+            <enum name="top" value="0"/>
+            <enum name="center" value="1"/>
+            <enum name="bottom" value="2"/>
+            <enum name="outside_bottom" value="3"/>
+        </attr>
+        <attr name="ITWingWallpaperPremiumMode">
+            <enum name="text" value="0"/>
+            <enum name="icon" value="1"/>
+            <enum name="hidden" value="2"/>
+        </attr>
+        <attr format="color" name="ITWingWallpaperPremiumColor"/>
+        <attr format="color" name="ITWingWallpaperPremiumTextColor"/>
+        <attr format="reference" name="ITWingWallpaperPremiumIcon"/>
+        <attr format="color" name="ITWingWallpaperPremiumIconTint"/>
+        <attr format="color" name="ITWingWallpaperItemBackgroundColor"/>
+        <attr format="color" name="ITWingWallpaperItemStrokeColor"/>
+        <attr format="reference" name="ITWingWallpaperItemLayout"/>
+    </declare-styleable></configuration></mergedItems></merger>

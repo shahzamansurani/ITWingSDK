@@ -1,0 +1,73 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.itwingtech.itwingsdk" >
+4
+5    <uses-sdk android:minSdkVersion="26" />
+5-->INJECTED
+5-->INJECTED
+6
+7    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+7-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:4:5-79
+7-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:4:22-76
+8    <uses-permission android:name="android.permission.INTERNET" />
+8-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:5:5-67
+8-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:5:22-64
+9    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+9-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:6:5-77
+9-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:6:22-74
+10    <uses-permission android:name="android.permission.WAKE_LOCK" />
+10-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:7:5-68
+10-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:7:22-65
+11
+12    <application android:hardwareAccelerated="true" >
+12-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:9:5-34:19
+12-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:9:18-52
+13        <activity
+13-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:10:9-15:52
+14            android:name="com.itwingtech.itwingsdk.flow.ITWingFlowSplashActivity"
+14-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:11:13-58
+15            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+15-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:12:13-83
+16            android:exported="false"
+16-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:14:13-37
+17            android:screenOrientation="portrait"
+17-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:15:13-49
+18            android:theme="@style/FullScreen" />
+18-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:13:13-46
+19        <activity
+19-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:16:9-20:52
+20            android:name="com.itwingtech.itwingsdk.flow.ITWingFlowOnboardingActivity"
+20-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:17:13-62
+21            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+21-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:18:13-83
+22            android:exported="false"
+22-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:19:13-37
+23            android:screenOrientation="portrait" />
+23-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:20:13-49
+24        <activity
+24-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:21:9-25:52
+25            android:name="com.itwingtech.itwingsdk.flow.ITWingFlowTermsActivity"
+25-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:22:13-57
+26            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+26-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:23:13-83
+27            android:exported="false"
+27-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:24:13-37
+28            android:screenOrientation="portrait" />
+28-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:25:13-49
+29
+30        <service
+30-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:27:9-33:19
+31            android:name="com.itwingtech.itwingsdk.notifications.ITWingFirebaseMessagingService"
+31-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:28:13-73
+32            android:exported="false" >
+32-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:29:13-37
+33            <intent-filter>
+33-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:30:13-32:29
+34                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+34-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:31:17-78
+34-->D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:31:25-75
+35            </intent-filter>
+36        </service>
+37    </application>
+38
+39</manifest>

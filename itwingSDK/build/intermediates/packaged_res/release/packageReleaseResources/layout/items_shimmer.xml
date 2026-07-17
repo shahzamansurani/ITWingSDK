@@ -1,0 +1,40 @@
+<com.facebook.shimmer.ShimmerFrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/shimmerContainer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_gravity="center"
+    android:padding="@dimen/_5sdp"
+    app:shimmer_auto_start="true"
+    app:shimmer_repeat_mode="restart">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Placeholder for wallpaper_area-->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginVertical="@dimen/_3sdp"
+            android:layout_weight="4"
+            android:orientation="vertical">
+
+            <View
+                android:id="@+id/ad_media"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center_horizontal"
+                android:background="@color/itwing_sdk_shimmer_base" />
+
+        </RelativeLayout>
+
+        <!-- Placeholder for wallpaper_text_area-->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/_50sdp"
+            android:background="@color/itwing_sdk_shimmer_base" />
+    </LinearLayout>
+
+</com.facebook.shimmer.ShimmerFrameLayout>

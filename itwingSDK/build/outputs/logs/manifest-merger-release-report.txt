@@ -1,0 +1,80 @@
+-- Merging decision tree log ---
+manifest
+ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:2:1-35:12
+INJECTED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:2:1-35:12
+	package
+		INJECTED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml
+	xmlns:android
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:2:11-69
+uses-permission#android.permission.ACCESS_NETWORK_STATE
+ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:4:5-79
+	android:name
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:4:22-76
+uses-permission#android.permission.INTERNET
+ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:5:5-67
+	android:name
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:5:22-64
+uses-permission#android.permission.POST_NOTIFICATIONS
+ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:6:5-77
+	android:name
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:6:22-74
+uses-permission#android.permission.WAKE_LOCK
+ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:7:5-68
+	android:name
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:7:22-65
+application
+ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:9:5-34:19
+	android:hardwareAccelerated
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:9:18-52
+activity#com.itwingtech.itwingsdk.flow.ITWingFlowSplashActivity
+ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:10:9-15:52
+	android:screenOrientation
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:15:13-49
+	android:exported
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:14:13-37
+	android:configChanges
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:12:13-83
+	android:theme
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:13:13-46
+	android:name
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:11:13-58
+activity#com.itwingtech.itwingsdk.flow.ITWingFlowOnboardingActivity
+ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:16:9-20:52
+	android:screenOrientation
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:20:13-49
+	android:exported
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:19:13-37
+	android:configChanges
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:18:13-83
+	android:name
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:17:13-62
+activity#com.itwingtech.itwingsdk.flow.ITWingFlowTermsActivity
+ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:21:9-25:52
+	android:screenOrientation
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:25:13-49
+	android:exported
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:24:13-37
+	android:configChanges
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:23:13-83
+	android:name
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:22:13-57
+service#com.itwingtech.itwingsdk.notifications.ITWingFirebaseMessagingService
+ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:27:9-33:19
+	android:exported
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:29:13-37
+	android:name
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:28:13-73
+intent-filter#action:name:com.google.firebase.MESSAGING_EVENT
+ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:30:13-32:29
+action#com.google.firebase.MESSAGING_EVENT
+ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:31:17-78
+	android:name
+		ADDED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml:31:25-75
+uses-sdk
+INJECTED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml
+INJECTED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from D:\ITWingAdsPlatform\android-sdk\itwingSDK\src\main\AndroidManifest.xml
