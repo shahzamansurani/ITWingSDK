@@ -22,13 +22,13 @@ fun configuredValue(name: String, fallback: String): String {
 android {
     namespace = "com.itwingtech.itwingsdk.example"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.itwingtech.itwingsdk.example"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

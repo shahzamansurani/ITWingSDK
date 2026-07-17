@@ -43,7 +43,7 @@ public final class DialogItwingActionBinding implements ViewBinding {
   public final MaterialButton itwingActionPositive;
 
   @NonNull
-  public final RatingBar itwingActionRatingBar;
+  public final RatingBar itwingActionRatingbar;
 
   @NonNull
   public final EditText itwingActionReviewFeedback;
@@ -58,19 +58,15 @@ public final class DialogItwingActionBinding implements ViewBinding {
   public final MaterialButton itwingActionReviewSend;
 
   @NonNull
-  public final TextView itwingActionReviewTitle;
-
-  @NonNull
   public final TextView itwingActionTitle;
 
   private DialogItwingActionBinding(@NonNull MaterialCardView rootView,
       @NonNull LinearLayout itwingActionButtons, @NonNull TextView itwingActionClose,
       @NonNull TextView itwingActionDescription, @NonNull FrameLayout itwingActionNativeContainer,
       @NonNull MaterialButton itwingActionNegative, @NonNull MaterialButton itwingActionPositive,
-      @NonNull RatingBar itwingActionRatingBar, @NonNull EditText itwingActionReviewFeedback,
+      @NonNull RatingBar itwingActionRatingbar, @NonNull EditText itwingActionReviewFeedback,
       @NonNull TextView itwingActionReviewMessage, @NonNull LinearLayout itwingActionReviewSection,
-      @NonNull MaterialButton itwingActionReviewSend, @NonNull TextView itwingActionReviewTitle,
-      @NonNull TextView itwingActionTitle) {
+      @NonNull MaterialButton itwingActionReviewSend, @NonNull TextView itwingActionTitle) {
     this.rootView = rootView;
     this.itwingActionButtons = itwingActionButtons;
     this.itwingActionClose = itwingActionClose;
@@ -78,12 +74,11 @@ public final class DialogItwingActionBinding implements ViewBinding {
     this.itwingActionNativeContainer = itwingActionNativeContainer;
     this.itwingActionNegative = itwingActionNegative;
     this.itwingActionPositive = itwingActionPositive;
-    this.itwingActionRatingBar = itwingActionRatingBar;
+    this.itwingActionRatingbar = itwingActionRatingbar;
     this.itwingActionReviewFeedback = itwingActionReviewFeedback;
     this.itwingActionReviewMessage = itwingActionReviewMessage;
     this.itwingActionReviewSection = itwingActionReviewSection;
     this.itwingActionReviewSend = itwingActionReviewSend;
-    this.itwingActionReviewTitle = itwingActionReviewTitle;
     this.itwingActionTitle = itwingActionTitle;
   }
 
@@ -150,9 +145,9 @@ public final class DialogItwingActionBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.itwing_action_rating_bar;
-      RatingBar itwingActionRatingBar = ViewBindings.findChildViewById(rootView, id);
-      if (itwingActionRatingBar == null) {
+      id = R.id.itwing_action_ratingbar;
+      RatingBar itwingActionRatingbar = ViewBindings.findChildViewById(rootView, id);
+      if (itwingActionRatingbar == null) {
         break missingId;
       }
 
@@ -180,12 +175,6 @@ public final class DialogItwingActionBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.itwing_action_review_title;
-      TextView itwingActionReviewTitle = ViewBindings.findChildViewById(rootView, id);
-      if (itwingActionReviewTitle == null) {
-        break missingId;
-      }
-
       id = R.id.itwing_action_title;
       TextView itwingActionTitle = ViewBindings.findChildViewById(rootView, id);
       if (itwingActionTitle == null) {
@@ -194,9 +183,9 @@ public final class DialogItwingActionBinding implements ViewBinding {
 
       return new DialogItwingActionBinding((MaterialCardView) rootView, itwingActionButtons,
           itwingActionClose, itwingActionDescription, itwingActionNativeContainer,
-          itwingActionNegative, itwingActionPositive, itwingActionRatingBar,
+          itwingActionNegative, itwingActionPositive, itwingActionRatingbar,
           itwingActionReviewFeedback, itwingActionReviewMessage, itwingActionReviewSection,
-          itwingActionReviewSend, itwingActionReviewTitle, itwingActionTitle);
+          itwingActionReviewSend, itwingActionTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

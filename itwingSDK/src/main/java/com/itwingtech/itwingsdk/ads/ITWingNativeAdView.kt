@@ -44,6 +44,9 @@ class ITWingNativeAdView @JvmOverloads constructor(
     private var isLoadPosted =
         false
 
+    private var readyRetryRegistered =
+        false
+
     private var lastAutoLoadAtMs =
         0L
 
@@ -79,6 +82,12 @@ class ITWingNativeAdView @JvmOverloads constructor(
             setCardBackgroundColor(
                 Color.TRANSPARENT
             )
+
+            cardElevation = 0f
+            maxCardElevation = 0f
+            useCompatPadding = false
+            preventCornerOverlap = false
+            setContentPadding(0, 0, 0, 0)
 
             addView(
                 nativeContainer
@@ -127,13 +136,13 @@ class ITWingNativeAdView @JvmOverloads constructor(
                     val strokeColor =
                         getColor(
                             R.styleable.ITWingNativeAdView_ITWingNativeAdViewStrokeColor,
-                            Color.GRAY
+                            Color.TRANSPARENT
                         )
 
                     val strokeWidth =
                         getDimension(
                             R.styleable.ITWingNativeAdView_ITWingNativeAdViewStrokeWidth,
-                            1f
+                            0f
                         )
 
                     val cornerRadius =
@@ -166,77 +175,12 @@ class ITWingNativeAdView @JvmOverloads constructor(
         heightMeasureSpec: Int
     ) {
         runCatching {
-
-            val defaultHeightLarge =
-                resources
-                    .getDimension(
-                        com.intuit.sdp.R.dimen._240sdp
-                    )
-                    .toInt()
-
-            val defaultHeightSmall =
-                resources
-                    .getDimension(
-                        com.intuit.sdp.R.dimen._150sdp
-                    )
-                    .toInt()
-
-            val padding =
-                resources
-                    .getDimension(
-                        com.intuit.sdp.R.dimen._2sdp
-                    )
-                    .toInt()
-
-            val resolvedType =
-                nativeType ?: NativeType.LARGE
-
-            val desiredHeight =
-                when (resolvedType) {
-
-                    NativeType.LARGE ->
-                        defaultHeightLarge + padding
-
-                    NativeType.SMALL ->
-                        defaultHeightSmall + padding
-                }
-
-            val desiredWidth =
-                MeasureSpec.getSize(
-                    widthMeasureSpec
-                )
-
-            val customHeightMeasureSpec =
-                MeasureSpec.makeMeasureSpec(
-                    desiredHeight,
-                    MeasureSpec.AT_MOST
-                )
-
-            val customWidthMeasureSpec =
-                MeasureSpec.makeMeasureSpec(
-                    desiredWidth,
-                    MeasureSpec.EXACTLY
-                )
-
-            setPadding(
-                padding,
-                padding,
-                padding,
-                padding
-            )
-
-            super.onMeasure(
-                customWidthMeasureSpec,
-                customHeightMeasureSpec
-            )
-
+            setPadding(0, 0, 0, 0)
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
             return
         }
 
-        super.onMeasure(
-            widthMeasureSpec,
-            heightMeasureSpec
-        )
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 
     override fun onAttachedToWindow() {
@@ -287,6 +231,11 @@ class ITWingNativeAdView @JvmOverloads constructor(
                     return@post
                 }
 
+                if (!ITWingSDK.areInlineAdsReady()) {
+                    registerReadyRetry(force)
+                    return@post
+                }
+
                 val activity =
                     context.findActivitySafe()
                         ?: return@post
@@ -308,6 +257,20 @@ class ITWingNativeAdView @JvmOverloads constructor(
                         nativeType = nativeType
                     )
                 }
+            }
+        }
+    }
+
+    private fun registerReadyRetry(force: Boolean) {
+        if (readyRetryRegistered) {
+            return
+        }
+
+        readyRetryRegistered = true
+        ITWingSDK.onInlineAdsReady { ready ->
+            readyRetryRegistered = false
+            if (ready && !isDestroyed && isAttachedToWindow) {
+                postDelayed({ postLoadAd(force = force) }, 100)
             }
         }
     }
@@ -363,8 +326,7 @@ class ITWingNativeAdView @JvmOverloads constructor(
     }
 
     private fun isMeasuredForAdRequest(): Boolean {
-        return width > 0 &&
-            height > 0
+        return width > 0
     }
 
     private fun runOnMain(

@@ -5,6 +5,11 @@
         <item name="colorControlActivated">@color/orange</item>
     </style>
 
+    <style name="ITWingMaterialRatingStyle" parent="Widget.AppCompat.RatingBar">
+        <item name="android:progressDrawable">@drawable/itwing_review_ratingbar</item>
+        <item name="android:indeterminateDrawable">@drawable/itwing_review_ratingbar</item>
+    </style>
+
     <style name="CustomCardShape" parent="ShapeAppearance.MaterialComponents.SmallComponent">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSizeTopLeft">15dp</item>

@@ -20,9 +20,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
-        ITWingSDK.onReady {
-            renderSdkState()
-        }
+        renderSdkState()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -167,7 +165,8 @@ class MainActivity : AppCompatActivity() {
                 }"
             )
         }
-        binding.firebaseText.text = "FCM push bridge: configured from admin; no host google-services plugin required"
+        binding.firebaseText.text =
+            "FCM push bridge: configured from admin; no host google-services plugin required"
         binding.notificationText.text =
             "Billing: ${ITWingSDK.billingDiagnostics()} | Ad free: ${ITWingSDK.isAdFree()}"
     }

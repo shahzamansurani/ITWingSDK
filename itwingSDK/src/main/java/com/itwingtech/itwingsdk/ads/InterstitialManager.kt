@@ -22,6 +22,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     private val loadedAds = ConcurrentHashMap<String, InterstitialAd>()
     private val preloaderKeys = ConcurrentHashMap<String, String>()
     private val lastLoadAttemptAt = ConcurrentHashMap<String, Long>()
+    private val activeShowRequests = ConcurrentHashMap<String, Boolean>()
     private val customRenderer = CustomFullscreenAdRenderer()
     private val minLoadIntervalMs = 20_000L
 
@@ -104,6 +105,16 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             safeCallback(onComplete)
             return
         }
+        if (activeShowRequests.putIfAbsent(placementName, true) != null) {
+            AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "show_already_in_progress"))
+            frequency.refundTrigger(placement)
+            safeCallback(onComplete)
+            return
+        }
+        val guardedComplete = {
+            activeShowRequests.remove(placementName)
+            safeCallback(onComplete)
+        }
 
         AdEventTracker.log("ad_show_requested", placement)
         if (customRenderer.canRender(placement)) {
@@ -111,12 +122,12 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 AdEventTracker.log("ad_dismissed", placement)
                 armInlineSafetyIfNeeded(placement)
                 preloadAfterShowIfEnabled(activity, placementName, placement)
-                safeCallback(onComplete)
+                guardedComplete()
             })
             if (!shown) {
                 AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
                 frequency.refundTrigger(placement)
-                safeCallback(onComplete)
+                guardedComplete()
             } else {
                 AdEventTracker.log("ad_show_started", placement)
                 frequency.markShown(placement)
@@ -129,11 +140,11 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
 
         if (ad == null) {
             load(activity, placementName, forceRequest = true)
-            waitForAdAndShow(activity, placementName, onComplete)
+            waitForAdAndShow(activity, placementName, guardedComplete)
             return
         }
 
-        presentAd(activity, placementName, placement, ad, onComplete)
+        presentAd(activity, placementName, placement, ad, guardedComplete)
     }
 
     private fun presentAd(
@@ -185,14 +196,14 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 AdEventTracker.log("ad_impression_recorded", placement)
             }
 
-            override fun onAdPaid(adValue: AdValue) {
+            override fun onAdPaid(value: AdValue) {
                 AdEventTracker.log(
                     "ad_paid",
                     placement,
                     mapOf(
-                        "revenue_micros" to adValue.valueMicros,
-                        "currency" to adValue.currencyCode,
-                        "precision" to adValue.precisionType,
+                        "revenue_micros" to value.valueMicros,
+                        "currency" to value.currencyCode,
+                        "precision" to value.precisionType,
                         "ad_unit_id" to (placement.units.firstOrNull { it.network == "admob" }?.adUnitId ?: ""),
                     ),
                 )

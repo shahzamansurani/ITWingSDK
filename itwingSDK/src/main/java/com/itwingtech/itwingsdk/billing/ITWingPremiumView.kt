@@ -91,11 +91,15 @@ class ITWingPremiumView @JvmOverloads constructor(
             showRestore = values.getBoolean(R.styleable.ITWingPremiumView_ITWingPremiumShowRestore, true)
         }
 
-        radius = dp(14).toFloat()
-        cardElevation = dp(2).toFloat()
-        setCardBackgroundColor(Color.WHITE)
-        strokeWidth = dp(1)
-        setStrokeColor(Color.rgb(226, 232, 240))
+        radius = 0f
+        cardElevation = 0f
+        maxCardElevation = 0f
+        useCompatPadding = false
+        preventCornerOverlap = false
+        setCardBackgroundColor(Color.TRANSPARENT)
+        strokeWidth = 0
+        setStrokeColor(Color.TRANSPARENT)
+        setContentPadding(0, 0, 0, 0)
 
         purchaseButton.setOnClickListener { launchPurchase() }
         restoreButton.setOnClickListener { openSubscriptionManagement() }

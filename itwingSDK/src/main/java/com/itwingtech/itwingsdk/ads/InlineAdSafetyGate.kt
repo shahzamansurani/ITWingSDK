@@ -20,6 +20,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 internal object InlineAdSafetyGate {
     private const val PENDING_WINDOW_MS = 30_000L
+    private const val AUTO_RELEASE_MS = 1_500L
     private val mainHandler = Handler(Looper.getMainLooper())
     private val reloadCallbacks = CopyOnWriteArrayList<() -> Unit>()
 
@@ -77,6 +78,7 @@ internal object InlineAdSafetyGate {
 
         reloadCallbacks.add(reloadAfterInteraction)
         installInteractionWatcher(activity)
+        scheduleAutoRelease(activity)
         SDKTelemetry.track(
             "inline_ad_safety_suppressed",
             mapOf(
@@ -87,6 +89,15 @@ internal object InlineAdSafetyGate {
             ),
         )
         return true
+    }
+
+    private fun scheduleAutoRelease(activity: Activity) {
+        mainHandler.postDelayed({
+            val suppressedActivity = suppressedActivityRef?.get()
+            if (suppressedActivity === activity) {
+                clear(activity, "auto_release", reload = true)
+            }
+        }, AUTO_RELEASE_MS)
     }
 
     private fun shouldSuppress(activity: Activity): Boolean {

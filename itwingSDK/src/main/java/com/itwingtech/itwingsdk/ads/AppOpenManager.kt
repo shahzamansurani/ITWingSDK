@@ -35,8 +35,11 @@ class AppOpenManager(
     private var appOpenLoadedAtMs: Long = 0L
     private var foregroundActivity: WeakReference<Activity>? = null
     private val lastLoadAttemptAt = ConcurrentHashMap<String, Long>()
+    private val activeShowRequests = ConcurrentHashMap<String, Boolean>()
     private val customRenderer = CustomFullscreenAdRenderer()
     private val minLoadIntervalMs = 30_000L
+    @Volatile
+    private var automaticSuppressedUntilMs: Long = 0L
 
     fun startAutomatic(activity: Activity) {
         updateForegroundActivity(activity)
@@ -53,6 +56,17 @@ class AppOpenManager(
                                 val currentActivity = foregroundActivity?.get()?.takeUnless {
                                     it.isFinishing || it.isDestroyed
                                 } ?: return
+                                if (SystemClock.elapsedRealtime() < automaticSuppressedUntilMs) {
+                                    SDKTelemetry.track(
+                                        "ad_suppressed",
+                                        mapOf(
+                                            "format" to "app_open",
+                                            "placement" to "automatic",
+                                            "reason" to "startup_flow_in_progress",
+                                        ),
+                                    )
+                                    return
+                                }
                                 if (FullscreenAdState.isActive()) {
                                     SDKTelemetry.track(
                                         "ad_suppressed",
@@ -80,6 +94,17 @@ class AppOpenManager(
 
     fun updateForegroundActivity(activity: Activity) {
         foregroundActivity = WeakReference(activity)
+    }
+
+    fun suppressAutomaticFor(durationMs: Long) {
+        automaticSuppressedUntilMs = maxOf(
+            automaticSuppressedUntilMs,
+            SystemClock.elapsedRealtime() + durationMs.coerceAtLeast(0L),
+        )
+    }
+
+    fun clearAutomaticSuppression() {
+        automaticSuppressedUntilMs = 0L
     }
 
     fun preloadAll(activity: Activity) {
@@ -174,6 +199,14 @@ class AppOpenManager(
             safeCallback(onComplete)
             return
         }
+        if (activeShowRequests.putIfAbsent(placementName, true) != null) {
+            AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "show_already_in_progress"))
+            return
+        }
+        val guardedComplete = {
+            activeShowRequests.remove(placementName)
+            safeCallback(onComplete)
+        }
 
         AdEventTracker.log("ad_show_requested", placement)
         if (customRenderer.canRender(placement)) {
@@ -181,7 +214,7 @@ class AppOpenManager(
                 AdEventTracker.log("ad_dismissed", placement)
                 armInlineSafetyIfNeeded(placement)
                 preloadAfterShowIfEnabled(activity, placementName, placement)
-                safeCallback(onComplete)
+                guardedComplete()
             })
             if (shown) {
                 AdEventTracker.log("ad_show_started", placement)
@@ -189,7 +222,7 @@ class AppOpenManager(
                 AdEventTracker.log("ad_impression", placement)
             } else {
                 AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active_or_show_failed"))
-                safeCallback(onComplete)
+                guardedComplete()
             }
             return
         }
@@ -198,14 +231,14 @@ class AppOpenManager(
         if (ad == null) {
             load(activity, placementName, forceRequest = true)
             if (waitForLoad) {
-                waitForAdAndShow(activity, placementName, onComplete)
+                waitForAdAndShow(activity, placementName, guardedComplete)
             } else {
-                safeCallback(onComplete)
+                guardedComplete()
             }
             return
         }
 
-        presentAd(activity, placementName, placement, ad, onComplete)
+        presentAd(activity, placementName, placement, ad, guardedComplete)
     }
 
     fun clear() {

@@ -3,8 +3,9 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@drawable/itwing_purchase_dialog_bg"
     android:orientation="vertical"
-    android:padding="18dp">
+    android:padding="@dimen/_10sdp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -33,7 +34,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/premium_title"
-                android:textColor="#0F172A"
+                android:textColor="#F8FAFC"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -43,7 +44,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:text="@string/premium_description"
-                android:textColor="#64748B"
+                android:textColor="#CBD5E1"
                 android:textSize="13sp" />
         </LinearLayout>
 
@@ -77,7 +78,7 @@
             android:id="@+id/itwing_premium_plan"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#0F172A"
+            android:textColor="#F8FAFC"
             android:textSize="14sp"
             android:textStyle="bold" />
 
@@ -86,7 +87,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="7dp"
-            android:textColor="#475569"
+            android:textColor="#CBD5E1"
             android:textSize="13sp" />
 
         <TextView
@@ -94,7 +95,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
-            android:textColor="#475569"
+            android:textColor="#CBD5E1"
             android:textSize="13sp" />
 
         <TextView
@@ -102,7 +103,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
-            android:textColor="#475569"
+            android:textColor="#CBD5E1"
             android:textSize="13sp" />
     </LinearLayout>
 
@@ -111,7 +112,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:textColor="#64748B"
+        android:textColor="#CBD5E1"
         android:textSize="12sp"
         android:visibility="gone" />
 

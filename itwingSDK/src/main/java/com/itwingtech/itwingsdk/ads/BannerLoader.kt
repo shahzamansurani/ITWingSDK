@@ -340,6 +340,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         (ctaView.background?.mutate() as? GradientDrawable)?.setColor(
             parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))
         )
+        ctaView.setTextColor(parseColorSafe(ITWingSDK.getColor("cta_text_color").takeIf { it.isNotBlank() }, Color.WHITE))
 
         (adTag.background?.mutate() as? GradientDrawable)?.setColor(
             parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))

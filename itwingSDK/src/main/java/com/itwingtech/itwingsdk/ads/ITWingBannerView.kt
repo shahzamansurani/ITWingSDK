@@ -79,6 +79,12 @@ class ITWingBannerView @JvmOverloads constructor(
                 Color.TRANSPARENT
             )
 
+            cardElevation = 0f
+            maxCardElevation = 0f
+            useCompatPadding = false
+            preventCornerOverlap = false
+            setContentPadding(0, 0, 0, 0)
+
             addView(
                 bannerContainer
             )
@@ -129,13 +135,13 @@ class ITWingBannerView @JvmOverloads constructor(
                     val strokeColor =
                         getColor(
                             R.styleable.ITWingBannerView_ITWingBannerStrokeColor,
-                            Color.GRAY
+                            Color.TRANSPARENT
                         )
 
                     val strokeWidth =
                         getDimension(
                             R.styleable.ITWingBannerView_ITWingBannerStrokeWidth,
-                            1f
+                            0f
                         )
 
                     val cornerRadius =
@@ -168,60 +174,12 @@ class ITWingBannerView @JvmOverloads constructor(
         heightMeasureSpec: Int
     ) {
         runCatching {
-
-            val defaultHeightPx =
-                resources
-                    .getDimension(
-                        com.intuit.sdp.R.dimen._60sdp
-                    )
-                    .toInt()
-
-            val padding =
-                resources
-                    .getDimension(
-                        com.intuit.sdp.R.dimen._3sdp
-                    )
-                    .toInt()
-
-            val desiredHeight =
-                defaultHeightPx + padding
-
-            val desiredWidth =
-                MeasureSpec.getSize(
-                    widthMeasureSpec
-                )
-
-            val customHeightMeasureSpec =
-                MeasureSpec.makeMeasureSpec(
-                    desiredHeight,
-                    MeasureSpec.AT_MOST
-                )
-
-            val customWidthMeasureSpec =
-                MeasureSpec.makeMeasureSpec(
-                    desiredWidth,
-                    MeasureSpec.EXACTLY
-                )
-
-            setPadding(
-                padding,
-                padding,
-                padding,
-                padding
-            )
-
-            super.onMeasure(
-                customWidthMeasureSpec,
-                customHeightMeasureSpec
-            )
-
+            setPadding(0, 0, 0, 0)
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
             return
         }
 
-        super.onMeasure(
-            widthMeasureSpec,
-            heightMeasureSpec
-        )
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 
     override fun onAttachedToWindow() {
@@ -272,6 +230,11 @@ class ITWingBannerView @JvmOverloads constructor(
                     return@post
                 }
 
+                if (!ITWingSDK.areInlineAdsReady()) {
+                    registerReadyRetry(force)
+                    return@post
+                }
+
                 val activity =
                     context.findActivitySafe()
                         ?: return@post
@@ -293,15 +256,20 @@ class ITWingBannerView @JvmOverloads constructor(
                         bannerType = bannerType
                     )
                 }
+            }
+        }
+    }
 
-                if (!readyRetryRegistered) {
-                    readyRetryRegistered = true
-                    ITWingSDK.onReady {
-                        if (!isDestroyed && isAttachedToWindow) {
-                            postDelayed({ postLoadBanner(force = true) }, 100)
-                        }
-                    }
-                }
+    private fun registerReadyRetry(force: Boolean) {
+        if (readyRetryRegistered) {
+            return
+        }
+
+        readyRetryRegistered = true
+        ITWingSDK.onInlineAdsReady { ready ->
+            readyRetryRegistered = false
+            if (ready && !isDestroyed && isAttachedToWindow) {
+                postDelayed({ postLoadBanner(force = force) }, 100)
             }
         }
     }
@@ -354,10 +322,7 @@ class ITWingBannerView @JvmOverloads constructor(
     }
 
     private fun isMeasuredForAdRequest(): Boolean {
-        return width > 0 &&
-            height > 0 &&
-            bannerContainer.width > 0 &&
-            bannerContainer.height > 0
+        return width > 0
     }
 
     private fun runOnMain(

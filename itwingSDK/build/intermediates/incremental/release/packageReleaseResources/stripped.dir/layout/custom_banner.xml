@@ -2,10 +2,10 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@android:color/white"
+    android:background="@drawable/itwing_purchase_dialog_bg"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:padding="@dimen/_1sdp">
+    android:padding="@dimen/_7sdp">
 
     <!-- MEDIA -->
 
@@ -41,7 +41,7 @@
                 android:layout_marginStart="@dimen/_2sdp"
                 android:maxLines="1"
                 android:text="IT Wing Technologies"
-                android:textColor="@android:color/black"
+                android:textColor="#F8FAFC"
                 android:textSize="@dimen/_8ssp"
                 android:textStyle="bold" />
 
@@ -56,7 +56,7 @@
             android:layout_marginTop="@dimen/_1sdp"
             android:maxLines="1"
             android:text="this is headline of the ad"
-            android:textColor="@android:color/black"
+            android:textColor="#F8FAFC"
             android:textSize="@dimen/_7ssp"
             android:textStyle="bold" />
 
@@ -67,7 +67,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:maxLines="2"
-            android:textColor="#666666"
+            android:textColor="#CBD5E1"
             android:textSize="@dimen/_7ssp" />
 
         <!-- BOTTOM -->

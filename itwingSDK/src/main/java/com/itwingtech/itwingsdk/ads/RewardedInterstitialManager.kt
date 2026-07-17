@@ -26,6 +26,7 @@ class RewardedInterstitialManager(
     private val mainHandler = Handler(Looper.getMainLooper())
     private val preloaderKeys = ConcurrentHashMap<String, String>()
     private val lastLoadAttemptAt = ConcurrentHashMap<String, Long>()
+    private val activeShowRequests = ConcurrentHashMap<String, Boolean>()
     private val customRenderer = CustomFullscreenAdRenderer()
     private val minLoadIntervalMs = 20_000L
 
@@ -110,10 +111,23 @@ class RewardedInterstitialManager(
             AdFailureDialog.show(activity, config.adPrimaryColor(), "No valid AdMob unit is configured for this rewarded interstitial placement.")
             return
         }
+        if (activeShowRequests.putIfAbsent(placementName, true) != null) {
+            AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "show_already_in_progress"))
+            return
+        }
+        val guardedReward = { safeCallback(onReward) }
+        val guardedComplete = {
+            activeShowRequests.remove(placementName)
+            safeCallback(onComplete)
+        }
+        val guardedCancel = {
+            activeShowRequests.remove(placementName)
+        }
 
         if (customRenderer.canRender(placement)) {
             RewardedIntroDialog.show(activity, placement, config.adPrimaryColor(), onSkip = {
                 AdEventTracker.log("ad_opt_out", placement)
+                guardedCancel()
             }) {
                 AdEventTracker.log("ad_show_requested", placement)
                 val customRewardEarned = AtomicBoolean(false)
@@ -125,13 +139,16 @@ class RewardedInterstitialManager(
                     InlineAdSafetyGate.arm("rewarded_interstitial", placement.name)
                     preloadAfterShowIfEnabled(activity, placementName, placement)
                     if (customRewardEarned.get()) {
-                        safeCallback(onReward)
-                        safeCallback(onComplete)
+                        guardedReward()
+                        guardedComplete()
+                    } else {
+                        guardedCancel()
                     }
                 })
                 if (!shown) {
                     AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
-                    showFailure(activity, placementName, placement, "Another full-screen ad is already showing.", onReward, onComplete)
+                    showFailure(activity, placementName, placement, "Another full-screen ad is already showing.", guardedReward, guardedComplete)
+                    guardedCancel()
                 } else {
                     AdEventTracker.log("ad_show_started", placement)
                     frequency.markShown(placement)
@@ -143,16 +160,17 @@ class RewardedInterstitialManager(
 
         RewardedIntroDialog.show(activity, placement, config.adPrimaryColor(), onSkip = {
             AdEventTracker.log("ad_opt_out", placement)
+            guardedCancel()
         }) {
             AdEventTracker.log("ad_show_requested", placement)
             val ad = pollPreloadedAd(placementName)
             if (ad == null) {
                 load(activity, placementName, forceRequest = true)
-                waitForAdAndShow(activity, placementName, onReward, onComplete)
+                waitForAdAndShow(activity, placementName, guardedReward, guardedComplete)
                 return@show
             }
 
-            presentAd(activity, placementName, placement, ad, onReward, onComplete)
+            presentAd(activity, placementName, placement, ad, guardedReward, guardedComplete)
         }
     }
 
@@ -303,6 +321,7 @@ class RewardedInterstitialManager(
 
             if (System.currentTimeMillis() - startedAt >= timeoutMs) {
                 loadingDialog.dismiss()
+                clearPreloader(placementName)
                 val placement = configProvider().ads.placements.firstOrNull { it.name == placementName }
                 if (placement != null) {
                     showFailure(activity, placementName, placement, "The ad did not load within ${timeoutMs / 1000} seconds. Check your connection and try again.", onReward, onComplete)
@@ -332,9 +351,13 @@ class RewardedInterstitialManager(
     }
 
     private fun restartPreloader(activity: Activity, placementName: String) {
-        preloaderKeys.remove(placementName)?.let { RewardedInterstitialAdPreloader.destroy(it) }
+        clearPreloader(placementName)
         lastLoadAttemptAt.remove(placementName)
         load(activity, placementName, forceRequest = true)
+    }
+
+    private fun clearPreloader(placementName: String) {
+        preloaderKeys.remove(placementName)?.let { RewardedInterstitialAdPreloader.destroy(it) }
     }
 
     private fun preloadAfterShowIfEnabled(

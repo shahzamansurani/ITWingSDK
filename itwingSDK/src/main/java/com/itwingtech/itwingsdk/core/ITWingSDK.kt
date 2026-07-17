@@ -79,6 +79,9 @@ object ITWingSDK {
     private var mobileAdsInitialized = false
 
     @Volatile
+    private var mobileAdsInitializationFinished = false
+
+    @Volatile
     private var startupPreloadDone = false
 
     @Volatile
@@ -89,6 +92,9 @@ object ITWingSDK {
 
     @Volatile
     private var bootstrapInFlight = false
+
+    private val splashPublicInFlight = AtomicBoolean(false)
+    private val splashPublicCallbacks = mutableListOf<(String) -> Unit>()
 
     @Volatile
     private var lastError: String? = "not_initialized"
@@ -108,6 +114,7 @@ object ITWingSDK {
     @Volatile
     private var foregroundStartedAtMs = 0L
     private val readyCallbacks = CopyOnWriteArrayList<(Boolean) -> Unit>()
+    private val inlineAdsReadyCallbacks = CopyOnWriteArrayList<(Boolean) -> Unit>()
     private val initListeners = CopyOnWriteArrayList<SDKInitListener>()
 
     val ads: AdManager = AdManager(
@@ -465,6 +472,7 @@ object ITWingSDK {
         listner: SDKInitListener? = null,
     ) {
         val externalListener = listener ?: listner
+        ads.suppressAutomaticAppOpenFor(60_000L)
         notificationTargetActivityName = mainActivity.name
         hostAppActivityReached = false
         val effectiveSdkOptions = sdkOptions.copy(
@@ -472,6 +480,12 @@ object ITWingSDK {
             autoApplyResponsiveLayout = autoApplyResponsiveLayout ?: sdkOptions.autoApplyResponsiveLayout,
         )
         val sessionFlowOptions = effectiveFlowOptions(flowOptions, splash_onboardings)
+        val hostOwnsSplash = splash_bg != null ||
+            splash_title != null ||
+            splash_sub_title != null ||
+            splash_lottie_anim != null ||
+            splash_bg_color != null ||
+            splash_logo != null
         val sessionId = ITWingAppFlowRegistry.put(
             ITWingAppFlowSession(
                 apiKey = apiKey,
@@ -479,12 +493,14 @@ object ITWingSDK {
                 flowOptions = sessionFlowOptions,
                 mainActivityName = mainActivity.name,
                 listener = externalListener,
+                hostOwnsSplash = hostOwnsSplash,
             ),
         )
         val completed = AtomicBoolean(false)
 
         fun open(target: Intent) {
             if (!completed.compareAndSet(false, true)) return
+            ads.clearAutomaticAppOpenSuppression()
             if (activity.isFinishing || activity.isDestroyed) {
                 ITWingAppFlowRegistry.remove(sessionId)
                 return
@@ -740,6 +756,7 @@ object ITWingSDK {
         repository = ConfigRepository(activity.applicationContext, apiKey, options)
         bootstrapFinished = false
         bootstrapInFlight = true
+        mobileAdsInitializationFinished = mobileAdsInitialized
         connectionState = "bootstrap_in_progress"
         lastError = "bootstrap_in_progress"
         analytics = AnalyticsClient(repository!!)
@@ -1093,6 +1110,8 @@ object ITWingSDK {
 
     private fun initializeMobileAds(activity: Activity, onInitialized: () -> Unit = {}) {
         if (mobileAdsInitialized) {
+            mobileAdsInitializationFinished = true
+            notifyInlineAdsReady(true)
             onInitialized()
             return
         }
@@ -1101,6 +1120,8 @@ object ITWingSDK {
                 "mobile_ads_initialize_skipped",
                 mapOf("reason" to "missing_admob_app_id")
             )
+            mobileAdsInitializationFinished = true
+            notifyInlineAdsReady(true)
             onInitialized()
             return
         }
@@ -1108,10 +1129,14 @@ object ITWingSDK {
             runCatching {
                 MobileAds.initialize(activity, InitializationConfig.Builder(appId).build()) {
                     mobileAdsInitialized = true
+                    mobileAdsInitializationFinished = true
+                    notifyInlineAdsReady(true)
                     onInitialized()
                 }
             }.onFailure {
                 SDKTelemetry.recordNonFatal(it, mapOf("operation" to "mobile_ads_initialize"))
+                mobileAdsInitializationFinished = true
+                notifyInlineAdsReady(false)
                 onInitialized()
             }
         }
@@ -1150,6 +1175,27 @@ object ITWingSDK {
     @JvmStatic
     fun isReady(): Boolean {
         return config.configVersion > 0
+    }
+
+    internal fun areInlineAdsReady(): Boolean {
+        return config.configVersion > 0 &&
+            (
+                mobileAdsInitialized ||
+                    mobileAdsInitializationFinished ||
+                    config.ads.admobAppId.isNullOrBlank()
+                )
+    }
+
+    internal fun onInlineAdsReady(callback: (Boolean) -> Unit) {
+        if (areInlineAdsReady()) {
+            mainHandler.post { callback(true) }
+            return
+        }
+        if (bootstrapFinished && config.configVersion <= 0) {
+            mainHandler.post { callback(false) }
+            return
+        }
+        inlineAdsReadyCallbacks.add(callback)
     }
 
     @JvmStatic
@@ -1765,16 +1811,30 @@ object ITWingSDK {
 
     @JvmStatic
     fun showSplash(activity: Activity, onComplete: () -> Unit = {}) {
+        synchronized(splashPublicCallbacks) {
+            splashPublicCallbacks.add { safeCallback(onComplete) }
+        }
+        if (!splashPublicInFlight.compareAndSet(false, true)) {
+            SDKTelemetry.track("splash_joined_in_flight", emptyMap())
+            return
+        }
+
         val startedAt = System.currentTimeMillis()
         val completed = AtomicBoolean(false)
         val runtimeStarted = AtomicBoolean(false)
         fun completeOnce(reason: String) {
             if (!completed.compareAndSet(false, true)) return
+            splashPublicInFlight.set(false)
             SDKTelemetry.track(
                 "splash_completed",
                 mapOf("reason" to reason, "elapsed_ms" to (System.currentTimeMillis() - startedAt))
             )
-            safeCallback(onComplete)
+            val callbacks = synchronized(splashPublicCallbacks) {
+                splashPublicCallbacks.toList().also { splashPublicCallbacks.clear() }
+            }
+            callbacks.forEach { callback ->
+                runCatching { callback(reason) }
+            }
         }
 
         fun scheduleHardTimeout(delayMs: Long = 15_000L) {
@@ -1956,7 +2016,7 @@ object ITWingSDK {
         onNegative: Runnable? = null,
         onCancel: Runnable? = null,
     ): ITWingActionDialog {
-        return createActionDialog(activity).also {
+        return createActionDialog(activity).setReviewEnabled(true).also {
             it.show(
                 title = title,
                 description = description,
@@ -2097,6 +2157,12 @@ object ITWingSDK {
         if (success) {
             notifyListeners { it.onReady() }
         }
+    }
+
+    private fun notifyInlineAdsReady(success: Boolean) {
+        val callbacks = inlineAdsReadyCallbacks.toList()
+        inlineAdsReadyCallbacks.clear()
+        callbacks.forEach { callback -> mainHandler.post { callback(success) } }
     }
 
     private fun legalKey(kind: String): String = when (kind) {

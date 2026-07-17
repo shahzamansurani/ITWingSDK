@@ -14,13 +14,28 @@ internal class AppRuntimeManager(
     private val adManagerProvider: () -> AdManager?,
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val splashInFlight = AtomicBoolean(false)
+    private val pendingSplashCompletions = mutableListOf<() -> Unit>()
 
     fun showSplash(activity: Activity, onComplete: () -> Unit) {
+        synchronized(pendingSplashCompletions) {
+            pendingSplashCompletions.add(onComplete)
+        }
+        if (!splashInFlight.compareAndSet(false, true)) {
+            return
+        }
+
         val completed = AtomicBoolean(false)
         val adFlowStarted = AtomicBoolean(false)
         fun completeOnce() {
             if (!completed.compareAndSet(false, true)) return
-            safeCallback(onComplete)
+            splashInFlight.set(false)
+            val callbacks = synchronized(pendingSplashCompletions) {
+                pendingSplashCompletions.toList().also { pendingSplashCompletions.clear() }
+            }
+            callbacks.forEach { callback ->
+                safeCallback(callback)
+            }
         }
         fun scheduleRuntimeTimeout(delayMs: Long = 12_000L) {
             mainHandler.postDelayed({

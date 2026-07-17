@@ -147,6 +147,7 @@
             android:textSize="18sp"
             android:textStyle="bold" />
 
+
         <com.itwingtech.itwingsdk.ads.ITWingBannerView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -162,17 +163,18 @@
             android:textSize="18sp"
             android:textStyle="bold" />
 
-                <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    app:ITWingNativeAdViewPlacement="native_small" />
+        <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:ITWingNativeAdViewPlacement="native_small" />
 
-                <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    app:ITWingNativeAdViewPlacement="native_large" />
+        <com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:ITWingNativeAdViewPlacement="native_large" />
+
 
         <TextView
             android:layout_width="match_parent"

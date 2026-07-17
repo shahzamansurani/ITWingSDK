@@ -318,7 +318,7 @@ class NativeLoader(
                 }
             )
 
-        } catch (_: Exception) {
+        } catch (exception: Exception) {
 
             if (!isCurrentLoad(container, token)) return
 
@@ -329,8 +329,11 @@ class NativeLoader(
             synchronized(activeLoadKeys) {
                 activeLoadKeys.remove(container)
             }
-            AdEventTracker.log("ad_load_failed", placement, mapOf("message" to "native_exception"))
-            AdLoadBackoff.recordFailure(placement, "native_exception")
+            val message = exception.message
+                ?.take(180)
+                ?: exception::class.java.simpleName
+            AdEventTracker.log("ad_load_failed", placement, mapOf("message" to message))
+            AdLoadBackoff.recordFailure(placement, message)
         }
     }
 
@@ -449,7 +452,7 @@ class NativeLoader(
         val ctaDrawable = adView.callToActionView?.background?.mutate() as? GradientDrawable
         ctaDrawable?.setColor(parseColorSafe(ITWingSDK.getColor("primary"), Color.rgb(37, 99, 235)))
         (adView.callToActionView as? TextView)?.setTextColor(
-            parseColorSafe(metadata.stringValue("native_cta_text_color", "cta_text_color"), Color.WHITE)
+            parseColorSafe(metadata.stringValue("native_cta_text_color", "cta_text_color") ?: sdkColor("cta_text_color"), Color.WHITE)
         )
 
         val adTagColor = ad_tag?.background?.mutate() as? GradientDrawable
@@ -673,7 +676,7 @@ class NativeLoader(
                 )
             )
         )
-        ctaView?.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "cta_text_color"), Color.WHITE))
+        ctaView?.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "cta_text_color") ?: sdkColor("cta_text_color"), Color.WHITE))
         adTag?.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
 
         /*
@@ -893,6 +896,7 @@ class NativeLoader(
     private fun View.applyTransparentNativeRoot() {
         setBackgroundResource(R.drawable.itwing_purchase_dialog_bg)
         findViewById<View?>(R.id.ad_unit_content)?.setBackgroundColor(Color.TRANSPARENT)
+        clearNativeChildBackgrounds()
     }
 
     private fun View.applyNativePlacementStyle(metadata: Map<String, Any?>) {
@@ -900,16 +904,31 @@ class NativeLoader(
         if (transparent) {
             setBackgroundResource(R.drawable.itwing_purchase_dialog_bg)
             findViewById<View?>(R.id.ad_unit_content)?.setBackgroundColor(Color.TRANSPARENT)
+            clearNativeChildBackgrounds()
         } else {
             val background = parseColorSafe(metadata.stringValue("native_background_color", "background_color"), Color.TRANSPARENT)
             applyBackgroundRecursively(background)
         }
-        val headline = parseColorSafe(metadata.stringValue("native_headline_text_color", "headline_text_color"), Color.rgb(248, 250, 252))
-        val body = parseColorSafe(metadata.stringValue("native_body_text_color", "body_text_color"), Color.rgb(203, 213, 225))
-        val meta = parseColorSafe(metadata.stringValue("native_meta_text_color", "meta_text_color"), Color.rgb(203, 213, 225))
+        val nativeTextColor = sdkColor("native_text_color")
+        val headline = parseColorSafe(metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(248, 250, 252))
+        val body = parseColorSafe(metadata.stringValue("native_body_text_color", "body_text_color") ?: nativeTextColor, Color.rgb(203, 213, 225))
+        val meta = parseColorSafe(metadata.stringValue("native_meta_text_color", "meta_text_color") ?: nativeTextColor, Color.rgb(203, 213, 225))
         listOf(R.id.ad_headline).forEach { findViewById<TextView?>(it)?.setTextColor(headline) }
         listOf(R.id.ad_body).forEach { findViewById<TextView?>(it)?.setTextColor(body) }
         listOf(R.id.ad_advertiser, R.id.ad_store, R.id.ad_price).forEach { findViewById<TextView?>(it)?.setTextColor(meta) }
+    }
+
+    private fun View.clearNativeChildBackgrounds() {
+        if (this !is ViewGroup) return
+        for (i in 0 until childCount) {
+            val child = getChildAt(i)
+            if (child.id != R.id.ad_call_to_action && child.id != R.id.ad_ic) {
+                if (child is ViewGroup) {
+                    child.setBackgroundColor(Color.TRANSPARENT)
+                    child.clearNativeChildBackgrounds()
+                }
+            }
+        }
     }
 
     private fun View.applyBackgroundRecursively(color: Int) {
@@ -1186,6 +1205,9 @@ class NativeLoader(
         ?: ((metadata["brand"] as? Map<*, *>)?.get("primary_color") as? String)?.takeIf { it.isNotBlank() }
         ?: ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
         ?: ITWingSDK.getColor("primary_color").takeIf { it.isNotBlank() }
+
+    private fun sdkColor(name: String): String? =
+        ITWingSDK.getColor(name).takeIf { it.isNotBlank() }
 
     private fun CustomAdConfig.brandName(): String? =
         (

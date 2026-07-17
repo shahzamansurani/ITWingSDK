@@ -313,6 +313,7 @@ internal data class ITWingAppFlowSession(
     val flowOptions: ITWingAppFlowOptions,
     val mainActivityName: String,
     val listener: SDKInitListener? = null,
+    val hostOwnsSplash: Boolean = false,
 )
 
 internal object ITWingAppFlowRegistry {

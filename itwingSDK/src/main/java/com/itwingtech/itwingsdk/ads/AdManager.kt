@@ -134,6 +134,14 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
         appOpenManager.startAutomatic(activity)
     }
 
+    fun suppressAutomaticAppOpenFor(durationMs: Long) {
+        appOpenManager.suppressAutomaticFor(durationMs)
+    }
+
+    fun clearAutomaticAppOpenSuppression() {
+        appOpenManager.clearAutomaticSuppression()
+    }
+
     fun updateForegroundActivity(activity: Activity) {
         appOpenManager.updateForegroundActivity(activity)
     }

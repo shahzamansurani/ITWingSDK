@@ -11,6 +11,7 @@
         android:layout_height="wrap_content"
         android:background="@android:color/transparent"
         android:gravity="center"
+        android:padding="@dimen/_5sdp"
         android:orientation="vertical">
 
         <RelativeLayout

@@ -272,17 +272,19 @@ class ITWingActionDialog internal constructor(
 
         val feedbackInput = content.findViewById<EditText>(R.id.itwing_action_review_feedback)
         val sendFeedback = content.findViewById<MaterialButton>(R.id.itwing_action_review_send)
-        val ratingBar = content.findViewById<RatingBar>(R.id.itwing_action_rating_bar)
         val message = content.findViewById<TextView>(R.id.itwing_action_review_message)
+        val ratingBar = content.findViewById<RatingBar>(R.id.itwing_action_ratingbar)
 
         section.visibility = View.VISIBLE
         sendFeedback.backgroundTintList = ColorStateList.valueOf(primaryColor)
         sendFeedback.setTextColor(onPrimary)
         sendFeedback.rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(primaryColor, 44))
 
+        ratingBar.rating = 0f
         ratingBar.setOnRatingBarChangeListener { _, rating, fromUser ->
             if (!fromUser || rating <= 0f) return@setOnRatingBarChangeListener
             if (rating >= 4f) {
+                message.text = activity.getString(R.string.itwing_action_review_message)
                 feedbackInput.visibility = View.GONE
                 sendFeedback.visibility = View.GONE
                 launchInAppReview()
@@ -295,6 +297,7 @@ class ITWingActionDialog internal constructor(
                 }
             }
         }
+
         return true
     }
 

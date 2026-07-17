@@ -2,11 +2,11 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@android:id/background"
-        android:drawable="@drawable/itwing_review_star_empty" />
+        android:drawable="@drawable/itwing_lib_material_icon_star_off" />
     <item
         android:id="@android:id/secondaryProgress"
-        android:drawable="@drawable/itwing_review_star_empty" />
+        android:drawable="@drawable/itwing_lib_material_icon_star_off" />
     <item
         android:id="@android:id/progress"
-        android:drawable="@drawable/itwing_review_star_filled" />
+        android:drawable="@drawable/itwing_lib_material_icon_star_on" />
 </layer-list>

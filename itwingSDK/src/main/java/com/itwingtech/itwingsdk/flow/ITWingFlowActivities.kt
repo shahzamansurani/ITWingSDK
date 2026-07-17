@@ -81,6 +81,8 @@ class ITWingFlowSplashActivity : ComponentActivity() {
                     openNextScreen()
                 } else if (shouldShowStartupScreens() || splashAdFormat() in setOf("none", "no_ad", "disabled")) {
                     continueAfterUpdateCheckWithDelay()
+                } else if (current.hostOwnsSplash) {
+                    openNextScreen()
                 } else {
                     ITWingSDK.showSplash(this@ITWingFlowSplashActivity) {
                         openNextScreen()

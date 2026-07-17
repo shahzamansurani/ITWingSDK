@@ -12,6 +12,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:gravity="center"
+        android:padding="@dimen/_5sdp"
         android:background="@android:color/transparent"
         android:orientation="vertical">
 

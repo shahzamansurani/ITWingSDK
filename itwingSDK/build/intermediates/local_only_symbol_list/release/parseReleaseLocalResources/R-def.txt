@@ -156,13 +156,14 @@ drawable itwing_flow_splash_logo
 drawable itwing_flow_tint_selector
 drawable itwing_ic_close
 drawable itwing_ic_premium
+drawable itwing_lib_material_icon_star_off
+drawable itwing_lib_material_icon_star_on
 drawable itwing_premium_badge_bg
 drawable itwing_premium_icon_bg
 drawable itwing_purchase_card_bg
 drawable itwing_purchase_dialog_bg
+drawable itwing_review_rating_icon
 drawable itwing_review_ratingbar
-drawable itwing_review_star_empty
-drawable itwing_review_star_filled
 drawable no_sound
 drawable ok_btn
 drawable start_bg
@@ -216,12 +217,11 @@ id itwing_action_description
 id itwing_action_native_container
 id itwing_action_negative
 id itwing_action_positive
-id itwing_action_rating_bar
+id itwing_action_ratingbar
 id itwing_action_review_feedback
 id itwing_action_review_message
 id itwing_action_review_section
 id itwing_action_review_send
-id itwing_action_review_title
 id itwing_action_title
 id itwing_flow_back
 id itwing_flow_banner_container
@@ -263,6 +263,7 @@ id itwing_media_category_title
 id itwing_media_icon
 id itwing_media_image
 id itwing_media_premium
+id itwing_media_subtitle
 id itwing_media_title
 id itwing_premium_badge
 id itwing_premium_billing
@@ -422,6 +423,7 @@ string watch_ad
 string watch_video_ad_to_proceed
 style CustomCardShape
 style FullScreen
+style ITWingMaterialRatingStyle
 style RatingBar
 style RoundedWallpaperImage
 styleable ITWingBannerView ITWingBannerPlacement ITWingBannerText ITWingBannerTextColor ITWingBannerTextSize ITWingBannerStrokeColor ITWingBannerBackgroundColor ITWingBannerStrokeWidth ITWingBannerCornerRadius ITWingBannerType

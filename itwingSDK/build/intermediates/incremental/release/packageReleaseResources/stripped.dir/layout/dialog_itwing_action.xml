@@ -68,44 +68,36 @@
             android:id="@+id/itwing_action_review_section"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:background="@drawable/itwing_purchase_card_bg"
-            android:gravity="center_horizontal"
+            android:layout_marginTop="@dimen/_20sdp"
             android:orientation="vertical"
-            android:padding="14dp"
             android:visibility="gone">
 
-            <TextView
-                android:id="@+id/itwing_action_review_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center"
-                android:text="@string/itwing_action_review_title"
-                android:textColor="#F8FAFC"
-                android:textSize="15sp"
-                android:textStyle="bold" />
+            <ImageView
+                android:layout_width="@dimen/_40sdp"
+                android:layout_height="@dimen/_40sdp"
+                android:layout_gravity="center_horizontal"
+                android:src="@drawable/itwing_review_rating_icon" />
 
             <RatingBar
-                android:id="@+id/itwing_action_rating_bar"
+                android:id="@+id/itwing_action_ratingbar"
+                style="@style/ITWingMaterialRatingStyle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:layout_marginTop="8dp"
-                android:isIndicator="false"
+                android:layout_marginTop="@dimen/_10sdp"
                 android:numStars="5"
-                android:progressDrawable="@drawable/itwing_review_ratingbar"
-                android:rating="0"
                 android:stepSize="1" />
 
             <TextView
                 android:id="@+id/itwing_action_review_message"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:gravity="center"
+                android:layout_marginTop="@dimen/_5sdp"
+                android:gravity="center_horizontal"
+                android:padding="@dimen/_5sdp"
                 android:text="@string/itwing_action_review_message"
-                android:textColor="#CBD5E1"
-                android:textSize="12sp" />
+                android:textColor="#F8FAFC"
+                android:textSize="@dimen/_13sdp" />
 
             <EditText
                 android:id="@+id/itwing_action_review_feedback"

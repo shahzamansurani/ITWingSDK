@@ -26,6 +26,7 @@ class RewardedManager(
     private val mainHandler = Handler(Looper.getMainLooper())
     private val preloaderKeys = ConcurrentHashMap<String, String>()
     private val lastLoadAttemptAt = ConcurrentHashMap<String, Long>()
+    private val activeShowRequests = ConcurrentHashMap<String, Boolean>()
     private val customRenderer = CustomFullscreenAdRenderer()
     private val minLoadIntervalMs = 20_000L
 
@@ -117,10 +118,24 @@ class RewardedManager(
             safeCallback(onUnavailableOrSkipped)
             return
         }
+        if (activeShowRequests.putIfAbsent(placementName, true) != null) {
+            AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "show_already_in_progress"))
+            safeCallback(onUnavailableOrSkipped)
+            return
+        }
+        val guardedReward = { safeCallback(onReward) }
+        val guardedComplete = {
+            activeShowRequests.remove(placementName)
+            safeCallback(onComplete)
+        }
+        val guardedUnavailable = {
+            activeShowRequests.remove(placementName)
+            safeCallback(onUnavailableOrSkipped)
+        }
 
         RewardedIntroDialog.show(activity, placement, config.adPrimaryColor(), onSkip = {
             AdEventTracker.log("ad_opt_out", placement)
-            safeCallback(onUnavailableOrSkipped)
+            guardedUnavailable()
         }) {
             AdEventTracker.log("ad_show_requested", placement)
             if (customRenderer.canRender(placement)) {
@@ -133,15 +148,15 @@ class RewardedManager(
                     InlineAdSafetyGate.arm("rewarded", placement.name)
                     preloadAfterShowIfEnabled(activity, placementName, placement)
                     if (customRewardEarned.get()) {
-                        safeCallback(onReward)
-                        safeCallback(onComplete)
+                        guardedReward()
+                        guardedComplete()
                     } else {
-                        safeCallback(onUnavailableOrSkipped)
+                        guardedUnavailable()
                     }
                 })
                 if (!shown) {
                     AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
-                    showFailure(activity, placementName, placement, "Another full-screen ad is already showing.", onReward, onComplete, onUnavailableOrSkipped)
+                    showFailure(activity, placementName, placement, "Another full-screen ad is already showing.", guardedReward, guardedComplete, guardedUnavailable)
                 } else {
                     AdEventTracker.log("ad_show_started", placement)
                     frequency.markShown(placement)
@@ -153,11 +168,11 @@ class RewardedManager(
             val ad = pollPreloadedAd(placementName)
             if (ad == null) {
                 load(activity, placementName, forceRequest = true)
-                waitForAdAndShow(activity, placementName, onReward, onComplete, onUnavailableOrSkipped)
+                waitForAdAndShow(activity, placementName, guardedReward, guardedComplete, guardedUnavailable)
                 return@show
             }
 
-            presentAd(activity, placementName, placement, ad, onReward, onComplete, onUnavailableOrSkipped)
+            presentAd(activity, placementName, placement, ad, guardedReward, guardedComplete, guardedUnavailable)
         }
     }
 
@@ -317,6 +332,7 @@ class RewardedManager(
 
             if (System.currentTimeMillis() - startedAt >= timeoutMs) {
                 loadingDialog.dismiss()
+                clearPreloader(placementName)
                 val placement = configProvider().ads.placements.firstOrNull { it.name == placementName }
                 if (placement != null) {
                     showFailure(activity, placementName, placement, "The ad did not load within ${timeoutMs / 1000} seconds. Check your connection and try again.", onReward, onComplete, onUnavailableOrSkipped)
@@ -350,9 +366,13 @@ class RewardedManager(
     }
 
     private fun restartPreloader(activity: Activity, placementName: String) {
-        preloaderKeys.remove(placementName)?.let { RewardedAdPreloader.destroy(it) }
+        clearPreloader(placementName)
         lastLoadAttemptAt.remove(placementName)
         load(activity, placementName, forceRequest = true)
+    }
+
+    private fun clearPreloader(placementName: String) {
+        preloaderKeys.remove(placementName)?.let { RewardedAdPreloader.destroy(it) }
     }
 
     private fun preloadAfterShowIfEnabled(

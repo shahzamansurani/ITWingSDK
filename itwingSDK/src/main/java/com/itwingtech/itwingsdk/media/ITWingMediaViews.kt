@@ -917,7 +917,15 @@ private fun View.bindMediaItem(item: ITWingMediaItem, kind: String, showTitle: B
     val image = findViewByName<ImageView>("itwing_media_image", "media_image", "thumbnail", "country_flag")
     val icon = findViewByName<TextView>("itwing_media_icon")
     val title = findViewByName<TextView>("itwing_media_title", "media_title", "title", "country_name")
-    val subtitle = findViewByName<TextView>("itwing_media_subtitle", "media_subtitle", "subtitle", "server_name", "vpn_server_name")
+    val subtitle = findViewByName<TextView>(
+        "itwing_media_subtitle",
+        "itwing_media_sub_title",
+        "media_subtitle",
+        "media_sub_title",
+        "subtitle",
+        "server_name",
+        "vpn_server_name",
+    )
     val premium = findViewByName<TextView>("itwing_media_premium", "media_premium", "premium", "cost")
     val vpnLabel = if (kind == "vpn_servers") item.vpnListTitle() else item.title
     title?.text = vpnLabel
@@ -931,8 +939,8 @@ private fun View.bindMediaItem(item: ITWingMediaItem, kind: String, showTitle: B
     }
     premium?.visibility = if (item.isPremium || kind == "vpn_servers") View.VISIBLE else View.GONE
     if (kind == "vpn_servers" && premium != null) {
-        premium.text = if (item.isPremium) "★" else "▰▰▰"
         premium.setTextColor(if (item.isPremium) Color.parseColor("#F59E0B") else Color.parseColor("#22C55E"))
+        premium.text = if (item.isPremium) "Pro" else "Free"
         premium.background = null
         premium.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0)
     } else if (premium != null && item.isPremium && style.premiumIcon != 0 && style.premiumMode != 0) {

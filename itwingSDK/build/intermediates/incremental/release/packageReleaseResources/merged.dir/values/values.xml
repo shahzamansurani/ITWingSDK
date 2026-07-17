@@ -25,6 +25,7 @@
     <item name="itwing_media_icon" type="id"/>
     <item name="itwing_media_image" type="id"/>
     <item name="itwing_media_premium" type="id"/>
+    <item name="itwing_media_subtitle" type="id"/>
     <item name="itwing_media_title" type="id"/>
     <string name="ad">AD</string>
     <string name="ad_failed_reason">The ad could not be shown. %1$s</string>
@@ -42,7 +43,7 @@
     <string name="itwing_action_review_email_body">Stars: %1$s\n\nFeedback:\n%2$s\n\nDevice Info:\nOS API: %3$s\nDevice: %4$s\nModel: %5$s</string>
     <string name="itwing_action_review_email_subject">%1$s app feedback</string>
     <string name="itwing_action_review_low_hint">Tell us what should be improved.</string>
-    <string name="itwing_action_review_message">Tap a star to share your feedback.</string>
+    <string name="itwing_action_review_message">If you like our app, please give us your valuable feedback by the halp of stars.</string>
     <string name="itwing_action_review_send_feedback">Send feedback</string>
     <string name="itwing_action_review_thanks">Thanks for your feedback.</string>
     <string name="itwing_action_review_title">Enjoying this app?</string>
@@ -118,6 +119,10 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowFullscreen">true</item>
+    </style>
+    <style name="ITWingMaterialRatingStyle" parent="Widget.AppCompat.RatingBar">
+        <item name="android:progressDrawable">@drawable/itwing_review_ratingbar</item>
+        <item name="android:indeterminateDrawable">@drawable/itwing_review_ratingbar</item>
     </style>
     <style name="RatingBar" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="colorControlNormal">@color/grey</item>

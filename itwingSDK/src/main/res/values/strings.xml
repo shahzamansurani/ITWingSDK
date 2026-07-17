@@ -75,7 +75,7 @@
     <string name="itwing_media_player_mute">Mute</string>
     <string name="itwing_media_player_unmute">Unmute</string>
     <string name="itwing_action_review_title">Enjoying this app?</string>
-    <string name="itwing_action_review_message">Tap a star to share your feedback.</string>
+    <string name="itwing_action_review_message">If you like our app, please give us your valuable feedback by the halp of stars.</string>
     <string name="itwing_action_review_low_hint">Tell us what should be improved.</string>
     <string name="itwing_action_review_send_feedback">Send feedback</string>
     <string name="itwing_action_review_thanks">Thanks for your feedback.</string>
