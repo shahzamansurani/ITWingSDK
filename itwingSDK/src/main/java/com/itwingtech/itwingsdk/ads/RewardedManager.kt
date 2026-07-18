@@ -74,6 +74,7 @@ class RewardedManager(
         onReward: () -> Unit,
         onComplete: () -> Unit = {},
         onUnavailableOrSkipped: () -> Unit = {},
+        showIntro: Boolean = true,
     ) {
         if (!activity.isUsable()) {
             safeCallback(onUnavailableOrSkipped)
@@ -133,10 +134,7 @@ class RewardedManager(
             safeCallback(onUnavailableOrSkipped)
         }
 
-        RewardedIntroDialog.show(activity, placement, config.adPrimaryColor(), onSkip = {
-            AdEventTracker.log("ad_opt_out", placement)
-            guardedUnavailable()
-        }) {
+        val showAd = showAd@{
             AdEventTracker.log("ad_show_requested", placement)
             if (customRenderer.canRender(placement)) {
                 val customRewardEarned = AtomicBoolean(false)
@@ -162,17 +160,28 @@ class RewardedManager(
                     frequency.markShown(placement)
                     AdEventTracker.log("ad_impression", placement)
                 }
-                return@show
+                    return@showAd
             }
 
             val ad = pollPreloadedAd(placementName)
             if (ad == null) {
                 load(activity, placementName, forceRequest = true)
                 waitForAdAndShow(activity, placementName, guardedReward, guardedComplete, guardedUnavailable)
-                return@show
+                return@showAd
             }
 
             presentAd(activity, placementName, placement, ad, guardedReward, guardedComplete, guardedUnavailable)
+        }
+
+        if (showIntro) {
+            RewardedIntroDialog.show(activity, placement, config.adPrimaryColor(), onSkip = {
+                AdEventTracker.log("ad_opt_out", placement)
+                guardedUnavailable()
+            }) {
+                showAd()
+            }
+        } else {
+            showAd()
         }
     }
 

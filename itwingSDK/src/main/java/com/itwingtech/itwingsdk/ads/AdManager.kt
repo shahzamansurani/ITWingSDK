@@ -13,7 +13,10 @@ import java.util.WeakHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 
-class AdManager(private val configProvider: () -> ITWingConfig, private val suppressAdsProvider: () -> Boolean = { false } ) {
+class AdManager(
+    private val configProvider: () -> ITWingConfig,
+    private val suppressAdsReasonProvider: () -> String? = { null },
+) {
     private val frequencyController = FrequencyController()
     private val bannerLoader by lazy { BannerLoader(configProvider) }
     private val interstitialManager by lazy { InterstitialManager(configProvider = configProvider, frequency = frequencyController) }
@@ -65,6 +68,23 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
             return
         }
         rewardedManager.show(activity, placement, onReward, onComplete, onUnavailableOrSkipped)
+    }
+
+    fun showRewardedDirect(
+        activity: Activity,
+        placement: String,
+        onReward: () -> Unit,
+        onComplete: () -> Unit = {},
+        onUnavailableOrSkipped: () -> Unit = {},
+    ) {
+        if (adsSuppressed()) {
+            trackSuppressed("rewarded", placement)
+            clearCache()
+            AdFailureDialog.show(activity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
+            onUnavailableOrSkipped()
+            return
+        }
+        rewardedManager.show(activity, placement, onReward, onComplete, onUnavailableOrSkipped, showIntro = false)
     }
 
     fun showRewarded(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
@@ -401,7 +421,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
 
     private fun adsSuppressed(): Boolean {
         val ads = configProvider().ads
-        return suppressAdsProvider() || !ads.globalEnabled || ads.blockedReason == "active_subscription"
+        return suppressAdsReasonProvider() != null || !ads.globalEnabled || ads.blockedReason == "active_subscription"
     }
 
     private fun rewardedSuppressionReason(): String {
@@ -419,7 +439,7 @@ class AdManager(private val configProvider: () -> ITWingConfig, private val supp
                 "format" to format,
                 "placement" to placement,
                 "global_enabled" to ads.globalEnabled,
-                "blocked_reason" to (ads.blockedReason ?: if (suppressAdsProvider()) "subscription" else "unknown"),
+                "blocked_reason" to (ads.blockedReason ?: suppressAdsReasonProvider() ?: "unknown"),
             ),
         )
     }

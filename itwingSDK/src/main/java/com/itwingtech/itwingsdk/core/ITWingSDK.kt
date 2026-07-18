@@ -103,6 +103,9 @@ object ITWingSDK {
     private var connectionState: String = "not_initialized"
 
     @Volatile
+    private var hostAdsSuppressionReason: String? = null
+
+    @Volatile
     private var lifecycleTrackingRegistered = false
 
     @Volatile
@@ -119,7 +122,11 @@ object ITWingSDK {
 
     val ads: AdManager = AdManager(
         configProvider = { config },
-        suppressAdsProvider = { ::subscriptions.isInitialized && subscriptions.isAdFree() })
+        suppressAdsReasonProvider = {
+            hostAdsSuppressionReason
+                ?: if (::subscriptions.isInitialized && subscriptions.isAdFree()) "subscription" else null
+        },
+    )
     lateinit var analytics: AnalyticsClient private set
     lateinit var updates: InAppUpdateManager private set
     lateinit var subscriptions: SubscriptionManager private set
@@ -1480,6 +1487,22 @@ object ITWingSDK {
     }
 
     @JvmStatic
+    fun setHostAdsSuppressed(suppressed: Boolean, reason: String = "host_suppressed") {
+        hostAdsSuppressionReason = if (suppressed) reason.ifBlank { "host_suppressed" } else null
+        if (suppressed) {
+            ads.clearCache()
+            ads.onEntitlementActivated()
+        }
+        SDKTelemetry.track(
+            "host_ads_suppression_changed",
+            mapOf("suppressed" to suppressed, "reason" to (hostAdsSuppressionReason ?: "none")),
+        )
+    }
+
+    @JvmStatic
+    fun areHostAdsSuppressed(): Boolean = hostAdsSuppressionReason != null
+
+    @JvmStatic
     fun showInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) =
         runSdkCall("show_interstitial", mapOf("placement" to placement)) {
             ads.showInterstitial(activity, placement, onComplete)
@@ -1499,6 +1522,18 @@ object ITWingSDK {
     ) =
         runSdkCall("show_rewarded", mapOf("placement" to placement)) {
             ads.showRewarded(activity, placement, onReward, onComplete, onUnavailableOrSkipped)
+        }
+
+    @JvmStatic
+    fun showRewardedDirect(
+        activity: Activity,
+        placement: String,
+        onReward: () -> Unit,
+        onComplete: () -> Unit = {},
+        onUnavailableOrSkipped: () -> Unit = {},
+    ) =
+        runSdkCall("show_rewarded_direct", mapOf("placement" to placement)) {
+            ads.showRewardedDirect(activity, placement, onReward, onComplete, onUnavailableOrSkipped)
         }
 
     @JvmStatic
