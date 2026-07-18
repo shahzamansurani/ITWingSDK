@@ -25,7 +25,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class AppOpenManager(
     private val configProvider: () -> ITWingConfig,
-    private val frequency: FrequencyController
+    private val frequency: FrequencyController,
+    private val suppressAdsReasonProvider: () -> String? = { null },
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val loading = AtomicBoolean(false)
@@ -63,6 +64,19 @@ class AppOpenManager(
                                             "format" to "app_open",
                                             "placement" to "automatic",
                                             "reason" to "startup_flow_in_progress",
+                                        ),
+                                    )
+                                    return
+                                }
+                                val hostSuppressionReason = suppressAdsReasonProvider()
+                                if (hostSuppressionReason != null) {
+                                    clear()
+                                    SDKTelemetry.track(
+                                        "ad_suppressed",
+                                        mapOf(
+                                            "format" to "app_open",
+                                            "placement" to "automatic",
+                                            "reason" to hostSuppressionReason,
                                         ),
                                     )
                                     return
@@ -120,7 +134,8 @@ class AppOpenManager(
 
     private fun load(activity: Activity, placementName: String, forceRequest: Boolean) {
         val config = configProvider()
-        if (!config.ads.globalEnabled || loading.get() || appOpenAd != null) {
+        if (!config.ads.globalEnabled || loading.get() || appOpenAd != null || suppressAdsReasonProvider() != null) {
+            if (suppressAdsReasonProvider() != null) clear()
             return
         }
         if (!NetworkState.isOnline(activity)) return
@@ -176,6 +191,15 @@ class AppOpenManager(
         }
         updateForegroundActivity(activity)
         val config = configProvider()
+        suppressAdsReasonProvider()?.let { reason ->
+            clear()
+            SDKTelemetry.track(
+                "ad_suppressed",
+                mapOf("format" to "app_open", "placement" to placementName, "reason" to reason),
+            )
+            safeCallback(onComplete)
+            return
+        }
         if (!NetworkState.isOnline(activity)) {
             safeCallback(onComplete)
             return
@@ -380,6 +404,12 @@ class AppOpenManager(
                 return
             }
             if (!NetworkState.isOnline(activity)) {
+                loadingDialog.dismiss()
+                safeCallback(onComplete)
+                return
+            }
+            suppressAdsReasonProvider()?.let {
+                clear()
                 loadingDialog.dismiss()
                 safeCallback(onComplete)
                 return

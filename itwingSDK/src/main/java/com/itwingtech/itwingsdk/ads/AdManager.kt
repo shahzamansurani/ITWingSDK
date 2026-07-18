@@ -22,7 +22,7 @@ class AdManager(
     private val interstitialManager by lazy { InterstitialManager(configProvider = configProvider, frequency = frequencyController) }
     private val rewardedManager by lazy { RewardedManager(configProvider, frequencyController) }
     private val rewardedInterstitialManager by lazy { RewardedInterstitialManager(configProvider, frequencyController) }
-    private val appOpenManager by lazy { AppOpenManager(configProvider, frequencyController) }
+    private val appOpenManager by lazy { AppOpenManager(configProvider, frequencyController, suppressAdsReasonProvider) }
     private val nativeLoader by lazy { NativeLoader(configProvider) }
     private val bannerContainers = CopyOnWriteArrayList<WeakReference<ViewGroup>>()
     private val nativeContainers = CopyOnWriteArrayList<WeakReference<ViewGroup>>()

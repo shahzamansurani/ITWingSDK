@@ -28,6 +28,22 @@ internal object NetworkState {
         }.getOrDefault(false)
     }
 
+    fun isVpnActive(context: Context?): Boolean {
+        context ?: return false
+        return runCatching {
+            val manager =
+                context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                    ?: return false
+            val network =
+                manager.activeNetwork
+                    ?: return false
+            val capabilities =
+                manager.getNetworkCapabilities(network)
+                    ?: return false
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+        }.getOrDefault(false)
+    }
+
     fun offlineMessage(): String =
         "No internet connection is available. Please connect and try again."
 }

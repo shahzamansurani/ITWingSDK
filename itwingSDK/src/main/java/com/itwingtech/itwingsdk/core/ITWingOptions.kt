@@ -6,4 +6,5 @@ data class ITWingOptions(
     val strictSslPinning: Boolean = false,
     val analyticsEnabled: Boolean = true,
     val autoApplyResponsiveLayout: Boolean = false,
+    val blockAdsWhenVpnActive: Boolean = false,
 )

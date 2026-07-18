@@ -28,6 +28,7 @@ import com.itwingtech.itwingsdk.ui.ITWingLoadingDialog
 import com.itwingtech.itwingsdk.ui.SdkFeatureErrorDialog
 import com.itwingtech.itwingsdk.updates.InAppUpdateManager
 import com.itwingtech.itwingsdk.utils.SensitiveDataSanitizer
+import com.itwingtech.itwingsdk.utils.NetworkState
 import com.itwingtech.itwingsdk.wallpapers.ITWingWallpapersCallback
 import com.itwingtech.itwingsdk.wallpapers.toWallpaperResponse
 import com.itwingtech.itwingsdk.media.ITWingMediaCallback
@@ -112,6 +113,15 @@ object ITWingSDK {
     private var autoApplyResponsiveLayout = false
 
     @Volatile
+    private var blockAdsWhenVpnActive = false
+
+    @Volatile
+    private var remoteBlockAdsWhenVpnActive: Boolean? = null
+
+    @Volatile
+    private var applicationContext: Context? = null
+
+    @Volatile
     private var foregroundActivityCount = 0
 
     @Volatile
@@ -123,8 +133,12 @@ object ITWingSDK {
     val ads: AdManager = AdManager(
         configProvider = { config },
         suppressAdsReasonProvider = {
-            hostAdsSuppressionReason
-                ?: if (::subscriptions.isInitialized && subscriptions.isAdFree()) "subscription" else null
+            when {
+                hostAdsSuppressionReason != null -> hostAdsSuppressionReason
+                isVpnAdBlockingEnabled() && NetworkState.isVpnActive(applicationContext) -> "vpn_active"
+                ::subscriptions.isInitialized && subscriptions.isAdFree() -> "subscription"
+                else -> null
+            }
         },
     )
     lateinit var analytics: AnalyticsClient private set
@@ -212,6 +226,7 @@ object ITWingSDK {
             analyticsEnabled = config.analyticsEnabled,
             bootstrapTimeoutMs = config.bootstrapTimeoutMs,
             strictSslPinning = config.strictSslPinning,
+            blockAdsWhenVpnActive = config.blockAdsWhenVpnActive,
             finishCurrent = config.finishCurrent,
             showSplash = config.showSplash,
             showOnboarding = config.showOnboarding,
@@ -296,6 +311,7 @@ object ITWingSDK {
         analyticsEnabled: Boolean = true,
         bootstrapTimeoutMs: Long = 8_000,
         strictSslPinning: Boolean = false,
+        blockAdsWhenVpnActive: Boolean = false,
         finishCurrent: Boolean = true,
         showSplash: Boolean = true,
         showOnboarding: Boolean = true,
@@ -387,6 +403,7 @@ object ITWingSDK {
                 strictSslPinning = strictSslPinning,
                 analyticsEnabled = analyticsEnabled,
                 autoApplyResponsiveLayout = autoApplyResponsiveLayout,
+                blockAdsWhenVpnActive = blockAdsWhenVpnActive,
             ),
             flowOptions = ITWingAppFlowOptions(
                 splashStyle = splashStyle,
@@ -451,6 +468,7 @@ object ITWingSDK {
                 splashUi = splashUi,
                 onboardingUi = onboardingUi,
                 termsUi = termsUi,
+                blockAdsWhenVpnActive = blockAdsWhenVpnActive,
             ),
             finishCurrent = finishCurrent,
             listener = listener,
@@ -485,6 +503,7 @@ object ITWingSDK {
         val effectiveSdkOptions = sdkOptions.copy(
             endpoint = endpoint ?: sdkOptions.endpoint,
             autoApplyResponsiveLayout = autoApplyResponsiveLayout ?: sdkOptions.autoApplyResponsiveLayout,
+            blockAdsWhenVpnActive = sdkOptions.blockAdsWhenVpnActive || flowOptions.blockAdsWhenVpnActive,
         )
         val sessionFlowOptions = effectiveFlowOptions(flowOptions, splash_onboardings)
         val hostOwnsSplash = splash_bg != null ||
@@ -643,6 +662,7 @@ object ITWingSDK {
         apiKey: String,
         endpoint: String,
         autoApplyResponsiveLayout: Boolean = true,
+        blockAdsWhenVpnActive: Boolean = false,
         mainActivity: Class<out Activity>,
         splash_bg: ImageView? = null,
         splash_title: TextView? = null,
@@ -669,6 +689,11 @@ object ITWingSDK {
             splash_onboardings = splash_onboardings,
             endpoint = endpoint,
             autoApplyResponsiveLayout = autoApplyResponsiveLayout,
+            sdkOptions = ITWingOptions(
+                endpoint = endpoint,
+                autoApplyResponsiveLayout = autoApplyResponsiveLayout,
+                blockAdsWhenVpnActive = blockAdsWhenVpnActive,
+            ),
             flowOptions = flowOptions,
             finishCurrent = finishCurrent,
             listener = listener,
@@ -714,6 +739,23 @@ object ITWingSDK {
         }
     }
 
+    private fun syncRemoteVpnAdBlocking() {
+        val app = config.app
+        val flow = (app["start_flow"] as? Map<*, *>) ?: (app["app_flow"] as? Map<*, *>) ?: emptyMap<Any?, Any?>()
+        val value = when {
+            flow.containsKey("block_ads_when_vpn_active") -> flow["block_ads_when_vpn_active"]
+            flow.containsKey("vpn_ad_blocking_enabled") -> flow["vpn_ad_blocking_enabled"]
+            app.containsKey("block_ads_when_vpn_active") -> app["block_ads_when_vpn_active"]
+            app.containsKey("vpn_ad_blocking_enabled") -> app["vpn_ad_blocking_enabled"]
+            else -> null
+        }
+        remoteBlockAdsWhenVpnActive = value?.asBoolean(false)
+        if (isVpnAdBlockingEnabled() && NetworkState.isVpnActive(applicationContext)) {
+            ads.clearCache()
+            ads.onEntitlementActivated()
+        }
+    }
+
     private fun shouldApplyAdminSplashDesign(flowOptions: ITWingAppFlowOptions): Boolean {
         val app = config.app
         val flow = (app["start_flow"] as? Map<*, *>) ?: (app["app_flow"] as? Map<*, *>) ?: emptyMap<Any?, Any?>()
@@ -752,6 +794,9 @@ object ITWingSDK {
         listener: SDKInitListener? = null
     ) {
         listener?.let { initListeners.add(it) }
+        applicationContext = activity.applicationContext
+        blockAdsWhenVpnActive = options.blockAdsWhenVpnActive
+        remoteBlockAdsWhenVpnActive = null
         autoApplyResponsiveLayout = options.autoApplyResponsiveLayout
         if (autoApplyResponsiveLayout) {
             HostLayoutController.apply(
@@ -803,6 +848,7 @@ object ITWingSDK {
              * for instant startup.
              */
             config = repository?.loadCachedConfig() ?: ITWingConfig()
+            syncRemoteVpnAdBlocking()
             if (config.configVersion > 0) {
                 if (autoApplyResponsiveLayout) {
                     HostLayoutController.apply(
@@ -850,6 +896,7 @@ object ITWingSDK {
              */
             runCatching { repository!!.bootstrap() }.onSuccess { remote ->
                 config = remote
+                syncRemoteVpnAdBlocking()
                 if (autoApplyResponsiveLayout) {
                     getActiveActivity()?.let { active ->
                         HostLayoutController.apply(
@@ -1031,6 +1078,7 @@ object ITWingSDK {
 
         if (cached.configVersion > 0) {
             config = cached
+            syncRemoteVpnAdBlocking()
         }
     }
 
@@ -1156,6 +1204,7 @@ object ITWingSDK {
             val updated = runCatching {
                 repository?.syncConfig(config.configVersion)?.let {
                     config = it
+                    syncRemoteVpnAdBlocking()
                     if (autoApplyResponsiveLayout) {
                         getActiveActivity()?.let { active ->
                             HostLayoutController.apply(
@@ -1220,6 +1269,8 @@ object ITWingSDK {
         "bootstrap_finished" to bootstrapFinished,
         "bootstrap_in_flight" to bootstrapInFlight,
         "auto_responsive_layout" to autoApplyResponsiveLayout,
+        "vpn_active" to isVpnActive(),
+        "vpn_ad_blocking_enabled" to isVpnAdBlockingEnabled(),
     )
 
     @JvmStatic
@@ -1501,6 +1552,26 @@ object ITWingSDK {
 
     @JvmStatic
     fun areHostAdsSuppressed(): Boolean = hostAdsSuppressionReason != null
+
+    @JvmStatic
+    fun setBlockAdsWhenVpnActive(enabled: Boolean) {
+        blockAdsWhenVpnActive = enabled
+        remoteBlockAdsWhenVpnActive = null
+        if (enabled && NetworkState.isVpnActive(applicationContext)) {
+            ads.clearCache()
+            ads.onEntitlementActivated()
+        }
+        SDKTelemetry.track(
+            "vpn_ad_blocking_changed",
+            mapOf("enabled" to enabled),
+        )
+    }
+
+    @JvmStatic
+    fun isVpnActive(): Boolean = NetworkState.isVpnActive(applicationContext)
+
+    @JvmStatic
+    fun isVpnAdBlockingEnabled(): Boolean = remoteBlockAdsWhenVpnActive ?: blockAdsWhenVpnActive
 
     @JvmStatic
     fun showInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) =

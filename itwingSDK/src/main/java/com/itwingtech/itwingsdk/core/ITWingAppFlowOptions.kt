@@ -107,6 +107,7 @@ data class ITWingStartAppFlowConfig @JvmOverloads constructor(
     val analyticsEnabled: Boolean = true,
     val bootstrapTimeoutMs: Long = 8_000,
     val strictSslPinning: Boolean = false,
+    val blockAdsWhenVpnActive: Boolean = false,
     val finishCurrent: Boolean = true,
     val showSplash: Boolean = true,
     val showOnboarding: Boolean = true,
@@ -249,6 +250,7 @@ data class ITWingAppFlowOptions @JvmOverloads constructor(
     val splashUi: ITWingSplashUiStyle = ITWingSplashUiStyle(),
     val onboardingUi: ITWingOnboardingUiStyle = ITWingOnboardingUiStyle(),
     val termsUi: ITWingTermsUiStyle = ITWingTermsUiStyle(),
+    val blockAdsWhenVpnActive: Boolean = false,
 )
 
 data class ITWingOnboardingPage @JvmOverloads constructor(
