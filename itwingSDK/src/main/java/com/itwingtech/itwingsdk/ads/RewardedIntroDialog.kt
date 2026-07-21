@@ -13,6 +13,7 @@ import androidx.core.graphics.ColorUtils
 import com.google.android.material.button.MaterialButton
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.AdPlacementConfig
+import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.ui.GlassDialogWindow
 import com.itwingtech.itwingsdk.utils.safeCallback
 
@@ -128,9 +129,10 @@ internal object RewardedIntroDialog {
                         findViewById<MaterialButton?>(
                             R.id.btnSkip
                         )?.apply {
-                            setTextColor(primaryColor)
-                            strokeColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(primaryColor, 120))
-                            rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(primaryColor, 28))
+                            val cancelTextColor = sdkColor("rewarded_cancel_text_color", "dialog_negative_text_color", fallback = primaryColor)
+                            setTextColor(cancelTextColor)
+                            strokeColor = ColorStateList.valueOf(sdkColor("dialog_negative_stroke_color", fallback = ColorUtils.setAlphaComponent(cancelTextColor, 120)))
+                            rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(cancelTextColor, 28))
                             setOnClickListener {
 
                                 runCatching {
@@ -144,14 +146,15 @@ internal object RewardedIntroDialog {
                         findViewById<MaterialButton?>(
                             R.id.btn_watch
                         )?.apply {
-                            val onPrimary = if (ColorUtils.calculateLuminance(primaryColor) > 0.58) {
+                            val acceptColor = sdkColor("rewarded_accept_button_color", "dialog_positive_button_color", fallback = primaryColor)
+                            val onPrimary = if (ColorUtils.calculateLuminance(acceptColor) > 0.58) {
                                 Color.BLACK
                             } else {
                                 Color.WHITE
                             }
-                            backgroundTintList = ColorStateList.valueOf(primaryColor)
-                            setTextColor(onPrimary)
-                            rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(primaryColor, 44))
+                            backgroundTintList = ColorStateList.valueOf(acceptColor)
+                            setTextColor(sdkColor("rewarded_accept_text_color", "dialog_positive_text_color", fallback = onPrimary))
+                            rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(acceptColor, 44))
                             setOnClickListener {
 
                                 runCatching {
@@ -222,5 +225,15 @@ internal object RewardedIntroDialog {
         val maxWidth = (430 * density).toInt()
         val margin = (28 * density).toInt()
         return minOf(maxWidth, screenWidth - margin).coerceAtLeast((300 * density).toInt())
+    }
+
+    private fun sdkColor(vararg keys: String, fallback: Int): Int {
+        keys.forEach { key ->
+            ITWingSDK.getColor(key)
+                .takeIf { it.isNotBlank() }
+                ?.let { value -> runCatching { Color.parseColor(value) }.getOrNull() }
+                ?.let { return it }
+        }
+        return fallback
     }
 }

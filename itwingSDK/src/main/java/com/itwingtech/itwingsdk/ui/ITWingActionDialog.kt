@@ -80,6 +80,15 @@ class ITWingActionDialog internal constructor(
         val content = LayoutInflater.from(activity).inflate(R.layout.dialog_itwing_action, null, false)
         val primaryColor = primaryColorProvider()
         val onPrimary = if (ColorUtils.calculateLuminance(primaryColor) > 0.58) Color.BLACK else Color.WHITE
+        val titleColor = sdkColor("dialog_title_color", "text_color", fallback = Color.rgb(17, 24, 39))
+        val descriptionColor = sdkColor("dialog_description_color", "secondary_text_color", fallback = Color.rgb(107, 114, 128))
+        val closeColor = sdkColor("dialog_close_icon_color", "icon_tint_color", fallback = descriptionColor)
+        val positiveButtonColor = sdkColor("dialog_positive_button_color", fallback = primaryColor)
+        val positiveTextColor = sdkColor("dialog_positive_text_color", fallback = if (ColorUtils.calculateLuminance(positiveButtonColor) > 0.58) Color.BLACK else Color.WHITE)
+        val positiveStrokeColor = sdkColor("dialog_positive_stroke_color", fallback = positiveButtonColor)
+        val negativeButtonColor = sdkColor("dialog_negative_button_color", fallback = Color.TRANSPARENT)
+        val negativeTextColor = sdkColor("dialog_negative_text_color", fallback = primaryColor)
+        val negativeStrokeColor = sdkColor("dialog_negative_stroke_color", fallback = ColorUtils.setAlphaComponent(primaryColor, 120))
         val resolvedTitle = title ?: defaults.string("title", "dialog_title", "host_dialog_title") ?: "Continue?"
         val resolvedDescription = description ?: defaults.string("description", "body", "message", "host_dialog_description") ?: "Choose how you want to continue."
         val resolvedPositive = positiveText ?: defaults.string("positive_text", "positiveText", "positive_button", "positiveButton", "host_dialog_positive_text") ?: "Continue"
@@ -107,11 +116,20 @@ class ITWingActionDialog internal constructor(
             resolvedNativePlacement,
         )
 
-        content.findViewById<TextView>(R.id.itwing_action_title).text = resolvedTitle
-        content.findViewById<TextView>(R.id.itwing_action_description).text = resolvedDescription
-        content.findViewById<TextView>(R.id.itwing_action_close).setOnClickListener {
-            dismiss()
-            deliverCallback("cancel_close", onCancel)
+        content.findViewById<TextView>(R.id.itwing_action_title).apply {
+            text = resolvedTitle
+            setTextColor(titleColor)
+        }
+        content.findViewById<TextView>(R.id.itwing_action_description).apply {
+            text = resolvedDescription
+            setTextColor(descriptionColor)
+        }
+        content.findViewById<TextView>(R.id.itwing_action_close).apply {
+            setTextColor(closeColor)
+            setOnClickListener {
+                dismiss()
+                deliverCallback("cancel_close", onCancel)
+            }
         }
 
         val isReviewSectionVisible = configureReviewSection(
@@ -134,9 +152,10 @@ class ITWingActionDialog internal constructor(
 
         content.findViewById<MaterialButton>(R.id.itwing_action_positive).apply {
             text = resolvedPositive
-            backgroundTintList = ColorStateList.valueOf(primaryColor)
-            setTextColor(onPrimary)
-            rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(primaryColor, 44))
+            backgroundTintList = ColorStateList.valueOf(positiveButtonColor)
+            setTextColor(positiveTextColor)
+            strokeColor = ColorStateList.valueOf(positiveStrokeColor)
+            rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(positiveButtonColor, 44))
             setOnClickListener {
                 dismiss()
                 deliverCallback("positive", onPositive)
@@ -145,9 +164,10 @@ class ITWingActionDialog internal constructor(
 
         content.findViewById<MaterialButton>(R.id.itwing_action_negative).apply {
             text = resolvedNegative
-            setTextColor(primaryColor)
-            strokeColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(primaryColor, 120))
-            rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(primaryColor, 28))
+            backgroundTintList = ColorStateList.valueOf(negativeButtonColor)
+            setTextColor(negativeTextColor)
+            strokeColor = ColorStateList.valueOf(negativeStrokeColor)
+            rippleColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(negativeTextColor, 28))
             setOnClickListener {
                 dismiss()
                 deliverCallback("negative", onNegative)
@@ -373,6 +393,16 @@ class ITWingActionDialog internal constructor(
             .edit()
             .putBoolean("review_feedback_submitted_${activity.packageName}", true)
             .apply()
+    }
+
+    private fun sdkColor(vararg keys: String, fallback: Int): Int {
+        keys.forEach { key ->
+            ITWingSDK.getColor(key)
+                .takeIf { it.isNotBlank() }
+                ?.let { value -> runCatching { Color.parseColor(value) }.getOrNull() }
+                ?.let { return it }
+        }
+        return fallback
     }
 
     private fun safeCallback(name: String, callback: Runnable?) {

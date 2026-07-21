@@ -308,15 +308,34 @@ class ITWingPremiumView @JvmOverloads constructor(
             .firstNotNullOfOrNull { key -> ITWingSDK.getColor(key).takeIf(String::isNotBlank) }
             ?.let { runCatching { Color.parseColor(it) }.getOrNull() }
             ?: Color.rgb(37, 99, 235)
-        val onPrimary = if (ColorUtils.calculateLuminance(primary) > 0.58) Color.BLACK else Color.WHITE
+        val buttonColor = sdkColor("premium_button_color", fallback = primary)
+        val buttonTextColor = sdkColor(
+            "premium_button_text_color",
+            fallback = if (ColorUtils.calculateLuminance(buttonColor) > 0.58) Color.BLACK else Color.WHITE,
+        )
+        val badgeColor = sdkColor("premium_badge_color", fallback = ColorUtils.setAlphaComponent(primary, 28))
+        val badgeTextColor = sdkColor("premium_badge_text_color", fallback = primary)
+        val outlineTextColor = sdkColor("premium_outline_button_text_color", fallback = primary)
+        val outlineStrokeColor = sdkColor("premium_outline_button_stroke_color", fallback = ColorUtils.setAlphaComponent(primary, 110))
+        val progressColor = sdkColor("premium_progress_color", fallback = primary)
         icon.backgroundTintList = ColorStateList.valueOf(primary)
-        badge.backgroundTintList = ColorStateList.valueOf(ColorUtils.setAlphaComponent(primary, 28))
-        badge.setTextColor(primary)
-        purchaseButton.backgroundTintList = ColorStateList.valueOf(primary)
-        purchaseButton.setTextColor(onPrimary)
-        restoreButton.strokeColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(primary, 110))
-        restoreButton.setTextColor(primary)
-        progress.indeterminateTintList = ColorStateList.valueOf(primary)
+        badge.backgroundTintList = ColorStateList.valueOf(badgeColor)
+        badge.setTextColor(badgeTextColor)
+        purchaseButton.backgroundTintList = ColorStateList.valueOf(buttonColor)
+        purchaseButton.setTextColor(buttonTextColor)
+        restoreButton.strokeColor = ColorStateList.valueOf(outlineStrokeColor)
+        restoreButton.setTextColor(outlineTextColor)
+        progress.indeterminateTintList = ColorStateList.valueOf(progressColor)
+    }
+
+    private fun sdkColor(vararg keys: String, fallback: Int): Int {
+        keys.forEach { key ->
+            ITWingSDK.getColor(key)
+                .takeIf { it.isNotBlank() }
+                ?.let { value -> runCatching { Color.parseColor(value) }.getOrNull() }
+                ?.let { return it }
+        }
+        return fallback
     }
 
     private fun attachLifecycleObserver() {
