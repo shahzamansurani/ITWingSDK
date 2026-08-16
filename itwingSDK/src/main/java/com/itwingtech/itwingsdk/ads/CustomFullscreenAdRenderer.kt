@@ -176,9 +176,7 @@ internal class CustomFullscreenAdRenderer {
             video = ad.isVideo(),
             loop = !isRewardedPlacement,
             onCompleted = {
-                if (isRewardedPlacement && rewardEarned.compareAndSet(false, true)) {
-                    reward?.invoke()
-                }
+                if (isRewardedPlacement) rewardEarned.compareAndSet(false, true)
             },
         )
 
@@ -227,6 +225,11 @@ internal class CustomFullscreenAdRenderer {
         adTag.text =
             ad.adIcon()
 
+        binding.adTitle.setTextColor(parseColorSafe(placement.metadata.stringValue("native_headline_text_color", "headline_text_color") ?: sdkColor("native_text_color"), Color.WHITE))
+        binding.adBody.setTextColor(parseColorSafe(placement.metadata.stringValue("native_body_text_color", "body_text_color") ?: sdkColor("native_text_color"), Color.rgb(226, 232, 240)))
+        advertiserView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: sdkColor("native_text_color"), Color.rgb(226, 232, 240)))
+        storeView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: sdkColor("native_text_color"), Color.rgb(226, 232, 240)))
+
         /*
         |--------------------------------------------------------------------------
         | App Icon
@@ -259,6 +262,7 @@ internal class CustomFullscreenAdRenderer {
                 )
             )
         )
+        binding.adCta.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "cta_text_color") ?: sdkColor("cta_text_color"), Color.WHITE))
 
         /*
         |--------------------------------------------------------------------------
@@ -280,6 +284,7 @@ internal class CustomFullscreenAdRenderer {
                 )
             )
         )
+        adTag.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
 
         /*
         |--------------------------------------------------------------------------
@@ -314,7 +319,7 @@ internal class CustomFullscreenAdRenderer {
                 activity.startActivity(
                     Intent(
                         Intent.ACTION_VIEW,
-                        ad.targetUrl?.toUri()
+                        (ad.androidTargetUrl ?: ad.targetUrl)?.toUri()
                     )
                 )
             }
@@ -450,7 +455,7 @@ internal class CustomFullscreenAdRenderer {
             placement.format.contains(
                 "rewarded",
                 true
-            ) -> 6000L
+            ) -> 5000L
 
             else -> 3000L
         }
@@ -459,9 +464,7 @@ internal class CustomFullscreenAdRenderer {
             Looper.getMainLooper()
         ).postDelayed({
 
-            if (isRewardedPlacement && !ad.isVideo() && rewardEarned.compareAndSet(false, true)) {
-                reward?.invoke()
-            }
+            if (isRewardedPlacement && !ad.isVideo()) rewardEarned.compareAndSet(false, true)
 
             binding.adClose.animate().alpha(1f).setDuration(250).start()
 
@@ -502,6 +505,7 @@ internal class CustomFullscreenAdRenderer {
             )
 
             if (!isRewardedPlacement || rewardEarned.get()) {
+                if (isRewardedPlacement) reward?.invoke()
                 completion.complete()
             }
         }
@@ -641,6 +645,16 @@ internal class CustomFullscreenAdRenderer {
                 it.isNotBlank()
             }
             ?: "AD"
+
+    private fun Map<String, Any?>.stringValue(vararg keys: String): String? =
+        keys.firstNotNullOfOrNull { key ->
+            this[key]?.toString()?.trim()?.takeIf { it.isNotBlank() }
+        }
+
+    private fun sdkColor(vararg keys: String): String? =
+        keys.firstNotNullOfOrNull { key ->
+            ITWingSDK.getColor(key).takeIf { it.isNotBlank() }
+        }
 
     private fun parseColorSafe(
         value: String?,

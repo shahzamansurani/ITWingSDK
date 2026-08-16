@@ -10,6 +10,7 @@ import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
 import com.google.android.libraries.ads.mobile.sdk.common.PreloadConfiguration
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAd
 import com.itwingtech.itwingsdk.core.ITWingConfig
+import com.itwingtech.itwingsdk.core.AdPlacementConfig
 import java.util.concurrent.ConcurrentHashMap
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdEventCallback
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdPreloader
@@ -185,7 +186,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                 frequency.refundTrigger(placement)
                 FullscreenAdState.end(fullscreenOwner)
-                completion.complete()
+                if (!showCustomFallback(activity, placement, completion::complete)) completion.complete()
             }
 
             override fun onAdClicked() {
@@ -337,16 +338,25 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             if (System.currentTimeMillis() - startedAt >= timeoutMs) {
                 loadingDialog.dismiss()
                 clearPreloader(placementName)
-                configProvider().ads.placements.firstOrNull {
+                val placement = configProvider().ads.placements.firstOrNull {
                     it.name == placementName && it.enabled && it.format == "interstitial"
-                }?.let(frequency::refundTrigger)
-                safeCallback(onComplete)
+                }
+                placement?.let(frequency::refundTrigger)
+                if (placement == null || !showCustomFallback(activity, placement, onComplete)) safeCallback(onComplete)
                 return
             }
             mainHandler.postDelayed({ poll() }, 150L)
         }
 
         mainHandler.postDelayed({ poll() }, 150L)
+    }
+
+    private fun showCustomFallback(activity: Activity, placement: AdPlacementConfig, onComplete: () -> Unit): Boolean {
+        val fallback = configProvider().placementWithCustomFallback(placement) ?: return false
+        return customRenderer.show(activity, fallback, onComplete = {
+            frequency.markShown(placement)
+            safeCallback(onComplete)
+        })
     }
 
     private fun clearPreloader(placementName: String) {

@@ -313,6 +313,12 @@ class NativeLoader(
                                 mapOf("message" to adError.message),
                             )
                             AdLoadBackoff.recordFailure(placement, adError.message)
+                            val fallback = config.customFallbackFor(placement)
+                            if (fallback != null) {
+                                AdEventTracker.log("ad_custom_fallback", placement, mapOf("reason" to adError.message))
+                                preloadCustomAd(activity, container, fallback, placement, resolvedNativeType, loadingView, token)
+                                return@runOnUiThread
+                            }
                         }
                     }
                 }
@@ -432,6 +438,12 @@ class NativeLoader(
 
         (adView.headlineView as? TextView)
             ?.text = nativeAd.headline
+        val nativeTextColor = sdkColor("native_text_color")
+        (adView.headlineView as? TextView)?.setTextColor(parseColorSafe(metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(17, 24, 39)))
+        (adView.bodyView as? TextView)?.setTextColor(parseColorSafe(metadata.stringValue("native_body_text_color", "body_text_color") ?: nativeTextColor, Color.rgb(71, 85, 105)))
+        listOf(adView.priceView, adView.storeView, adView.advertiserView).forEach { view ->
+            (view as? TextView)?.setTextColor(parseColorSafe(metadata.stringValue("native_meta_text_color", "meta_text_color") ?: nativeTextColor, Color.rgb(100, 116, 139)))
+        }
 
         nativeAd.body?.let { (adView.bodyView as? TextView)?.text = it
             adView.bodyView?.visibility =
@@ -748,7 +760,7 @@ class NativeLoader(
                     )
                 )
 
-                ad.targetUrl
+                (ad.androidTargetUrl ?: ad.targetUrl)
                     ?.takeIf {
                         it.isNotBlank()
                     }

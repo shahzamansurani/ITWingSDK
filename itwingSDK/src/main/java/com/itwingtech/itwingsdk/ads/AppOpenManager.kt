@@ -327,7 +327,7 @@ class AppOpenManager(
                 override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
                     AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                     FullscreenAdState.end(fullscreenOwner)
-                    completion.complete()
+                    if (!showCustomFallback(activity, placement, completion::complete)) completion.complete()
                 }
 
                 override fun onAdPaid(adValue: AdValue) {
@@ -430,7 +430,10 @@ class AppOpenManager(
 
             if (System.currentTimeMillis() - startedAt >= timeoutMs) {
                 loadingDialog.dismiss()
-                safeCallback(onComplete)
+                val placement = configProvider().ads.placements.firstOrNull {
+                    it.name == placementName && it.enabled && it.format == "app_open"
+                }
+                if (placement == null || !showCustomFallback(activity, placement, onComplete)) safeCallback(onComplete)
                 return
             }
 
@@ -438,6 +441,14 @@ class AppOpenManager(
         }
 
         mainHandler.postDelayed({ poll() }, 150L)
+    }
+
+    private fun showCustomFallback(activity: Activity, placement: com.itwingtech.itwingsdk.core.AdPlacementConfig, onComplete: () -> Unit): Boolean {
+        val fallback = configProvider().placementWithCustomFallback(placement) ?: return false
+        return customRenderer.show(activity, fallback, onComplete = {
+            frequency.markShown(placement)
+            safeCallback(onComplete)
+        })
     }
 
     private fun validAppOpenAd(): AppOpenAd? {

@@ -232,7 +232,9 @@ class RewardedManager(
             ) {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                 FullscreenAdState.end(fullscreenOwner)
-                showFailure(activity, placementName, placement, fullScreenContentError.message, onReward, onComplete, onUnavailableOrSkipped)
+                if (!showCustomFallback(activity, placement, onReward, onComplete)) {
+                    showFailure(activity, placementName, placement, fullScreenContentError.message, onReward, onComplete, onUnavailableOrSkipped)
+                }
             }
 
             override fun onAdPaid(adValue: AdValue) {
@@ -344,7 +346,9 @@ class RewardedManager(
                 clearPreloader(placementName)
                 val placement = configProvider().ads.placements.firstOrNull { it.name == placementName }
                 if (placement != null) {
-                    showFailure(activity, placementName, placement, "The ad did not load within ${timeoutMs / 1000} seconds. Check your connection and try again.", onReward, onComplete, onUnavailableOrSkipped)
+                    if (!showCustomFallback(activity, placement, onReward, onComplete)) {
+                        showFailure(activity, placementName, placement, "The ad did not load within ${timeoutMs / 1000} seconds. Check your connection and try again.", onReward, onComplete, onUnavailableOrSkipped)
+                    }
                 } else {
                     safeCallback(onUnavailableOrSkipped)
                 }
@@ -355,6 +359,21 @@ class RewardedManager(
         }
 
         mainHandler.postDelayed({ poll() }, 150L)
+    }
+
+    private fun showCustomFallback(
+        activity: Activity,
+        placement: AdPlacementConfig,
+        onReward: () -> Unit,
+        onComplete: () -> Unit,
+    ): Boolean {
+        val fallback = configProvider().placementWithCustomFallback(placement) ?: return false
+        return customRenderer.show(activity, fallback, reward = {
+            safeCallback(onReward)
+        }, onComplete = {
+            frequency.markShown(placement)
+            safeCallback(onComplete)
+        })
     }
 
     private fun showFailure(

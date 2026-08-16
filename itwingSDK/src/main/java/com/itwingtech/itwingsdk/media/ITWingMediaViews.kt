@@ -861,9 +861,9 @@ class ITWingVpnServersView @JvmOverloads constructor(context: Context, attrs: At
         for (index in 0 until tabs.childCount) {
             val child = tabs.getChildAt(index) as? TextView ?: continue
             val selected = (index == 0 && selectedTab == ServerTierTab.FREE) || (index == 1 && selectedTab == ServerTierTab.PREMIUM)
-            child.setTextColor(if (selected) Color.WHITE else SDKUi.primaryTextColor(context))
+            child.setTextColor(if (selected) Color.BLACK else SDKUi.primaryTextColor(context))
             child.background = rounded(
-                if (selected) SDKUi.primaryColor() else SDKUi.surfaceColor(context),
+                if (selected) Color.WHITE else SDKUi.surfaceColor(context),
                 dp(12).toFloat(),
                 if (selected) SDKUi.primaryColor() else SDKUi.strokeColor(context),
                 1,
@@ -1063,7 +1063,9 @@ private fun View.bindMediaItem(item: ITWingMediaItem, kind: String, showTitle: B
     title?.setTextColor(style.titleColor)
     title?.visibility = if (showTitle) View.VISIBLE else View.GONE
     if (kind == "vpn_servers") {
-        subtitle?.text = item.title.takeIf { it.isNotBlank() } ?: item.vpnProtocolType.orEmpty()
+        subtitle?.text = item.vpnDisplaySubtitle
+            ?: item.vpnProtocolType?.takeIf { it.isNotBlank() }
+            ?: item.title.takeIf { it.isNotBlank() }
         subtitle?.visibility = if (showTitle && !subtitle?.text.isNullOrBlank()) View.VISIBLE else View.GONE
     } else {
         subtitle?.visibility = View.GONE
@@ -1096,6 +1098,7 @@ private fun View.bindMediaItem(item: ITWingMediaItem, kind: String, showTitle: B
 }
 
 private fun ITWingMediaItem.vpnListTitle(): String {
+    vpnDisplayTitle?.let { return it }
     val country = vpnCountryName ?: "VPN Server"
     val flag = vpnFlagEmoji
     return if (flag.isNullOrBlank()) country else "$flag $country"

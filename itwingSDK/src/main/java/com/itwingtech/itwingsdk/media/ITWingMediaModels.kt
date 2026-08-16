@@ -60,6 +60,12 @@ data class ITWingMediaItem(
     val vpnProtocolType: String?
         get() = metadata["vpn_protocol_type"]?.toString()?.takeIf { it.isNotBlank() }
 
+    val vpnDisplayTitle: String?
+        get() = metadata["display_title"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
+
+    val vpnDisplaySubtitle: String?
+        get() = metadata["display_subtitle"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
+
     val vpnFreeDurationMinutes: Int
         get() = metadata["free_connect_duration"]?.toString()?.toIntOrNull()?.coerceAtLeast(0) ?: 0
 }

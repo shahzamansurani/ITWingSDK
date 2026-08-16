@@ -218,7 +218,9 @@ class RewardedInterstitialManager(
             ) {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                 FullscreenAdState.end(fullscreenOwner)
-                showFailure(activity, placementName, placement, fullScreenContentError.message, onReward, onComplete)
+                if (!showCustomFallback(activity, placement, onReward, onComplete)) {
+                    showFailure(activity, placementName, placement, fullScreenContentError.message, onReward, onComplete)
+                }
             }
 
             override fun onAdPaid(adValue: AdValue) {
@@ -324,7 +326,9 @@ class RewardedInterstitialManager(
                 clearPreloader(placementName)
                 val placement = configProvider().ads.placements.firstOrNull { it.name == placementName }
                 if (placement != null) {
-                    showFailure(activity, placementName, placement, "The ad did not load within ${timeoutMs / 1000} seconds. Check your connection and try again.", onReward, onComplete)
+                    if (!showCustomFallback(activity, placement, onReward, onComplete)) {
+                        showFailure(activity, placementName, placement, "The ad did not load within ${timeoutMs / 1000} seconds. Check your connection and try again.", onReward, onComplete)
+                    }
                 }
                 return
             }
@@ -333,6 +337,14 @@ class RewardedInterstitialManager(
         }
 
         mainHandler.postDelayed({ poll() }, 150L)
+    }
+
+    private fun showCustomFallback(activity: Activity, placement: com.itwingtech.itwingsdk.core.AdPlacementConfig, onReward: () -> Unit, onComplete: () -> Unit): Boolean {
+        val fallback = configProvider().placementWithCustomFallback(placement) ?: return false
+        return customRenderer.show(activity, fallback, reward = { safeCallback(onReward) }, onComplete = {
+            frequency.markShown(placement)
+            safeCallback(onComplete)
+        })
     }
 
     private fun showFailure(

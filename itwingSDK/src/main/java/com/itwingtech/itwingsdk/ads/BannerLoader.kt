@@ -105,6 +105,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                 activity = activity,
                 container = container,
                 ad = customAd,
+                placement = placement,
                 loadingView = loadingView,
                 token = token
             )
@@ -226,14 +227,19 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                                 return@runOnUiThread
                             }
 
-                            stopShimmer(loadingView)
-                            container.visibility = View.GONE
-
                             synchronized(adViews) {
                                 if (adViews[container] === adView) {
                                     adViews.remove(container)
                                 }
                             }
+                            val fallback = config.customFallbackFor(placement)
+                            if (fallback != null) {
+                                AdEventTracker.log("ad_custom_fallback", placement, mapOf("reason" to adError.message))
+                                preloadCustomBanner(activity, container, fallback, placement, loadingView, token)
+                                return@runOnUiThread
+                            }
+                            stopShimmer(loadingView)
+                            container.visibility = View.GONE
                             synchronized(activeLoadKeys) {
                                 activeLoadKeys.remove(container)
                             }
@@ -314,6 +320,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         activity: Activity,
         container: ViewGroup,
         ad: CustomAdConfig,
+        placement: AdPlacementConfig,
         loadingView: View?
     ) {
         destroyLoadedAd(container)
@@ -336,15 +343,19 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         ctaView.text = ad.cta?.takeIf { it.isNotBlank() } ?: "Install"
         ratingView.rating = ad.brandRating()
         adTag.text = ad.adIcon()
+        headlineView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_headline_text_color", "headline_text_color") ?: sdkColor("native_text_color"), Color.rgb(17, 24, 39)))
+        bodyView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_body_text_color", "body_text_color") ?: sdkColor("native_text_color"), Color.rgb(71, 85, 105)))
+        advertiserView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: sdkColor("native_text_color"), Color.rgb(100, 116, 139)))
 
         (ctaView.background?.mutate() as? GradientDrawable)?.setColor(
             parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))
         )
-        ctaView.setTextColor(parseColorSafe(ITWingSDK.getColor("cta_text_color").takeIf { it.isNotBlank() }, Color.WHITE))
+        ctaView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "cta_text_color") ?: sdkColor("cta_text_color"), Color.WHITE))
 
         (adTag.background?.mutate() as? GradientDrawable)?.setColor(
             parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))
         )
+        adTag.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
 
         mediaView.apply {
             render(ad.mediaUrl(), ad.isVideo())
@@ -363,7 +374,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                 mapOf("placement" to "banner")
             )
 
-            ad.targetUrl?.takeIf { it.isNotBlank() }?.let { url ->
+            (ad.androidTargetUrl ?: ad.targetUrl)?.takeIf { it.isNotBlank() }?.let { url ->
                 runCatching {
                     mediaView.pauseForExternalNavigation()
 
@@ -411,6 +422,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         activity: Activity,
         container: ViewGroup,
         ad: CustomAdConfig,
+        placement: AdPlacementConfig,
         loadingView: View?,
         token: Int
     ) {
@@ -430,6 +442,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                     activity = activity,
                     container = container,
                     ad = ad,
+                    placement = placement,
                     loadingView = loadingView
                 )
             }
@@ -454,6 +467,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                     activity = activity,
                     container = container,
                     ad = ad,
+                    placement = placement,
                     loadingView = loadingView
                 )
             }
@@ -699,6 +713,16 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
 
     private fun CustomAdConfig.adIcon(): String =
         (metadata["ad_icon"] as? String)?.takeIf { it.isNotBlank() } ?: "AD"
+
+    private fun Map<String, Any?>.stringValue(vararg keys: String): String? =
+        keys.firstNotNullOfOrNull { key ->
+            this[key]?.toString()?.trim()?.takeIf { it.isNotBlank() }
+        }
+
+    private fun sdkColor(vararg keys: String): String? =
+        keys.firstNotNullOfOrNull { key ->
+            ITWingSDK.getColor(key).takeIf { it.isNotBlank() }
+        }
 
     private fun parseColorSafe(value: String?, fallback: Int): Int =
         runCatching {

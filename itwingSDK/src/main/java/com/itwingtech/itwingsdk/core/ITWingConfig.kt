@@ -61,6 +61,8 @@ data class CustomAdConfig(
     val body: String? = null,
     val cta: String? = null,
     val targetUrl: String? = null,
+    val androidTargetUrl: String? = null,
+    val iosTargetUrl: String? = null,
     val imageUrl: String? = null,
     val videoUrl: String? = null,
     val mediaUrl: String? = null,
