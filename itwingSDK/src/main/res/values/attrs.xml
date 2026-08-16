@@ -163,6 +163,7 @@
         </attr>
         <attr name="ITWingMediaPremiumIcon" format="reference" />
         <attr name="ITWingMediaPremiumIconTint" format="color" />
+        <attr name="ITWingMediaVpnTabsEnabled" format="boolean" />
     </declare-styleable>
 
     <declare-styleable name="ITWingMediaCategoriesView">

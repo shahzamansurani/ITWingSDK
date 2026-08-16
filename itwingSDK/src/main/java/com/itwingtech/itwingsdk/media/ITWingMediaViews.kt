@@ -119,6 +119,7 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
     private var categorySlug: String? = null
     private var clickListener: ((ITWingMediaItem) -> Unit)? = null
     private var customBinder: ITWingMediaItemBinder? = null
+    private var itemFilter: ((ITWingMediaItem) -> Boolean)? = null
     private var inlineAdEnabled = false
     private var inlineAdPlacement: String? = null
     private var inlineAdInterval = 0
@@ -165,7 +166,7 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
                 callback = object : ITWingMediaCallback() {
                     override fun onLoaded(response: ITWingMediaResponse) {
                         val source = if (showTrending || placement?.type == "top_trends") response.trending else response.items
-                        val items = source.take(placement?.limit ?: limit)
+                        val items = source.filter { shouldDisplayItem(it) && itemFilter?.invoke(it) != false }.take(placement?.limit ?: limit)
                         submit(items)
                         if (offlineAtStart && items.isNotEmpty()) showCachedContentNotice()
                     }
@@ -207,6 +208,13 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
         adapter.customLayoutRes = layoutRes
         adapter.customBinder = binder
     }
+
+    fun setItemFilter(filter: ((ITWingMediaItem) -> Boolean)?) {
+        itemFilter = filter
+        reload()
+    }
+
+    protected open fun shouldDisplayItem(item: ITWingMediaItem): Boolean = true
 
     private fun submit(items: List<ITWingMediaItem>) {
         adapter.showTitle = showTitle
@@ -758,7 +766,130 @@ class ITWingVideoCategoriesView @JvmOverloads constructor(context: Context, attr
     ITWingMediaCategoriesView(context, attrs, defStyleAttr, "videos")
 
 class ITWingVpnServersView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0) :
-    ITWingMediaItemsView(context, attrs, defStyleAttr, "vpn_servers", false)
+    ITWingMediaItemsView(context, attrs, defStyleAttr, "vpn_servers", false) {
+
+    private var tabsEnabled = false
+    private var selectedTab = ServerTierTab.FREE
+    private var tabsView: LinearLayout? = null
+    private var contentTopMargin = 0
+
+    init {
+        context.withStyledAttributes(attrs, R.styleable.ITWingMediaItemsView) {
+            tabsEnabled = getBoolean(R.styleable.ITWingMediaItemsView_ITWingMediaVpnTabsEnabled, false)
+        }
+        if (tabsEnabled) installTabs()
+    }
+
+    fun setVpnServerTabsEnabled(enabled: Boolean) {
+        if (tabsEnabled == enabled) return
+        tabsEnabled = enabled
+        if (enabled) {
+            installTabs()
+        } else {
+            removeTabs()
+        }
+        reload()
+    }
+
+    fun setVpnServerTierTab(tab: String) {
+        selectedTab = if (tab.equals("premium", true) || tab.equals("owned", true)) ServerTierTab.PREMIUM else ServerTierTab.FREE
+        updateTabStyles()
+        reload()
+    }
+
+    override fun shouldDisplayItem(item: ITWingMediaItem): Boolean {
+        if (!isVpnServerWorking(item)) return false
+        if (!tabsEnabled) return true
+        val publicServer = item.isPublicVpnServer()
+        return if (selectedTab == ServerTierTab.FREE) publicServer else !publicServer
+    }
+
+    private fun installTabs() {
+        if (tabsView != null) return
+        val height = dp(40)
+        val margin = dp(8)
+        contentTopMargin = height + margin
+        val tabs = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(8), 0, dp(8), 0)
+            addView(tabButton("Free", ServerTierTab.FREE), LinearLayout.LayoutParams(0, height, 1f))
+            addView(tabButton("Premium", ServerTierTab.PREMIUM), LinearLayout.LayoutParams(0, height, 1f).apply {
+                leftMargin = dp(8)
+            })
+        }
+        tabsView = tabs
+        adjustContentTopMargin(contentTopMargin)
+        addView(tabs, LayoutParams(LayoutParams.MATCH_PARENT, height, Gravity.TOP))
+        updateTabStyles()
+    }
+
+    private fun removeTabs() {
+        tabsView?.let { removeView(it) }
+        tabsView = null
+        adjustContentTopMargin(0)
+        contentTopMargin = 0
+    }
+
+    private fun adjustContentTopMargin(topMargin: Int) {
+        val tabs = tabsView
+        for (index in 0 until childCount) {
+            val child = getChildAt(index)
+            if (child == tabs) continue
+            val params = child.layoutParams as? MarginLayoutParams ?: continue
+            params.topMargin = topMargin
+            child.layoutParams = params
+        }
+    }
+
+    private fun tabButton(label: String, tab: ServerTierTab): TextView =
+        TextView(context).apply {
+            text = label
+            gravity = Gravity.CENTER
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            setOnClickListener {
+                if (selectedTab != tab) {
+                    selectedTab = tab
+                    updateTabStyles()
+                    reload()
+                }
+            }
+        }
+
+    private fun updateTabStyles() {
+        val tabs = tabsView ?: return
+        for (index in 0 until tabs.childCount) {
+            val child = tabs.getChildAt(index) as? TextView ?: continue
+            val selected = (index == 0 && selectedTab == ServerTierTab.FREE) || (index == 1 && selectedTab == ServerTierTab.PREMIUM)
+            child.setTextColor(if (selected) Color.WHITE else SDKUi.primaryTextColor(context))
+            child.background = rounded(
+                if (selected) SDKUi.primaryColor() else SDKUi.surfaceColor(context),
+                dp(12).toFloat(),
+                if (selected) SDKUi.primaryColor() else SDKUi.strokeColor(context),
+                1,
+            )
+        }
+    }
+
+    private fun isVpnServerWorking(item: ITWingMediaItem): Boolean {
+        val serverStatus = item.metadata["server_status"]?.toString()?.trim()?.lowercase()
+        val pingStatus = item.metadata["last_ping_status"]?.toString()?.trim()?.lowercase()
+        if (!serverStatus.isNullOrBlank() && serverStatus != "online") return false
+        if (!pingStatus.isNullOrBlank() && pingStatus != "online") return false
+        return true
+    }
+
+    private fun ITWingMediaItem.isPublicVpnServer(): Boolean {
+        val source = metadata["server_source"]?.toString()?.trim()?.lowercase()
+        val tier = metadata["server_tier"]?.toString()?.trim()?.lowercase()
+        return source == "vpngate_public" || tier == "public"
+    }
+
+    private enum class ServerTierTab {
+        FREE,
+        PREMIUM,
+    }
+}
 
 class ITWingTopTrendsVpnServerView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0) :
     ITWingMediaItemsView(context, attrs, defStyleAttr, "vpn_servers", true)
