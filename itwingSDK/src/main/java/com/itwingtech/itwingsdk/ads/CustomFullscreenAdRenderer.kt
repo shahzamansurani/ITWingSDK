@@ -289,7 +289,7 @@ internal class CustomFullscreenAdRenderer {
                 )
             )
         )
-        adTag.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+        adTag.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color") ?: sdkColor("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
 
         /*
         |--------------------------------------------------------------------------
@@ -589,7 +589,9 @@ internal class CustomFullscreenAdRenderer {
         )
 
     private fun CustomAdConfig.primaryColor(): String? =
-        (metadata["ad_primary_color"]
+        ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
+            ?: ITWingSDK.getColor("primary_color").takeIf { it.isNotBlank() }
+            ?: (metadata["ad_primary_color"]
                 as? String)?.takeIf { it.isNotBlank() }
             ?: (
                     metadata["brand"]
@@ -597,8 +599,6 @@ internal class CustomFullscreenAdRenderer {
                     )?.get("primary_color")
                     .let { it as? String }
                     ?.takeIf { it.isNotBlank() }
-            ?: ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
-            ?: ITWingSDK.getColor("primary_color").takeIf { it.isNotBlank() }
 
     private fun CustomAdConfig.brandName(): String? =
         (

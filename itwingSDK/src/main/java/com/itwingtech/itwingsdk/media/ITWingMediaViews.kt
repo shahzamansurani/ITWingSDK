@@ -879,7 +879,7 @@ class ITWingVpnServersView @JvmOverloads constructor(context: Context, attrs: At
         if (item.isPublicVpnServer()) {
             val stability = item.metadata["public_stability_status"]?.toString()?.trim()?.lowercase()
             val mode = item.metadata["last_ping_mode"]?.toString()?.trim()?.lowercase()
-            if (stability != "stable" || mode != "tcp_socket") return false
+            if (stability != "stable" || mode !in setOf("tcp_socket", "client_report")) return false
         }
         return true
     }

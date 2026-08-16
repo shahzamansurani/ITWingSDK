@@ -473,7 +473,7 @@ class NativeLoader(
 
         val adTagColor = ad_tag?.background?.mutate() as? GradientDrawable
         adTagColor?.setColor(parseColorSafe(ITWingSDK.getColor("primary"), Color.rgb(37, 99, 235)))
-        ad_tag?.setTextColor(parseColorSafe(metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+        ad_tag?.setTextColor(parseColorSafe(metadata.stringValue("native_ad_label_text_color", "ad_label_text_color") ?: sdkColor("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
 
 
         nativeAd.icon?.drawable?.let {
@@ -692,8 +692,8 @@ class NativeLoader(
                 )
             )
         )
-        ctaView?.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "cta_text_color") ?: sdkColor("cta_text_color"), Color.WHITE))
-        adTag?.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+        ctaView?.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "cta_text_color") ?: sdkColor("native_cta_text_color", "cta_text_color"), Color.WHITE))
+        adTag?.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color") ?: sdkColor("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
 
         /*
         |--------------------------------------------------------------------------
@@ -1221,10 +1221,10 @@ class NativeLoader(
     ) || (!videoUrl.isNullOrBlank() && mediaUrl == videoUrl)
 
     private fun CustomAdConfig.primaryColor(): String? =
-        (metadata["ad_primary_color"] as? String)?.takeIf { it.isNotBlank() }
-        ?: ((metadata["brand"] as? Map<*, *>)?.get("primary_color") as? String)?.takeIf { it.isNotBlank() }
-        ?: ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
+        ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
         ?: ITWingSDK.getColor("primary_color").takeIf { it.isNotBlank() }
+        ?: (metadata["ad_primary_color"] as? String)?.takeIf { it.isNotBlank() }
+        ?: ((metadata["brand"] as? Map<*, *>)?.get("primary_color") as? String)?.takeIf { it.isNotBlank() }
 
     private fun sdkColor(vararg names: String): String? =
         names.firstNotNullOfOrNull { name -> ITWingSDK.getColor(name).takeIf { it.isNotBlank() } }

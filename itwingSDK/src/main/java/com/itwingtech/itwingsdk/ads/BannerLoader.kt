@@ -355,12 +355,12 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         (ctaView.background?.mutate() as? GradientDrawable)?.setColor(
             parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))
         )
-        ctaView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE))
+        ctaView.setTextColor(parseColorSafe(placement.metadata.stringValue("banner_cta_text_color", "native_cta_text_color", "cta_text_color") ?: sdkColor("banner_cta_text_color", "native_cta_text_color", "cta_text_color"), Color.WHITE))
 
         (adTag.background?.mutate() as? GradientDrawable)?.setColor(
             parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))
         )
-        adTag.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+        adTag.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color") ?: sdkColor("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
 
         mediaView.apply {
             render(ad.mediaUrl(), ad.isVideo())
@@ -691,11 +691,11 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                 (!videoUrl.isNullOrBlank() && mediaUrl == videoUrl)
 
     private fun CustomAdConfig.primaryColor(): String? =
-        (metadata["ad_primary_color"] as? String)?.takeIf { it.isNotBlank() }
+        ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
+            ?: ITWingSDK.getColor("primary_color").takeIf { it.isNotBlank() }
+            ?: (metadata["ad_primary_color"] as? String)?.takeIf { it.isNotBlank() }
             ?: ((metadata["brand"] as? Map<*, *>)?.get("primary_color") as? String)
                 ?.takeIf { it.isNotBlank() }
-            ?: ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
-            ?: ITWingSDK.getColor("primary_color").takeIf { it.isNotBlank() }
 
     private fun CustomAdConfig.brandName(): String? =
         (metadata["brand"] as? Map<*, *>)?.get("name") as? String ?: campaignGroup
