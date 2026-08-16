@@ -343,14 +343,19 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         ctaView.text = ad.cta?.takeIf { it.isNotBlank() } ?: "Install"
         ratingView.rating = ad.brandRating()
         adTag.text = ad.adIcon()
-        headlineView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_headline_text_color", "headline_text_color") ?: sdkColor("native_text_color"), Color.rgb(17, 24, 39)))
-        bodyView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_body_text_color", "body_text_color") ?: sdkColor("native_text_color"), Color.rgb(71, 85, 105)))
-        advertiserView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: sdkColor("native_text_color"), Color.rgb(100, 116, 139)))
+        val nativeTextColor = placement.metadata.stringValue("native_text_color", "banner_text_color")
+            ?: sdkColor("native_text_color", "banner_text_color", "text_color")
+        val secondaryTextColor = placement.metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+            ?: sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+            ?: nativeTextColor
+        headlineView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(17, 24, 39)))
+        bodyView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(71, 85, 105)))
+        advertiserView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(100, 116, 139)))
 
         (ctaView.background?.mutate() as? GradientDrawable)?.setColor(
             parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))
         )
-        ctaView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "cta_text_color") ?: sdkColor("cta_text_color"), Color.WHITE))
+        ctaView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE))
 
         (adTag.background?.mutate() as? GradientDrawable)?.setColor(
             parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))

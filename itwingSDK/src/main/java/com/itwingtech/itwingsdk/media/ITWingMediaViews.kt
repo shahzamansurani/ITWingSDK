@@ -863,7 +863,7 @@ class ITWingVpnServersView @JvmOverloads constructor(context: Context, attrs: At
             val selected = (index == 0 && selectedTab == ServerTierTab.FREE) || (index == 1 && selectedTab == ServerTierTab.PREMIUM)
             child.setTextColor(if (selected) Color.BLACK else SDKUi.primaryTextColor(context))
             child.background = rounded(
-                if (selected) Color.WHITE else SDKUi.surfaceColor(context),
+                if (selected) SDKUi.primaryColor() else SDKUi.surfaceColor(context),
                 dp(12).toFloat(),
                 if (selected) SDKUi.primaryColor() else SDKUi.strokeColor(context),
                 1,
@@ -876,6 +876,11 @@ class ITWingVpnServersView @JvmOverloads constructor(context: Context, attrs: At
         val pingStatus = item.metadata["last_ping_status"]?.toString()?.trim()?.lowercase()
         if (!serverStatus.isNullOrBlank() && serverStatus != "online") return false
         if (!pingStatus.isNullOrBlank() && pingStatus != "online") return false
+        if (item.isPublicVpnServer()) {
+            val stability = item.metadata["public_stability_status"]?.toString()?.trim()?.lowercase()
+            val mode = item.metadata["last_ping_mode"]?.toString()?.trim()?.lowercase()
+            if (stability != "stable" || mode != "tcp_socket") return false
+        }
         return true
     }
 
@@ -1064,8 +1069,8 @@ private fun View.bindMediaItem(item: ITWingMediaItem, kind: String, showTitle: B
     title?.visibility = if (showTitle) View.VISIBLE else View.GONE
     if (kind == "vpn_servers") {
         subtitle?.text = item.vpnDisplaySubtitle
-            ?: item.vpnProtocolType?.takeIf { it.isNotBlank() }
-            ?: item.title.takeIf { it.isNotBlank() }
+            ?: item.metadata["server_label"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
+            ?: if (item.isPremium) "Premium server" else "Free server"
         subtitle?.visibility = if (showTitle && !subtitle?.text.isNullOrBlank()) View.VISIBLE else View.GONE
     } else {
         subtitle?.visibility = View.GONE

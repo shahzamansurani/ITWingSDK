@@ -225,10 +225,15 @@ internal class CustomFullscreenAdRenderer {
         adTag.text =
             ad.adIcon()
 
-        binding.adTitle.setTextColor(parseColorSafe(placement.metadata.stringValue("native_headline_text_color", "headline_text_color") ?: sdkColor("native_text_color"), Color.WHITE))
-        binding.adBody.setTextColor(parseColorSafe(placement.metadata.stringValue("native_body_text_color", "body_text_color") ?: sdkColor("native_text_color"), Color.rgb(226, 232, 240)))
-        advertiserView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: sdkColor("native_text_color"), Color.rgb(226, 232, 240)))
-        storeView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: sdkColor("native_text_color"), Color.rgb(226, 232, 240)))
+        val nativeTextColor = placement.metadata.stringValue("native_text_color", "banner_text_color")
+            ?: sdkColor("native_text_color", "banner_text_color", "text_color")
+        val secondaryTextColor = placement.metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+            ?: sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+            ?: nativeTextColor
+        binding.adTitle.setTextColor(parseColorSafe(placement.metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.WHITE))
+        binding.adBody.setTextColor(parseColorSafe(placement.metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(226, 232, 240)))
+        advertiserView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(226, 232, 240)))
+        storeView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(226, 232, 240)))
 
         /*
         |--------------------------------------------------------------------------
@@ -262,7 +267,7 @@ internal class CustomFullscreenAdRenderer {
                 )
             )
         )
-        binding.adCta.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "cta_text_color") ?: sdkColor("cta_text_color"), Color.WHITE))
+        binding.adCta.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE))
 
         /*
         |--------------------------------------------------------------------------

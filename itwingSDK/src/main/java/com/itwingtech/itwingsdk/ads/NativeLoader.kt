@@ -438,11 +438,15 @@ class NativeLoader(
 
         (adView.headlineView as? TextView)
             ?.text = nativeAd.headline
-        val nativeTextColor = sdkColor("native_text_color")
+        val nativeTextColor = metadata.stringValue("native_text_color", "banner_text_color")
+            ?: sdkColor("native_text_color", "banner_text_color", "text_color")
+        val secondaryTextColor = metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+            ?: sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+            ?: nativeTextColor
         (adView.headlineView as? TextView)?.setTextColor(parseColorSafe(metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(17, 24, 39)))
-        (adView.bodyView as? TextView)?.setTextColor(parseColorSafe(metadata.stringValue("native_body_text_color", "body_text_color") ?: nativeTextColor, Color.rgb(71, 85, 105)))
+        (adView.bodyView as? TextView)?.setTextColor(parseColorSafe(metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(71, 85, 105)))
         listOf(adView.priceView, adView.storeView, adView.advertiserView).forEach { view ->
-            (view as? TextView)?.setTextColor(parseColorSafe(metadata.stringValue("native_meta_text_color", "meta_text_color") ?: nativeTextColor, Color.rgb(100, 116, 139)))
+            (view as? TextView)?.setTextColor(parseColorSafe(metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(100, 116, 139)))
         }
 
         nativeAd.body?.let { (adView.bodyView as? TextView)?.text = it
@@ -464,7 +468,7 @@ class NativeLoader(
         val ctaDrawable = adView.callToActionView?.background?.mutate() as? GradientDrawable
         ctaDrawable?.setColor(parseColorSafe(ITWingSDK.getColor("primary"), Color.rgb(37, 99, 235)))
         (adView.callToActionView as? TextView)?.setTextColor(
-            parseColorSafe(metadata.stringValue("native_cta_text_color", "cta_text_color") ?: sdkColor("cta_text_color"), Color.WHITE)
+            parseColorSafe(metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE)
         )
 
         val adTagColor = ad_tag?.background?.mutate() as? GradientDrawable
@@ -921,10 +925,14 @@ class NativeLoader(
             val background = parseColorSafe(metadata.stringValue("native_background_color", "background_color"), Color.TRANSPARENT)
             applyBackgroundRecursively(background)
         }
-        val nativeTextColor = sdkColor("native_text_color")
+        val nativeTextColor = metadata.stringValue("native_text_color", "banner_text_color")
+            ?: sdkColor("native_text_color", "banner_text_color", "text_color")
+        val secondaryTextColor = metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+            ?: sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+            ?: nativeTextColor
         val headline = parseColorSafe(metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(248, 250, 252))
-        val body = parseColorSafe(metadata.stringValue("native_body_text_color", "body_text_color") ?: nativeTextColor, Color.rgb(203, 213, 225))
-        val meta = parseColorSafe(metadata.stringValue("native_meta_text_color", "meta_text_color") ?: nativeTextColor, Color.rgb(203, 213, 225))
+        val body = parseColorSafe(metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(203, 213, 225))
+        val meta = parseColorSafe(metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(203, 213, 225))
         listOf(R.id.ad_headline).forEach { findViewById<TextView?>(it)?.setTextColor(headline) }
         listOf(R.id.ad_body).forEach { findViewById<TextView?>(it)?.setTextColor(body) }
         listOf(R.id.ad_advertiser, R.id.ad_store, R.id.ad_price).forEach { findViewById<TextView?>(it)?.setTextColor(meta) }
@@ -1218,8 +1226,8 @@ class NativeLoader(
         ?: ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
         ?: ITWingSDK.getColor("primary_color").takeIf { it.isNotBlank() }
 
-    private fun sdkColor(name: String): String? =
-        ITWingSDK.getColor(name).takeIf { it.isNotBlank() }
+    private fun sdkColor(vararg names: String): String? =
+        names.firstNotNullOfOrNull { name -> ITWingSDK.getColor(name).takeIf { it.isNotBlank() } }
 
     private fun CustomAdConfig.brandName(): String? =
         (
