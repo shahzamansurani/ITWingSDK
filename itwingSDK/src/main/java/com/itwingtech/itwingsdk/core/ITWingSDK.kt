@@ -1533,8 +1533,39 @@ object ITWingSDK {
 
     @JvmStatic
     fun getColor(name: String, defaultValue: String = ""): String {
-        val colors = config.app["colors"] as? Map<*, *> ?: return defaultValue
-        return colors[name] as? String ?: defaultValue
+        val colorMaps = listOfNotNull(
+            config.app["colors"] as? Map<*, *>,
+            config.app["sdk_colors"] as? Map<*, *>,
+            config.app["sdkColors"] as? Map<*, *>,
+        )
+        if (colorMaps.isEmpty()) return defaultValue
+        for (key in colorLookupKeys(name)) {
+            for (colors in colorMaps) {
+                val value = colors[key].asNonBlankString()
+                if (value != null) return value
+            }
+        }
+        return defaultValue
+    }
+
+    private fun colorLookupKeys(name: String): List<String> {
+        val key = name.trim()
+        if (key.isEmpty()) return emptyList()
+        val aliases = when (key) {
+            "primary" -> listOf("primary", "primary_color", "ad_primary_color")
+            "primary_color" -> listOf("primary_color", "primary", "ad_primary_color")
+            "native_text_color" -> listOf("native_text_color", "native_headline_text_color", "headline_text_color", "banner_text_color", "text_color")
+            "native_headline_text_color", "headline_text_color" -> listOf(key, "native_text_color", "banner_text_color", "text_color")
+            "native_secondary_text_color" -> listOf("native_secondary_text_color", "native_body_text_color", "native_meta_text_color", "banner_secondary_text_color", "secondary_text_color")
+            "native_body_text_color", "body_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "native_text_color")
+            "native_meta_text_color", "meta_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "native_text_color")
+            "native_cta_text_color" -> listOf("native_cta_text_color", "banner_cta_text_color", "cta_text_color")
+            "banner_cta_text_color" -> listOf("banner_cta_text_color", "native_cta_text_color", "cta_text_color")
+            "native_ad_label_text_color" -> listOf("native_ad_label_text_color", "ad_label_text_color", "ad_badge_text_color")
+            "ad_label_text_color", "ad_badge_text_color" -> listOf(key, "native_ad_label_text_color")
+            else -> listOf(key)
+        }
+        return aliases.distinct()
     }
 
     @JvmStatic
