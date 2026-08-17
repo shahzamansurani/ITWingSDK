@@ -259,7 +259,7 @@ internal class CustomFullscreenAdRenderer {
 
         ctaDrawable?.setColor(
             parseColorSafe(
-                ad.primaryColor(),
+                sdkColor("native_cta_color", "native_cta_background_color", "banner_cta_color", "banner_cta_background_color", "ad_cta_color", "ad_cta_background_color") ?: ad.primaryColor(),
                 Color.rgb(
                     37,
                     99,
@@ -281,7 +281,7 @@ internal class CustomFullscreenAdRenderer {
 
         adTagDrawable?.setColor(
             parseColorSafe(
-                ad.primaryColor(),
+                sdkColor("native_ad_label_color", "native_ad_label_background_color", "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color") ?: ad.primaryColor(),
                 Color.rgb(
                     37,
                     99,

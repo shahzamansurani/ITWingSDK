@@ -466,13 +466,19 @@ class NativeLoader(
         }
 
         val ctaDrawable = adView.callToActionView?.background?.mutate() as? GradientDrawable
-        ctaDrawable?.setColor(parseColorSafe(ITWingSDK.getColor("primary"), Color.rgb(37, 99, 235)))
+        ctaDrawable?.setColor(parseColorSafe(
+            sdkColor("native_cta_color", "native_cta_background_color", "banner_cta_color", "banner_cta_background_color", "ad_cta_color", "ad_cta_background_color", "primary"),
+            Color.rgb(37, 99, 235)
+        ))
         (adView.callToActionView as? TextView)?.setTextColor(
             parseColorSafe(metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE)
         )
 
         val adTagColor = ad_tag?.background?.mutate() as? GradientDrawable
-        adTagColor?.setColor(parseColorSafe(ITWingSDK.getColor("primary"), Color.rgb(37, 99, 235)))
+        adTagColor?.setColor(parseColorSafe(
+            sdkColor("native_ad_label_color", "native_ad_label_background_color", "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color", "primary"),
+            Color.rgb(37, 99, 235)
+        ))
         ad_tag?.setTextColor(parseColorSafe(metadata.stringValue("native_ad_label_text_color", "ad_label_text_color") ?: sdkColor("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
 
 
@@ -669,7 +675,7 @@ class NativeLoader(
 
         adTagDrawable?.setColor(
             parseColorSafe(
-                ad.primaryColor(),
+                sdkColor("native_cta_color", "native_cta_background_color", "banner_cta_color", "banner_cta_background_color", "ad_cta_color", "ad_cta_background_color") ?: ad.primaryColor(),
                 Color.rgb(
                     37,
                     99,
@@ -684,7 +690,7 @@ class NativeLoader(
 
         ctaDrawable?.setColor(
             parseColorSafe(
-                ad.primaryColor(),
+                sdkColor("native_ad_label_color", "native_ad_label_background_color", "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color") ?: ad.primaryColor(),
                 Color.rgb(
                     37,
                     99,
@@ -692,7 +698,7 @@ class NativeLoader(
                 )
             )
         )
-        ctaView?.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "cta_text_color") ?: sdkColor("native_cta_text_color", "cta_text_color"), Color.WHITE))
+        ctaView?.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE))
         adTag?.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color") ?: sdkColor("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
 
         /*
@@ -922,7 +928,11 @@ class NativeLoader(
             findViewById<View?>(R.id.ad_unit_content)?.setBackgroundColor(Color.TRANSPARENT)
             clearNativeChildBackgrounds()
         } else {
-            val background = parseColorSafe(metadata.stringValue("native_background_color", "background_color"), Color.TRANSPARENT)
+            val background = parseColorSafe(
+                metadata.stringValue("native_background_color", "banner_background_color", "ad_background_color", "background_color")
+                    ?: sdkColor("native_background_color", "banner_background_color", "ad_background_color"),
+                Color.TRANSPARENT
+            )
             applyBackgroundRecursively(background)
         }
         val nativeTextColor = metadata.stringValue("native_text_color", "banner_text_color")

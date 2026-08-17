@@ -801,7 +801,11 @@ class ITWingVpnServersView @JvmOverloads constructor(context: Context, attrs: At
         if (!isVpnServerWorking(item)) return false
         if (!tabsEnabled) return true
         val publicServer = item.isPublicVpnServer()
-        return if (selectedTab == ServerTierTab.FREE) publicServer else !publicServer
+        return if (selectedTab == ServerTierTab.FREE) {
+            publicServer
+        } else {
+            !publicServer
+        }
     }
 
     private fun installTabs() {
@@ -887,7 +891,10 @@ class ITWingVpnServersView @JvmOverloads constructor(context: Context, attrs: At
     private fun ITWingMediaItem.isPublicVpnServer(): Boolean {
         val source = metadata["server_source"]?.toString()?.trim()?.lowercase()
         val tier = metadata["server_tier"]?.toString()?.trim()?.lowercase()
-        return source == "vpngate_public" || tier == "public"
+        return source == "vpngate_public"
+                || tier == "public"
+                || slug?.startsWith("vpngate-", ignoreCase = true) == true
+                || tags.any { it.equals("vpngate", true) || it.equals("public", true) }
     }
 
     private enum class ServerTierTab {

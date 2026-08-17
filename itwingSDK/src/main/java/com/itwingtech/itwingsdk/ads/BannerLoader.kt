@@ -353,12 +353,12 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         advertiserView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(100, 116, 139)))
 
         (ctaView.background?.mutate() as? GradientDrawable)?.setColor(
-            parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))
+            parseColorSafe(sdkColor("banner_cta_color", "banner_cta_background_color", "native_cta_color", "native_cta_background_color", "ad_cta_color", "ad_cta_background_color") ?: ad.primaryColor(), Color.rgb(37, 99, 235))
         )
         ctaView.setTextColor(parseColorSafe(placement.metadata.stringValue("banner_cta_text_color", "native_cta_text_color", "cta_text_color") ?: sdkColor("banner_cta_text_color", "native_cta_text_color", "cta_text_color"), Color.WHITE))
 
         (adTag.background?.mutate() as? GradientDrawable)?.setColor(
-            parseColorSafe(ad.primaryColor(), Color.rgb(37, 99, 235))
+            parseColorSafe(sdkColor("native_ad_label_color", "native_ad_label_background_color", "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color") ?: ad.primaryColor(), Color.rgb(37, 99, 235))
         )
         adTag.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color") ?: sdkColor("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
 
