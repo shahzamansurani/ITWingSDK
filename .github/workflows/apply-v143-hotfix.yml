@@ -1,0 +1,219 @@
+name: Apply SDK v1.43 hotfix
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/apply-v143-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-hotfix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patch and move v1.43 tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "itwingtech"
+          git config user.email "shahab.itwing@gmail.com"
+          git apply <<'PATCH'
+          diff --git a/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/BannerLoader.kt b/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/BannerLoader.kt
+          index 0d0f007..604a272 100644
+          --- a/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/BannerLoader.kt
+          +++ b/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/BannerLoader.kt
+          @@ -343,24 +343,24 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
+                   ctaView.text = ad.cta?.takeIf { it.isNotBlank() } ?: "Install"
+                   ratingView.rating = ad.brandRating()
+                   adTag.text = ad.adIcon()
+          -        val nativeTextColor = placement.metadata.stringValue("native_text_color", "banner_text_color")
+          -            ?: sdkColor("native_text_color", "banner_text_color", "text_color")
+          -        val secondaryTextColor = placement.metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+          -            ?: sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+          +        val nativeTextColor = sdkColor("native_text_color", "banner_text_color", "text_color")
+          +            ?: placement.metadata.stringValue("native_text_color", "banner_text_color")
+          +        val secondaryTextColor = sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+          +            ?: placement.metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+                       ?: nativeTextColor
+          -        headlineView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(17, 24, 39)))
+          -        bodyView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(71, 85, 105)))
+          -        advertiserView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(100, 116, 139)))
+          +        headlineView.setTextColor(parseColorSafe(sdkColor("native_headline_text_color", "headline_text_color") ?: placement.metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(17, 24, 39)))
+          +        bodyView.setTextColor(parseColorSafe(sdkColor("native_body_text_color", "body_text_color") ?: placement.metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(71, 85, 105)))
+          +        advertiserView.setTextColor(parseColorSafe(sdkColor("native_meta_text_color", "meta_text_color") ?: placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(100, 116, 139)))
+           
+                   (ctaView.background?.mutate() as? GradientDrawable)?.setColor(
+                       parseColorSafe(sdkColor("banner_cta_color", "banner_cta_background_color", "native_cta_color", "native_cta_background_color", "ad_cta_color", "ad_cta_background_color") ?: ad.primaryColor(), Color.rgb(37, 99, 235))
+                   )
+          -        ctaView.setTextColor(parseColorSafe(placement.metadata.stringValue("banner_cta_text_color", "native_cta_text_color", "cta_text_color") ?: sdkColor("banner_cta_text_color", "native_cta_text_color", "cta_text_color"), Color.WHITE))
+          +        ctaView.setTextColor(parseColorSafe(sdkColor("banner_cta_text_color", "native_cta_text_color", "cta_text_color") ?: placement.metadata.stringValue("banner_cta_text_color", "native_cta_text_color", "cta_text_color"), Color.WHITE))
+           
+                   (adTag.background?.mutate() as? GradientDrawable)?.setColor(
+                       parseColorSafe(sdkColor("native_ad_label_color", "native_ad_label_background_color", "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color") ?: ad.primaryColor(), Color.rgb(37, 99, 235))
+                   )
+          -        adTag.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color") ?: sdkColor("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+          +        adTag.setTextColor(parseColorSafe(sdkColor("native_ad_label_text_color", "ad_label_text_color") ?: placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+           
+                   mediaView.apply {
+                       render(ad.mediaUrl(), ad.isVideo())
+          diff --git a/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt b/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt
+          index 5cf3734..92f4261 100644
+          --- a/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt
+          +++ b/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/CustomFullscreenAdRenderer.kt
+          @@ -225,15 +225,15 @@ internal class CustomFullscreenAdRenderer {
+                   adTag.text =
+                       ad.adIcon()
+           
+          -        val nativeTextColor = placement.metadata.stringValue("native_text_color", "banner_text_color")
+          -            ?: sdkColor("native_text_color", "banner_text_color", "text_color")
+          -        val secondaryTextColor = placement.metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+          -            ?: sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+          +        val nativeTextColor = sdkColor("native_text_color", "banner_text_color", "text_color")
+          +            ?: placement.metadata.stringValue("native_text_color", "banner_text_color")
+          +        val secondaryTextColor = sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+          +            ?: placement.metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+                       ?: nativeTextColor
+          -        binding.adTitle.setTextColor(parseColorSafe(placement.metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.WHITE))
+          -        binding.adBody.setTextColor(parseColorSafe(placement.metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(226, 232, 240)))
+          -        advertiserView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(226, 232, 240)))
+          -        storeView.setTextColor(parseColorSafe(placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(226, 232, 240)))
+          +        binding.adTitle.setTextColor(parseColorSafe(sdkColor("native_headline_text_color", "headline_text_color") ?: placement.metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.WHITE))
+          +        binding.adBody.setTextColor(parseColorSafe(sdkColor("native_body_text_color", "body_text_color") ?: placement.metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(226, 232, 240)))
+          +        advertiserView.setTextColor(parseColorSafe(sdkColor("native_meta_text_color", "meta_text_color") ?: placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(226, 232, 240)))
+          +        storeView.setTextColor(parseColorSafe(sdkColor("native_meta_text_color", "meta_text_color") ?: placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(226, 232, 240)))
+           
+                   /*
+                   |--------------------------------------------------------------------------
+          @@ -267,7 +267,7 @@ internal class CustomFullscreenAdRenderer {
+                           )
+                       )
+                   )
+          -        binding.adCta.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE))
+          +        binding.adCta.setTextColor(parseColorSafe(sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: placement.metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE))
+           
+                   /*
+                   |--------------------------------------------------------------------------
+          @@ -289,7 +289,7 @@ internal class CustomFullscreenAdRenderer {
+                           )
+                       )
+                   )
+          -        adTag.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color") ?: sdkColor("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+          +        adTag.setTextColor(parseColorSafe(sdkColor("native_ad_label_text_color", "ad_label_text_color") ?: placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+           
+                   /*
+                   |--------------------------------------------------------------------------
+          diff --git a/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/NativeLoader.kt b/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/NativeLoader.kt
+          index 7ae4252..2b807d5 100644
+          --- a/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/NativeLoader.kt
+          +++ b/itwingSDK/src/main/java/com/itwingtech/itwingsdk/ads/NativeLoader.kt
+          @@ -438,15 +438,15 @@ class NativeLoader(
+           
+                   (adView.headlineView as? TextView)
+                       ?.text = nativeAd.headline
+          -        val nativeTextColor = metadata.stringValue("native_text_color", "banner_text_color")
+          -            ?: sdkColor("native_text_color", "banner_text_color", "text_color")
+          -        val secondaryTextColor = metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+          -            ?: sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+          +        val nativeTextColor = sdkColor("native_text_color", "banner_text_color", "text_color")
+          +            ?: metadata.stringValue("native_text_color", "banner_text_color")
+          +        val secondaryTextColor = sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+          +            ?: metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+                       ?: nativeTextColor
+          -        (adView.headlineView as? TextView)?.setTextColor(parseColorSafe(metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(17, 24, 39)))
+          -        (adView.bodyView as? TextView)?.setTextColor(parseColorSafe(metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(71, 85, 105)))
+          +        (adView.headlineView as? TextView)?.setTextColor(parseColorSafe(sdkColor("native_headline_text_color", "headline_text_color") ?: metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(17, 24, 39)))
+          +        (adView.bodyView as? TextView)?.setTextColor(parseColorSafe(sdkColor("native_body_text_color", "body_text_color") ?: metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(71, 85, 105)))
+                   listOf(adView.priceView, adView.storeView, adView.advertiserView).forEach { view ->
+          -            (view as? TextView)?.setTextColor(parseColorSafe(metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(100, 116, 139)))
+          +            (view as? TextView)?.setTextColor(parseColorSafe(sdkColor("native_meta_text_color", "meta_text_color") ?: metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(100, 116, 139)))
+                   }
+           
+                   nativeAd.body?.let { (adView.bodyView as? TextView)?.text = it
+          @@ -471,7 +471,7 @@ class NativeLoader(
+                       Color.rgb(37, 99, 235)
+                   ))
+                   (adView.callToActionView as? TextView)?.setTextColor(
+          -            parseColorSafe(metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE)
+          +            parseColorSafe(sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE)
+                   )
+           
+                   val adTagColor = ad_tag?.background?.mutate() as? GradientDrawable
+          @@ -479,7 +479,7 @@ class NativeLoader(
+                       sdkColor("native_ad_label_color", "native_ad_label_background_color", "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color", "primary"),
+                       Color.rgb(37, 99, 235)
+                   ))
+          -        ad_tag?.setTextColor(parseColorSafe(metadata.stringValue("native_ad_label_text_color", "ad_label_text_color") ?: sdkColor("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+          +        ad_tag?.setTextColor(parseColorSafe(sdkColor("native_ad_label_text_color", "ad_label_text_color") ?: metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+           
+           
+                   nativeAd.icon?.drawable?.let {
+          @@ -675,7 +675,7 @@ class NativeLoader(
+           
+                   adTagDrawable?.setColor(
+                       parseColorSafe(
+          -                sdkColor("native_cta_color", "native_cta_background_color", "banner_cta_color", "banner_cta_background_color", "ad_cta_color", "ad_cta_background_color") ?: ad.primaryColor(),
+          +                sdkColor("native_ad_label_color", "native_ad_label_background_color", "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color") ?: ad.primaryColor(),
+                           Color.rgb(
+                               37,
+                               99,
+          @@ -690,7 +690,7 @@ class NativeLoader(
+           
+                   ctaDrawable?.setColor(
+                       parseColorSafe(
+          -                sdkColor("native_ad_label_color", "native_ad_label_background_color", "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color") ?: ad.primaryColor(),
+          +                sdkColor("native_cta_color", "native_cta_background_color", "banner_cta_color", "banner_cta_background_color", "ad_cta_color", "ad_cta_background_color") ?: ad.primaryColor(),
+                           Color.rgb(
+                               37,
+                               99,
+          @@ -698,8 +698,8 @@ class NativeLoader(
+                           )
+                       )
+                   )
+          -        ctaView?.setTextColor(parseColorSafe(placement.metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE))
+          -        adTag?.setTextColor(parseColorSafe(placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color") ?: sdkColor("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+          +        ctaView?.setTextColor(parseColorSafe(sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: placement.metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE))
+          +        adTag?.setTextColor(parseColorSafe(sdkColor("native_ad_label_text_color", "ad_label_text_color") ?: placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+           
+                   /*
+                   |--------------------------------------------------------------------------
+          @@ -929,20 +929,20 @@ class NativeLoader(
+                       clearNativeChildBackgrounds()
+                   } else {
+                       val background = parseColorSafe(
+          -                metadata.stringValue("native_background_color", "banner_background_color", "ad_background_color", "background_color")
+          -                    ?: sdkColor("native_background_color", "banner_background_color", "ad_background_color"),
+          +                sdkColor("native_background_color", "banner_background_color", "ad_background_color")
+          +                    ?: metadata.stringValue("native_background_color", "banner_background_color", "ad_background_color", "background_color"),
+                           Color.TRANSPARENT
+                       )
+                       applyBackgroundRecursively(background)
+                   }
+          -        val nativeTextColor = metadata.stringValue("native_text_color", "banner_text_color")
+          -            ?: sdkColor("native_text_color", "banner_text_color", "text_color")
+          -        val secondaryTextColor = metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+          -            ?: sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+          +        val nativeTextColor = sdkColor("native_text_color", "banner_text_color", "text_color")
+          +            ?: metadata.stringValue("native_text_color", "banner_text_color")
+          +        val secondaryTextColor = sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+          +            ?: metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
+                       ?: nativeTextColor
+          -        val headline = parseColorSafe(metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(248, 250, 252))
+          -        val body = parseColorSafe(metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(203, 213, 225))
+          -        val meta = parseColorSafe(metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(203, 213, 225))
+          +        val headline = parseColorSafe(sdkColor("native_headline_text_color", "headline_text_color") ?: metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(248, 250, 252))
+          +        val body = parseColorSafe(sdkColor("native_body_text_color", "body_text_color") ?: metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(203, 213, 225))
+          +        val meta = parseColorSafe(sdkColor("native_meta_text_color", "meta_text_color") ?: metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(203, 213, 225))
+                   listOf(R.id.ad_headline).forEach { findViewById<TextView?>(it)?.setTextColor(headline) }
+                   listOf(R.id.ad_body).forEach { findViewById<TextView?>(it)?.setTextColor(body) }
+                   listOf(R.id.ad_advertiser, R.id.ad_store, R.id.ad_price).forEach { findViewById<TextView?>(it)?.setTextColor(meta) }
+          PATCH
+          git rm --ignore-unmatch .github/workflows/apply-v143-hotfix.yml
+          git commit -am "Release SDK v1.43 ad color hotfix"
+          git tag -f v1.43
+          git push origin HEAD:master
+          git push --force origin refs/tags/v1.43
