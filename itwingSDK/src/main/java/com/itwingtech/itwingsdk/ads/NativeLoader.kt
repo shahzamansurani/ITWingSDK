@@ -6,6 +6,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.text.TextUtils
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -459,7 +461,10 @@ class NativeLoader(
         }
 
         nativeAd.callToAction?.let {
-            (adView.callToActionView as? Button)?.text = it
+            (adView.callToActionView as? Button)?.apply {
+                text = it
+                normalizeNativeCtaButton()
+            }
             adView.callToActionView?.visibility = View.VISIBLE
         } ?: run {
             adView.callToActionView?.visibility = View.INVISIBLE
@@ -648,6 +653,7 @@ class NativeLoader(
                 it.isNotBlank()
             }
                 ?: "Install"
+        ctaView?.normalizeNativeCtaButton()
 
         advertiserView?.text =
             ad.brandName()
@@ -1238,6 +1244,21 @@ class NativeLoader(
 
     private fun sdkColor(vararg names: String): String? =
         names.firstNotNullOfOrNull { name -> ITWingSDK.getColor(name).takeIf { it.isNotBlank() } }
+
+    private fun Button.normalizeNativeCtaButton() {
+        minHeight = 0
+        minimumHeight = 0
+        minWidth = 0
+        minimumWidth = 0
+        maxLines = 1
+        ellipsize = TextUtils.TruncateAt.END
+        gravity = Gravity.CENTER
+        setIncludeFontPadding(false)
+        setPadding(dp(8), 0, dp(8), 0)
+    }
+
+    private fun View.dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
 
     private fun CustomAdConfig.brandName(): String? =
         (

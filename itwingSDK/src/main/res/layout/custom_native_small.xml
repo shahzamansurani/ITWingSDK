@@ -138,7 +138,16 @@
                     android:layout_width="match_parent"
                     android:layout_height="40dp"
                     android:background="@drawable/start_bg"
+                    android:ellipsize="end"
                     android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:paddingStart="@dimen/_8sdp"
+                    android:paddingTop="0dp"
+                    android:paddingEnd="@dimen/_8sdp"
+                    android:paddingBottom="0dp"
                     android:textColor="@color/white"
                     android:textSize="12sp" />
 
