@@ -115,6 +115,7 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
     private var showTitle = true
     private var customLayoutRes = 0
     private var premiumUnlockPlacement = "rewarded"
+    private var sdkPremiumUnlockEnabled = true
     private var categoryId: String? = null
     private var categorySlug: String? = null
     private var clickListener: ((ITWingMediaItem) -> Unit)? = null
@@ -202,6 +203,10 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
         clickListener = listener
     }
 
+    fun setSdkPremiumUnlockEnabled(enabled: Boolean) {
+        sdkPremiumUnlockEnabled = enabled
+    }
+
     fun setCustomItemLayout(layoutRes: Int, binder: ITWingMediaItemBinder? = null) {
         customLayoutRes = layoutRes
         customBinder = binder
@@ -233,7 +238,7 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
 
     private fun handleItemClick(view: View, item: ITWingMediaItem) {
         ITWingSDK.trackMediaLibraryEvent(mediaKind, item.id, "click")
-        if (item.isPremium && !ITWingSDK.isAdFree() && !isUnlocked(item.id)) {
+        if (sdkPremiumUnlockEnabled && item.isPremium && !ITWingSDK.isAdFree() && !isUnlocked(item.id)) {
             val activity = context.findActivity()
             if (activity == null) {
                 ITWingSDK.showSdkFeatureError(context, "Premium media locked", "Rewarded ad requires an active Activity.")
