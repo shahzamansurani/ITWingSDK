@@ -43,6 +43,9 @@ class SDKMediaView @JvmOverloads constructor(
     private var wasPlayingBeforePause =
         false
 
+    private var playRequested =
+        false
+
     private var internalMuteHidden = false
 
     private val imageView = binding.sdkImage
@@ -95,6 +98,7 @@ class SDKMediaView @JvmOverloads constructor(
         }
 
         isVideo = video
+        playRequested = false
 
         if (video) {
 
@@ -195,7 +199,7 @@ class SDKMediaView @JvmOverloads constructor(
             repeatMode =
                 if (loop) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
 
-            playWhenReady = true
+            playWhenReady = false
 
             volume =
                 if (isMuted) 0f else 1f
@@ -217,7 +221,18 @@ class SDKMediaView @JvmOverloads constructor(
 
         runCatching {
 
-            player?.play()
+            playRequested =
+                true
+
+            if (canPlayNow()) {
+
+                player?.play()
+
+            } else {
+
+                player?.playWhenReady =
+                    true
+            }
         }
     }
 
@@ -231,6 +246,9 @@ class SDKMediaView @JvmOverloads constructor(
 
         runCatching {
 
+            playRequested =
+                false
+
             player?.pause()
         }
     }
@@ -243,10 +261,7 @@ class SDKMediaView @JvmOverloads constructor(
 
     fun resume() {
 
-        runCatching {
-
-            player?.play()
-        }
+        play()
     }
 
     /*
@@ -275,8 +290,8 @@ class SDKMediaView @JvmOverloads constructor(
     */
 
     fun onHostResume() {
-        runCatching {
-            player?.play()
+        if (playRequested) {
+            play()
         }
     }
 
@@ -348,6 +363,9 @@ class SDKMediaView @JvmOverloads constructor(
     fun release() {
 
         runCatching {
+
+            playRequested =
+                false
 
             playerView.player = null
 
@@ -605,10 +623,66 @@ class SDKMediaView @JvmOverloads constructor(
 
                 if (wasPlayingBeforePause) {
 
-                    player?.play()
+                    play()
                 }
             }
 
         }, 300)
     }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        resumeWhenVisible()
+    }
+
+    override fun onDetachedFromWindow() {
+        runCatching {
+            player?.pause()
+        }
+        super.onDetachedFromWindow()
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility == VISIBLE) {
+            resumeWhenVisible()
+        } else {
+            runCatching {
+                player?.pause()
+            }
+        }
+    }
+
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        if (isVisible) {
+            resumeWhenVisible()
+        } else {
+            runCatching {
+                player?.pause()
+            }
+        }
+    }
+
+    private fun resumeWhenVisible() {
+        if (!playRequested) {
+            return
+        }
+
+        post {
+            runCatching {
+                restorePlayer()
+                if (canPlayNow()) {
+                    player?.play()
+                } else {
+                    player?.playWhenReady = true
+                }
+            }
+        }
+    }
+
+    private fun canPlayNow(): Boolean =
+        isAttachedToWindow &&
+                windowVisibility == VISIBLE &&
+                isShown
 }

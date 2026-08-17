@@ -469,7 +469,9 @@ internal class CustomFullscreenAdRenderer {
             Looper.getMainLooper()
         ).postDelayed({
 
-            if (isRewardedPlacement && !ad.isVideo()) rewardEarned.compareAndSet(false, true)
+            if (isRewardedPlacement) {
+                rewardEarned.compareAndSet(false, true)
+            }
 
             binding.adClose.animate().alpha(1f).setDuration(250).start()
 
