@@ -61,6 +61,35 @@ class ConfigRepository(
         postConfig("/config/sync", version)
     }.getOrNull()
 
+    internal suspend fun realtimeRequest(
+        path: String,
+        method: String,
+        rawJson: String? = null,
+        headers: Map<String, String> = emptyMap(),
+    ): JSONObject? = withContext(Dispatchers.IO) {
+        signedRequestRaw(path, method, rawJson.orEmpty(), headers).use { response ->
+            val responseBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val message = runCatching {
+                    val error = JSONObject(responseBody)
+                    error.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }
+                        ?: error.optString("message").takeIf { it.isNotBlank() }
+                }.getOrNull().orEmpty().ifBlank { "Realtime request failed (${response.code})." }
+                throw RealtimeRequestException(response.code, message)
+            }
+            if (response.code == 204 || responseBody.isBlank()) return@withContext null
+            val envelope = JSONObject(responseBody)
+            if (!envelope.optBoolean("success", false)) {
+                val error = envelope.optJSONObject("error")
+                throw RealtimeRequestException(
+                    response.code,
+                    error?.optString("message").orEmpty().ifBlank { "Realtime request failed." },
+                )
+            }
+            envelope.optJSONObject("data")
+        }
+    }
+
     fun loadCachedConfig(): ITWingConfig? = store.load()
 
     fun isAdFreeEntitled(): Boolean = store.isAdFreeEntitled()
@@ -803,8 +832,19 @@ class ConfigRepository(
         }
     }
 
-    private suspend fun signedRequest(path: String, method: String, payload: JSONObject? = null): Response = withContext(Dispatchers.IO) {
-        val body = payload?.toString() ?: ""
+    private suspend fun signedRequest(
+        path: String,
+        method: String,
+        payload: JSONObject? = null,
+        extraHeaders: Map<String, String> = emptyMap(),
+    ): Response = signedRequestRaw(path, method, payload?.toString().orEmpty(), extraHeaders)
+
+    private suspend fun signedRequestRaw(
+        path: String,
+        method: String,
+        body: String,
+        extraHeaders: Map<String, String> = emptyMap(),
+    ): Response = withContext(Dispatchers.IO) {
         val timestamp = Instant.now().toString()
         val nonce = UUID.randomUUID().toString()
         val bodyHash = sha256(body)
@@ -821,6 +861,7 @@ class ConfigRepository(
             .header("X-ITW-Platform", "android")
             .header("X-ITW-App-Identifier", context.packageName)
             .header("X-ITW-SDK-Version", "1.0.0")
+        extraHeaders.forEach { (name, value) -> builder.header(name, value) }
 
         val request = if (normalizedMethod == "GET") {
             builder.get().build()
@@ -886,3 +927,5 @@ class ConfigRepository(
         return this
     }
 }
+
+internal class RealtimeRequestException(val statusCode: Int, message: String) : IllegalStateException(message)

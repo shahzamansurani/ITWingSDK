@@ -23,6 +23,7 @@ import com.itwingtech.itwingsdk.analytics.InstallReferrerReporter
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.billing.SubscriptionManager
 import com.itwingtech.itwingsdk.data.ConfigRepository
+import com.itwingtech.itwingsdk.realtime.ITWingRealtime
 import com.itwingtech.itwingsdk.ui.ITWingActionDialog
 import com.itwingtech.itwingsdk.ui.ITWingLoadingDialog
 import com.itwingtech.itwingsdk.ui.SdkFeatureErrorDialog
@@ -70,6 +71,8 @@ object ITWingSDK {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
     private var repository: ConfigRepository? = null
+    /** App-scoped realtime JSON database; requests reuse the SDK's configured signer and transport. */
+    val realtime: ITWingRealtime by lazy { ITWingRealtime({ repository }, { applicationContext }) }
     private var config = ITWingConfig()
     private val runtime = AppRuntimeManager(
         configProvider = { config },

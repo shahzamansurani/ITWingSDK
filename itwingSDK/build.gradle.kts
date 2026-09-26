@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 val sdkPublicationGroup = providers.gradleProperty("group")
     .orElse("com.github.shahzamansurani")
 val sdkPublicationVersion = providers.gradleProperty("version")
-    .orElse("v1.47")
+    .orElse("v1.48")
 
 plugins {
     alias(libs.plugins.android.library)
@@ -73,7 +73,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.security.crypto)
     implementation(libs.okhttp)
-    implementation(libs.gson)
+    api(libs.gson)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.ads.mobile.sdk)
     implementation(libs.androidx.activity.ktx)
