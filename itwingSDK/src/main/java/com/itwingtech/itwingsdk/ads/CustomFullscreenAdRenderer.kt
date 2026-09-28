@@ -16,7 +16,6 @@ import android.view.Window
 import android.widget.ImageView
 import android.widget.RatingBar
 import android.widget.TextView
-import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
 import com.bumptech.glide.Glide
 import com.itwingtech.itwingsdk.R
@@ -225,15 +224,10 @@ internal class CustomFullscreenAdRenderer {
         adTag.text =
             ad.adIcon()
 
-        val nativeTextColor = sdkColor("native_text_color", "banner_text_color", "text_color")
-            ?: placement.metadata.stringValue("native_text_color", "banner_text_color")
-        val secondaryTextColor = sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
-            ?: placement.metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
-            ?: nativeTextColor
-        binding.adTitle.setTextColor(parseColorSafe(sdkColor("native_headline_text_color", "headline_text_color") ?: placement.metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.WHITE))
-        binding.adBody.setTextColor(parseColorSafe(sdkColor("native_body_text_color", "body_text_color") ?: placement.metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(226, 232, 240)))
-        advertiserView.setTextColor(parseColorSafe(sdkColor("native_meta_text_color", "meta_text_color") ?: placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(226, 232, 240)))
-        storeView.setTextColor(parseColorSafe(sdkColor("native_meta_text_color", "meta_text_color") ?: placement.metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(226, 232, 240)))
+        binding.adTitle.setTextColor(AdTheme.nativeText(placement.metadata, Color.WHITE))
+        binding.adBody.setTextColor(AdTheme.nativeBody(placement.metadata, Color.rgb(226, 232, 240)))
+        advertiserView.setTextColor(AdTheme.nativeMeta(placement.metadata, Color.rgb(226, 232, 240)))
+        storeView.setTextColor(AdTheme.nativeMeta(placement.metadata, Color.rgb(226, 232, 240)))
 
         /*
         |--------------------------------------------------------------------------
@@ -257,17 +251,8 @@ internal class CustomFullscreenAdRenderer {
             binding.adCta.background
                 ?.mutate() as? GradientDrawable
 
-        ctaDrawable?.setColor(
-            parseColorSafe(
-                sdkColor("native_cta_color", "native_cta_background_color", "banner_cta_color", "banner_cta_background_color", "ad_cta_color", "ad_cta_background_color") ?: ad.primaryColor(),
-                Color.rgb(
-                    37,
-                    99,
-                    235
-                )
-            )
-        )
-        binding.adCta.setTextColor(parseColorSafe(sdkColor("native_cta_text_color", "banner_cta_text_color", "cta_text_color") ?: placement.metadata.stringValue("native_cta_text_color", "banner_cta_text_color", "cta_text_color"), Color.WHITE))
+        ctaDrawable?.setColor(AdTheme.nativeCtaColor(placement.metadata, ad.primaryColor()))
+        binding.adCta.setTextColor(AdTheme.nativeCtaTextColor(placement.metadata))
 
         /*
         |--------------------------------------------------------------------------
@@ -279,17 +264,8 @@ internal class CustomFullscreenAdRenderer {
             adTag.background
                 ?.mutate() as? GradientDrawable
 
-        adTagDrawable?.setColor(
-            parseColorSafe(
-                sdkColor("native_ad_label_color", "native_ad_label_background_color", "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color") ?: ad.primaryColor(),
-                Color.rgb(
-                    37,
-                    99,
-                    235
-                )
-            )
-        )
-        adTag.setTextColor(parseColorSafe(sdkColor("native_ad_label_text_color", "ad_label_text_color") ?: placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
+        adTagDrawable?.setColor(AdTheme.nativeLabelColor(placement.metadata, ad.primaryColor()))
+        adTag.setTextColor(AdTheme.nativeLabelTextColor(placement.metadata))
 
         /*
         |--------------------------------------------------------------------------
@@ -579,28 +555,12 @@ internal class CustomFullscreenAdRenderer {
     |--------------------------------------------------------------------------
     */
 
-    private fun CustomAdConfig.mediaUrl(): String? =
-        mediaUrl
-            ?: videoUrl
-            ?: imageUrl
+    private fun CustomAdConfig.mediaUrl(): String? = resolvedMediaUrl()
 
-    private fun CustomAdConfig.isVideo(): Boolean =
-        mediaType.equals(
-            "video",
-            true
-        )
+    private fun CustomAdConfig.isVideo(): Boolean = isVideoMedia()
 
     private fun CustomAdConfig.primaryColor(): String? =
-        ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
-            ?: ITWingSDK.getColor("primary_color").takeIf { it.isNotBlank() }
-            ?: (metadata["ad_primary_color"]
-                as? String)?.takeIf { it.isNotBlank() }
-            ?: (
-                    metadata["brand"]
-                            as? Map<*, *>
-                    )?.get("primary_color")
-                    .let { it as? String }
-                    ?.takeIf { it.isNotBlank() }
+        AdTheme.primaryColor(metadata)
 
     private fun CustomAdConfig.brandName(): String? =
         (
@@ -652,34 +612,6 @@ internal class CustomFullscreenAdRenderer {
                 it.isNotBlank()
             }
             ?: "AD"
-
-    private fun Map<String, Any?>.stringValue(vararg keys: String): String? =
-        keys.firstNotNullOfOrNull { key ->
-            this[key]?.toString()?.trim()?.takeIf { it.isNotBlank() }
-        }
-
-    private fun sdkColor(vararg keys: String): String? =
-        keys.firstNotNullOfOrNull { key ->
-            ITWingSDK.getColor(key).takeIf { it.isNotBlank() }
-        }
-
-    private fun parseColorSafe(
-        value: String?,
-        fallback: Int
-    ): Int =
-
-        runCatching {
-
-            if (value.isNullOrBlank()) {
-
-                fallback
-
-            } else {
-
-                value.toColorInt()
-            }
-
-        }.getOrDefault(fallback)
 
     private fun loadImage(
         url: String?,

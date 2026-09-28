@@ -9,4 +9,7 @@
     <item name="itwing_media_category_image" type="id" />
     <item name="itwing_media_category_flag" type="id" />
     <item name="itwing_media_category_title" type="id" />
+    <item name="ad_card_original_margins" type="id" />
+    <item name="ad_card_original_padding" type="id" />
+    <item name="ad_card_original_parent_clipping" type="id" />
 </resources>

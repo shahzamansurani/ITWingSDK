@@ -51,13 +51,14 @@ class ITWingRealtime internal constructor(
         val key = cacheKey(namespace, path)
         try {
             val data = request(namespace, path, "GET") ?: JSONObject()
+            val snapshot = data.toSnapshot(namespace, path)
             runCatching {
                 withContext(Dispatchers.IO) {
                     contextOrThrow().getSharedPreferences(CACHE_PREFERENCES, Context.MODE_PRIVATE)
                         .edit().putString(key, data.toString()).apply()
                 }
             }
-            return data.toSnapshot(namespace, path)
+            return snapshot
         } catch (error: Exception) {
             if (error is CancellationException) throw error
             if (!fallbackToCacheOnError) throw error

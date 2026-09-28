@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.android.libraries.ads.mobile.sdk.appopen.AppOpenAd
@@ -34,7 +35,13 @@ class AppOpenManager(
     private var loadedPlacement: String? = null
     private var appOpenAd: AppOpenAd? = null
     private var appOpenLoadedAtMs: Long = 0L
-    private var foregroundActivity: WeakReference<Activity>? = null
+    @Volatile private var foregroundActivity: WeakReference<Activity>? = null
+    @Volatile private var foregroundSessionId: Long = 0L
+    @Volatile private var automaticResumeEligible = false
+    private var sawInitialProcessStart = false
+    private var backgroundedAtMs = 0L
+    @Volatile private var firstUseSession = false
+    private var pendingAutomaticShow: Runnable? = null
     private val lastLoadAttemptAt = ConcurrentHashMap<String, Long>()
     private val activeShowRequests = ConcurrentHashMap<String, Boolean>()
     private val customRenderer = CustomFullscreenAdRenderer()
@@ -48,15 +55,28 @@ class AppOpenManager(
             if (!automaticStarted.compareAndSet(false, true)) {
                 return@safeCallback
             }
+            val preferences = activity.applicationContext
+                .getSharedPreferences("itwing_sdk_app_open", Activity.MODE_PRIVATE)
+            firstUseSession = !preferences.getBoolean("has_opened_before", false)
+            if (firstUseSession) preferences.edit().putBoolean("has_opened_before", true).apply()
 
             ProcessLifecycleOwner.get().lifecycle
                 .addObserver(
                     object : DefaultLifecycleObserver {
                         override fun onStart(owner: LifecycleOwner) {
                             runCatching {
-                                val currentActivity = foregroundActivity?.get()?.takeUnless {
-                                    it.isFinishing || it.isDestroyed
-                                } ?: return
+                                foregroundSessionId += 1
+                                if (!sawInitialProcessStart) {
+                                    // Never show automatically on a cold start. Cold-start ads
+                                    // require an explicit splash/loading-screen integration.
+                                    sawInitialProcessStart = true
+                                    automaticResumeEligible = false
+                                    return
+                                }
+                                val backgroundDuration = (SystemClock.elapsedRealtime() - backgroundedAtMs).coerceAtLeast(0L)
+                                automaticResumeEligible = AppOpenPresentationPolicy
+                                    .shouldAutomaticallyPresentResume(true, backgroundDuration) && !firstUseSession
+                                if (!automaticResumeEligible) return
                                 if (SystemClock.elapsedRealtime() < automaticSuppressedUntilMs) {
                                     SDKTelemetry.track(
                                         "ad_suppressed",
@@ -81,7 +101,7 @@ class AppOpenManager(
                                     )
                                     return
                                 }
-                                if (FullscreenAdState.isActive()) {
+                                if (FullscreenAdState.isActive() || FullscreenAdState.wasRecentlyEnded()) {
                                     SDKTelemetry.track(
                                         "ad_suppressed",
                                         mapOf(
@@ -94,12 +114,16 @@ class AppOpenManager(
                                     return
                                 }
                                 val placement = automaticPlacementName() ?: return
-                                if (validAppOpenAd() != null || hasLoadedCustomAd(placement)) {
-                                    show(currentActivity, placement, waitForLoad = false)
-                                } else {
-                                    show(currentActivity, placement, waitForLoad = true)
-                                }
+                                scheduleAutomaticResume(placement)
                             }
+                        }
+
+                        override fun onStop(owner: LifecycleOwner) {
+                            automaticResumeEligible = false
+                            backgroundedAtMs = SystemClock.elapsedRealtime()
+                            firstUseSession = false
+                            pendingAutomaticShow?.let(mainHandler::removeCallbacks)
+                            pendingAutomaticShow = null
                         }
                     },
                 )
@@ -108,6 +132,36 @@ class AppOpenManager(
 
     fun updateForegroundActivity(activity: Activity) {
         foregroundActivity = WeakReference(activity)
+        if (automaticResumeEligible) automaticPlacementName()?.let(::scheduleAutomaticResume)
+    }
+
+    internal fun onActivityPaused(activity: Activity) {
+        if (foregroundActivity?.get() === activity) foregroundActivity = null
+    }
+
+    private fun scheduleAutomaticResume(placementName: String) {
+        pendingAutomaticShow?.let(mainHandler::removeCallbacks)
+        val session = foregroundSessionId
+        val attempt = Runnable {
+            pendingAutomaticShow = null
+            val activity = foregroundActivity?.get() ?: return@Runnable
+            val rejection = appOpenRejectionReason(activity, session)
+            if (rejection != null) {
+                automaticPlacement()?.let { placement ->
+                    AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to rejection))
+                }
+                return@Runnable
+            }
+            showInSession(
+                activity,
+                placementName,
+                {},
+                validAppOpenAd() == null && !hasLoadedCustomAd(placementName),
+                session,
+            )
+        }
+        pendingAutomaticShow = attempt
+        mainHandler.postDelayed(attempt, AUTO_RESUME_SHOW_DELAY_MS)
     }
 
     fun suppressAutomaticFor(durationMs: Long) {
@@ -147,15 +201,13 @@ class AppOpenManager(
 
         } ?: return
 
-        if (customRenderer.canRender(placement)) {
-            customRenderer.preload(activity, placement)
-            loadedPlacement = placementName
+        val unit = placement.adMobUnitOrNull() ?: run {
+            if (customRenderer.canRender(placement)) {
+                customRenderer.preload(activity, placement)
+                loadedPlacement = placementName
+            }
             return
         }
-
-        val unit = placement.units.firstOrNull {
-            it.network == "admob"
-        } ?: return
         if (!canStartLoad(placementName, placement, forceRequest)) return
         loading.set(true)
         AdEventTracker.log("ad_load_requested", placement)
@@ -185,7 +237,21 @@ class AppOpenManager(
         onComplete: () -> Unit = {},
         waitForLoad: Boolean = true,
     ) {
-        if (!activity.isUsable()) {
+        showInSession(activity, placementName, onComplete, waitForLoad, foregroundSessionId)
+    }
+
+    private fun showInSession(
+        activity: Activity,
+        placementName: String,
+        onComplete: () -> Unit,
+        waitForLoad: Boolean,
+        expectedSessionId: Long,
+    ) {
+        val rejection = appOpenRejectionReason(activity, expectedSessionId)
+        if (rejection != null) {
+            configProvider().ads.placements.firstOrNull { it.name == placementName }?.let {
+                AdEventTracker.log("ad_suppressed", it, mapOf("reason" to rejection))
+            }
             safeCallback(onComplete)
             return
         }
@@ -233,7 +299,7 @@ class AppOpenManager(
         }
 
         AdEventTracker.log("ad_show_requested", placement)
-        if (customRenderer.canRender(placement)) {
+        if (placement.adMobUnitOrNull() == null && customRenderer.canRender(placement)) {
             val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
                 armInlineSafetyIfNeeded(placement)
@@ -255,14 +321,14 @@ class AppOpenManager(
         if (ad == null) {
             load(activity, placementName, forceRequest = true)
             if (waitForLoad) {
-                waitForAdAndShow(activity, placementName, guardedComplete)
+                waitForAdAndShow(activity, placementName, expectedSessionId, guardedComplete)
             } else {
                 guardedComplete()
             }
             return
         }
 
-        presentAd(activity, placementName, placement, ad, guardedComplete)
+        presentAd(activity, placementName, placement, ad, expectedSessionId, guardedComplete)
     }
 
     fun clear() {
@@ -296,6 +362,7 @@ class AppOpenManager(
         placementName: String,
         placement: com.itwingtech.itwingsdk.core.AdPlacementConfig,
         ad: AppOpenAd,
+        expectedSessionId: Long,
         onComplete: () -> Unit,
     ) {
         val completion = FullscreenCompletion(onComplete)
@@ -313,6 +380,9 @@ class AppOpenManager(
             object : AppOpenAdEventCallback {
                 override fun onAdShowedFullScreenContent() {
                     frequency.markShown(placement)
+                }
+
+                override fun onAdImpression() {
                     AdEventTracker.log("ad_impression", placement)
                 }
 
@@ -327,7 +397,7 @@ class AppOpenManager(
                 override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
                     AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
                     FullscreenAdState.end(fullscreenOwner)
-                    if (!showCustomFallback(activity, placement, completion::complete)) completion.complete()
+                    if (!showCustomFallback(activity, placement, expectedSessionId, completion::complete)) completion.complete()
                 }
 
                 override fun onAdPaid(adValue: AdValue) {
@@ -345,7 +415,11 @@ class AppOpenManager(
             }
 
         runOnMain {
-            if (!activity.isUsable()) {
+            // A load/wait callback can outlive the screen that requested it.
+            // Recheck process foreground immediately before presentation.
+            val rejection = appOpenRejectionReason(activity, expectedSessionId, ownsFullscreenSlot = true)
+            if (rejection != null) {
+                AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to rejection))
                 FullscreenAdState.end(fullscreenOwner)
                 completion.complete()
                 return@runOnMain
@@ -389,7 +463,7 @@ class AppOpenManager(
         return true
     }
 
-    private fun waitForAdAndShow(activity: Activity, placementName: String, onComplete: () -> Unit) {
+    private fun waitForAdAndShow(activity: Activity, placementName: String, expectedSessionId: Long, onComplete: () -> Unit) {
         val loadingDialog = AdLoadingDialog(activity)
         val app = configProvider().app
         val timeoutMs = (app["loading_ad_timeout_ms"] as? Number)?.toLong() ?: 7000L
@@ -398,7 +472,7 @@ class AppOpenManager(
         loadingDialog.show(lottieUrl)
 
         fun poll() {
-            if (!activity.isUsable()) {
+            if (appOpenRejectionReason(activity, expectedSessionId) != null) {
                 loadingDialog.dismiss()
                 safeCallback(onComplete)
                 return
@@ -423,7 +497,7 @@ class AppOpenManager(
                 if (placement == null) {
                     safeCallback(onComplete)
                 } else {
-                    presentAd(activity, placementName, placement, ad, onComplete)
+                    presentAd(activity, placementName, placement, ad, expectedSessionId, onComplete)
                 }
                 return
             }
@@ -433,7 +507,7 @@ class AppOpenManager(
                 val placement = configProvider().ads.placements.firstOrNull {
                     it.name == placementName && it.enabled && it.format == "app_open"
                 }
-                if (placement == null || !showCustomFallback(activity, placement, onComplete)) safeCallback(onComplete)
+                if (placement == null || !showCustomFallback(activity, placement, expectedSessionId, onComplete)) safeCallback(onComplete)
                 return
             }
 
@@ -443,7 +517,17 @@ class AppOpenManager(
         mainHandler.postDelayed({ poll() }, 150L)
     }
 
-    private fun showCustomFallback(activity: Activity, placement: com.itwingtech.itwingsdk.core.AdPlacementConfig, onComplete: () -> Unit): Boolean {
+    private fun showCustomFallback(
+        activity: Activity,
+        placement: com.itwingtech.itwingsdk.core.AdPlacementConfig,
+        expectedSessionId: Long,
+        onComplete: () -> Unit,
+    ): Boolean {
+        val rejection = appOpenRejectionReason(activity, expectedSessionId)
+        if (rejection != null) {
+            AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to rejection))
+            return false
+        }
         val fallback = configProvider().placementWithCustomFallback(placement) ?: return false
         return customRenderer.show(activity, fallback, onComplete = {
             frequency.markShown(placement)
@@ -465,7 +549,7 @@ class AppOpenManager(
         val placement = configProvider().ads.placements.firstOrNull {
             it.name == placementName && it.enabled && it.format == "app_open"
         } ?: return false
-        return customRenderer.canRender(placement)
+        return placement.adMobUnitOrNull() == null && customRenderer.canRender(placement)
     }
 
     private fun clearExpiredAppOpenAd() {
@@ -556,6 +640,28 @@ class AppOpenManager(
     }
 
     private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed
+
+    private fun isProcessForeground(): Boolean =
+        ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+
+    private fun appOpenRejectionReason(
+        activity: Activity,
+        expectedSessionId: Long,
+        ownsFullscreenSlot: Boolean = false,
+    ): String? {
+        val resumedAndUsable = activity.isUsable() &&
+            foregroundActivity?.get() === activity &&
+            (activity !is androidx.lifecycle.LifecycleOwner || activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        return AppOpenPresentationPolicy.rejectionReason(
+            processForeground = isProcessForeground(),
+            activityResumedAndUsable = resumedAndUsable,
+            foregroundSessionMatches = expectedSessionId == foregroundSessionId,
+            fullscreenConflict = FullscreenAdState.isActive() || FullscreenAdState.wasRecentlyEnded(),
+            firstEverLaunch = firstUseSession,
+            ownsFullscreenSlot = ownsFullscreenSlot,
+        )
+    }
 }
 
 private const val APP_OPEN_MAX_AGE_MS = 4L * 60L * 60L * 1000L
+private const val AUTO_RESUME_SHOW_DELAY_MS = 250L

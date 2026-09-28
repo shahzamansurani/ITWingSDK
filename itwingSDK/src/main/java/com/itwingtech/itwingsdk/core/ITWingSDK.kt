@@ -18,6 +18,7 @@ import androidx.lifecycle.LifecycleOwner
 import com.google.android.libraries.ads.mobile.sdk.MobileAds
 import com.google.android.libraries.ads.mobile.sdk.initialization.InitializationConfig
 import com.itwingtech.itwingsdk.ads.AdManager
+import com.itwingtech.itwingsdk.ads.AdConsentManager
 import com.itwingtech.itwingsdk.analytics.AnalyticsClient
 import com.itwingtech.itwingsdk.analytics.InstallReferrerReporter
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
@@ -68,11 +69,15 @@ import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdAdapter
 import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 
 object ITWingSDK {
+    /** SDK release version reported to the backend and telemetry. */
+    const val VERSION: String = "1.49"
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
     private var repository: ConfigRepository? = null
     /** App-scoped realtime JSON database; requests reuse the SDK's configured signer and transport. */
     val realtime: ITWingRealtime by lazy { ITWingRealtime({ repository }, { applicationContext }) }
+    @Volatile
     private var config = ITWingConfig()
     private val runtime = AppRuntimeManager(
         configProvider = { config },
@@ -1167,6 +1172,19 @@ object ITWingSDK {
 
 
     private fun initializeMobileAds(activity: Activity, onInitialized: () -> Unit = {}) {
+        if (!AdConsentManager.isResolved()) {
+            AdConsentManager.requestConsent(activity) { allowed ->
+                if (allowed) {
+                    initializeMobileAds(activity, onInitialized)
+                } else {
+                    SDKTelemetry.track("mobile_ads_initialize_skipped", mapOf("reason" to "consent_not_granted_or_unavailable"))
+                    mobileAdsInitializationFinished = true
+                    notifyInlineAdsReady(false)
+                    onInitialized()
+                }
+            }
+            return
+        }
         if (mobileAdsInitialized) {
             mobileAdsInitializationFinished = true
             notifyInlineAdsReady(true)
@@ -1375,9 +1393,9 @@ object ITWingSDK {
 
     @JvmStatic
     fun getApiBaseUrl(key: String, defaultValue: String = ""): String {
-        return config.apiKeys[key]?.baseUrl.normalizeBaseUrl()
-            ?: defaultValue.normalizeBaseUrl()
-            ?: defaultValue
+        return runCatching {
+            ApiBaseUrlResolver.resolve(config.apiKeys[key]?.baseUrl, defaultValue)
+        }.getOrElse { defaultValue }
     }
 
     @JvmStatic
@@ -1551,6 +1569,35 @@ object ITWingSDK {
         return defaultValue
     }
 
+    /** True when the configured UMP message requires a privacy-options entry point. */
+    @JvmStatic
+    fun isPrivacyOptionsRequired(): Boolean = AdConsentManager.privacyOptionsRequired()
+
+    /** Presents the UMP privacy choices form from a user-initiated settings action. */
+    @JvmStatic
+    fun showPrivacyOptionsForm(activity: Activity?, onComplete: ((Boolean) -> Unit)? = null) {
+        val host = activity?.takeUnless { it.isFinishing || it.isDestroyed }
+        if (host == null) {
+            onComplete?.invoke(false)
+            return
+        }
+        AdConsentManager.showPrivacyOptions(host) { allowed -> onComplete?.invoke(allowed) }
+    }
+
+    /** Returns only the explicitly configured value for a key, without alias fallback. */
+    internal fun getConfiguredColor(name: String): String? {
+        val key = name.trim()
+        if (key.isEmpty()) return null
+        val colorMaps = listOfNotNull(
+            config.app["colors"] as? Map<*, *>,
+            config.app["sdk_colors"] as? Map<*, *>,
+            config.app["sdkColors"] as? Map<*, *>,
+        )
+        return colorMaps.firstNotNullOfOrNull { colors ->
+            colors[key].asNonBlankString()
+        }
+    }
+
     private fun colorLookupKeys(name: String): List<String> {
         val key = name.trim()
         if (key.isEmpty()) return emptyList()
@@ -1617,18 +1664,18 @@ object ITWingSDK {
     fun isVpnAdBlockingEnabled(): Boolean = remoteBlockAdsWhenVpnActive ?: blockAdsWhenVpnActive
 
     @JvmStatic
-    fun showInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) =
+    fun showInterstitial(activity: Activity?, placement: String, onComplete: () -> Unit = {}) =
         runSdkCall("show_interstitial", mapOf("placement" to placement)) {
             ads.showInterstitial(activity, placement, onComplete)
         }
 
     @JvmStatic
-    fun showInterstitial(activity: Activity, placement: String, onComplete: Runnable) =
+    fun showInterstitial(activity: Activity?, placement: String, onComplete: Runnable) =
         showInterstitial(activity, placement) { onComplete.run() }
 
     @JvmStatic
     fun showRewarded(
-        activity: Activity,
+        activity: Activity?,
         placement: String,
         onReward: () -> Unit,
         onComplete: () -> Unit = {},
@@ -1640,7 +1687,7 @@ object ITWingSDK {
 
     @JvmStatic
     fun showRewardedDirect(
-        activity: Activity,
+        activity: Activity?,
         placement: String,
         onReward: () -> Unit,
         onComplete: () -> Unit = {},
@@ -1651,18 +1698,18 @@ object ITWingSDK {
         }
 
     @JvmStatic
-    fun showRewarded(activity: Activity, placement: String, onComplete: () -> Unit = {}) =
+    fun showRewarded(activity: Activity?, placement: String, onComplete: () -> Unit = {}) =
         runSdkCall("show_rewarded", mapOf("placement" to placement)) {
             ads.showRewarded(activity, placement, onComplete)
         }
 
     @JvmStatic
-    fun showRewarded(activity: Activity, placement: String, onComplete: Runnable) =
+    fun showRewarded(activity: Activity?, placement: String, onComplete: Runnable) =
         showRewarded(activity, placement) { onComplete.run() }
 
     @JvmStatic
     fun showRewardedInterstitial(
-        activity: Activity,
+        activity: Activity?,
         placement: String,
         onReward: () -> Unit = {},
         onComplete: () -> Unit = {}
@@ -1672,7 +1719,7 @@ object ITWingSDK {
         }
 
     @JvmStatic
-    fun showAppOpen(activity: Activity, placement: String, onComplete: () -> Unit = {}) =
+    fun showAppOpen(activity: Activity?, placement: String, onComplete: () -> Unit = {}) =
         runSdkCall("show_app_open", mapOf("placement" to placement)) {
             ads.showAppOpen(activity, placement, onComplete)
         }
@@ -2408,6 +2455,7 @@ object ITWingSDK {
                 override fun onActivityPaused(
                     activity: Activity
                 ) {
+                    ads.onActivityPaused(activity)
                 }
 
                 override fun onActivityStopped(

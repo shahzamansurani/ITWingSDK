@@ -1,0 +1,22 @@
+# Changelog
+
+## v1.49 — release candidate
+
+- Normalize native and banner ad presentation from the existing admin `app.colors` contract; honor dedicated CTA, text, background, and stroke colors before generic theme fallbacks.
+- Keep custom native and banner creatives aligned with admin-controlled styling, and use existing `media_shimmer_base_color` / `media_shimmer_highlight_color` keys for ad shimmer before safe generic fallbacks.
+- Apply the same normalized admin color resolution to fullscreen custom-ad text, badge, CTA, and background roles.
+- Make malformed color values fall back safely rather than failing during view styling.
+- Keep the native loading shimmer visible during configured real-to-custom fallback; terminal failures still clear loading UI.
+- Carry forward the Android v1.48-compatible realtime APIs and centralize the release version used in SDK request headers and telemetry.
+- Harden banner registration, native-ad view inflation, and interstitial display against incompatible ad view/type casts so recoverable SDK errors do not crash the host UI.
+- Treat null or destroyed Activity inputs at Android ad-entry points as recoverable: show callbacks complete deterministically, while preload calls safely no-op and inline placements hide.
+- Normalize native/banner card background and radius through the shared presentation layer. New card defaults remain transparent and zero-radius; explicit v1.48 transparency opt-ins retain their legacy configured background.
+- Gate Android Google ad requests on a single SDK-owned UMP consent flow, expose privacy-options hooks, and advance the Android Google Mobile Ads Next-Gen dependency to 1.4.0 with UMP 4.0.0.
+- Guard App Open presentation with process foreground, resumed-Activity, foreground-session, first-run, cooldown, freshness, and shared fullscreen-ad checks; stale delayed requests are rejected before presentation.
+- Add iOS source parity for legacy card-color compatibility and extend the existing macOS GitHub Actions workflow to run the iOS simulator test suite.
+- Keep VPN server records visible regardless of reported health; health remains telemetry unless the host app applies an explicit filter.
+- Retain existing public APIs and minimum Android version. Existing v1.48 integrations need no code changes.
+
+## Validation boundary
+
+This is a local candidate only. It has not been published to GitHub/JitPack or deployed to production. Android unit tests (17), SDK `lintDebug`, SDK release AAR assembly, unsigned sample release APK assembly, and ten connected instrumentation tests pass on the physical V2061 device. Instrumentation covers rendered real-native small/large styling, small/large custom-native colors, banner colors, shimmer colors, real/custom template dimensions, null/destroyed Activity entry points, template inflation, and shimmer startup. This does not substitute for real-ad-network/no-fill lifecycle testing, complete App Open lifecycle device scenarios, Google Native Validator QA, or the full backend preset screenshot matrix. iOS source/tests were statically reviewed only because Swift/Xcode are unavailable locally; the existing macOS workflow now includes simulator tests but has not been run from this local-only task. No iOS build/runtime certification is claimed.

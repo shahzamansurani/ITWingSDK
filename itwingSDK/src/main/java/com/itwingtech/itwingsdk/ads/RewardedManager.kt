@@ -56,12 +56,10 @@ class RewardedManager(
             it.name == placementName && it.enabled && it.format == "rewarded"
         } ?: return
 
-        if (customRenderer.canRender(placement)) {
-            customRenderer.preload(activity, placement)
+        val unit = placement.adMobUnitOrNull() ?: run {
+            if (customRenderer.canRender(placement)) customRenderer.preload(activity, placement)
             return
         }
-
-        val unit = placement.units.firstOrNull { it.network == "admob" } ?: return
         if (!canStartLoad(placementName, placement, forceRequest)) return
         val request = AdRequest.Builder(unit.adUnitId).build()
         AdEventTracker.log("ad_load_requested", placement)
@@ -114,7 +112,7 @@ class RewardedManager(
             return
         }
 
-        if (!customRenderer.canRender(placement) && placement.units.none { it.network.equals("admob", true) && it.adUnitId.isNotBlank() }) {
+        if (placement.adMobUnitOrNull() == null && !customRenderer.canRender(placement)) {
             AdFailureDialog.show(activity, config.adPrimaryColor(), "No valid AdMob unit is configured for this rewarded placement.")
             safeCallback(onUnavailableOrSkipped)
             return
@@ -136,7 +134,7 @@ class RewardedManager(
 
         val showAd = showAd@{
             AdEventTracker.log("ad_show_requested", placement)
-            if (customRenderer.canRender(placement)) {
+            if (placement.adMobUnitOrNull() == null && customRenderer.canRender(placement)) {
                 val customRewardEarned = AtomicBoolean(false)
                 val shown = customRenderer.show(activity, placement, reward = {
                     AdEventTracker.log("ad_reward_earned", placement)
@@ -211,6 +209,9 @@ class RewardedManager(
         ad.adEventCallback = object : RewardedAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
+            }
+
+            override fun onAdImpression() {
                 AdEventTracker.log("ad_impression", placement)
             }
 

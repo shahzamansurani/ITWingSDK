@@ -7,6 +7,11 @@ import com.itwingtech.itwingsdk.core.ITWingConfig
 /** Resolves a campaign for an AdMob failure without changing the configured delivery mode. */
 internal fun ITWingConfig.customFallbackFor(placement: AdPlacementConfig): CustomAdConfig? {
     val requested = placement.format.lowercase()
+    placement.customAd?.takeIf { ad ->
+        !ad.mediaUrl.isNullOrBlank() || !ad.videoUrl.isNullOrBlank() ||
+            !ad.imageUrl.isNullOrBlank() || !ad.html.isNullOrBlank()
+    }?.let { return it }
+
     val compatible = ads.customAds.filter { ad ->
         val hasCreative = !ad.mediaUrl.isNullOrBlank() || !ad.videoUrl.isNullOrBlank() ||
             !ad.imageUrl.isNullOrBlank() || !ad.html.isNullOrBlank()
@@ -28,4 +33,7 @@ internal fun ITWingConfig.customFallbackFor(placement: AdPlacementConfig): Custo
 }
 
 internal fun ITWingConfig.placementWithCustomFallback(placement: AdPlacementConfig): AdPlacementConfig? =
-    customFallbackFor(placement)?.let { placement.copy(customAd = it) }
+    customFallbackFor(placement)?.let { placement.withCustomFallback(it) }
+
+internal fun AdPlacementConfig.withCustomFallback(ad: CustomAdConfig): AdPlacementConfig =
+    copy(customAd = ad, units = emptyList())

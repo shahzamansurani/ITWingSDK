@@ -22,7 +22,7 @@
             android:background="@drawable/itwing_purchase_card_bg"
             android:contentDescription="@android:string/cancel"
             android:padding="9dp"
-            android:tint="#F8FAFC"
+            app:tint="#F8FAFC"
             android:src="@drawable/itwing_ic_close" />
 
         <FrameLayout

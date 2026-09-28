@@ -24,6 +24,7 @@ import androidx.lifecycle.LifecycleOwner
 import com.android.billingclient.api.BillingClient
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
+import com.itwingtech.itwingsdk.ads.AdTheme
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.core.SubscriptionPlanInfo
@@ -91,15 +92,10 @@ class ITWingPremiumView @JvmOverloads constructor(
             showRestore = values.getBoolean(R.styleable.ITWingPremiumView_ITWingPremiumShowRestore, true)
         }
 
-        radius = 0f
-        cardElevation = 0f
-        maxCardElevation = 0f
-        useCompatPadding = false
-        preventCornerOverlap = false
-        setCardBackgroundColor(Color.TRANSPARENT)
-        strokeWidth = 0
-        setStrokeColor(Color.TRANSPARENT)
         setContentPadding(0, 0, 0, 0)
+        // This view is the single premium card surface. Reuse the same
+        // theme-aware defaults and native-card appearance overrides as ads.
+        AdTheme.applyCard(this, "native", clipContent = false)
 
         purchaseButton.setOnClickListener { launchPurchase() }
         restoreButton.setOnClickListener { openSubscriptionManagement() }
@@ -319,6 +315,20 @@ class ITWingPremiumView @JvmOverloads constructor(
         val outlineStrokeColor = sdkColor("premium_outline_button_stroke_color", fallback = ColorUtils.setAlphaComponent(primary, 110))
         val progressColor = sdkColor("premium_progress_color", fallback = primary)
         icon.backgroundTintList = ColorStateList.valueOf(primary)
+        val surface = getCardBackgroundColor().defaultColor
+        val onSurface = if (ColorUtils.calculateLuminance(surface) > 0.55) {
+            Color.rgb(17, 24, 39)
+        } else {
+            Color.WHITE
+        }
+        val secondaryOnSurface = if (ColorUtils.calculateLuminance(surface) > 0.55) {
+            Color.rgb(71, 85, 105)
+        } else {
+            Color.rgb(203, 213, 225)
+        }
+        title.setTextColor(onSurface)
+        description.setTextColor(secondaryOnSurface)
+        message.setTextColor(secondaryOnSurface)
         badge.backgroundTintList = ColorStateList.valueOf(badgeColor)
         badge.setTextColor(badgeTextColor)
         purchaseButton.backgroundTintList = ColorStateList.valueOf(buttonColor)

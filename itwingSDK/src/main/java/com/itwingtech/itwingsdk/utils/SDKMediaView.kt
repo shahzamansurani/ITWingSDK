@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.AttributeSet
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.util.Log
 import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.media3.common.MediaItem
@@ -165,8 +166,21 @@ class SDKMediaView @JvmOverloads constructor(
                 .also { exoPlayer ->
                     exoPlayer.addListener(object : Player.Listener {
                         override fun onPlaybackStateChanged(playbackState: Int) {
+                            // Released/replaced players can still have queued callbacks.
+                            if (player !== exoPlayer) return
+                            if (playbackState == Player.STATE_READY && playRequested) {
+                                // A custom ad may be attached after prepare() completed. Re-check
+                                // visibility here so readiness and view attachment cannot race.
+                                if (canPlayNow()) exoPlayer.play()
+                            }
                             if (playbackState == Player.STATE_ENDED && completionSent.compareAndSet(false, true)) {
                                 onCompleted?.invoke()
+                            }
+                        }
+
+                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                            if (player === exoPlayer) {
+                                Log.w(TAG, "Custom media playback failed (${error.errorCodeName})")
                             }
                         }
                     })
@@ -230,8 +244,9 @@ class SDKMediaView @JvmOverloads constructor(
 
             } else {
 
-                player?.playWhenReady =
-                    true
+                // Keep the request pending without starting playback while detached
+                // or hidden. Attachment/visibility callbacks will resume it safely.
+                player?.playWhenReady = false
             }
         }
     }
@@ -637,7 +652,10 @@ class SDKMediaView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         runCatching {
-            player?.pause()
+            player?.apply {
+                playWhenReady = false
+                pause()
+            }
         }
         super.onDetachedFromWindow()
     }
@@ -648,7 +666,10 @@ class SDKMediaView @JvmOverloads constructor(
             resumeWhenVisible()
         } else {
             runCatching {
-                player?.pause()
+                player?.apply {
+                    playWhenReady = false
+                    pause()
+                }
             }
         }
     }
@@ -659,7 +680,10 @@ class SDKMediaView @JvmOverloads constructor(
             resumeWhenVisible()
         } else {
             runCatching {
-                player?.pause()
+                player?.apply {
+                    playWhenReady = false
+                    pause()
+                }
             }
         }
     }
@@ -675,7 +699,7 @@ class SDKMediaView @JvmOverloads constructor(
                 if (canPlayNow()) {
                     player?.play()
                 } else {
-                    player?.playWhenReady = true
+                    player?.playWhenReady = false
                 }
             }
         }
@@ -685,4 +709,8 @@ class SDKMediaView @JvmOverloads constructor(
         isAttachedToWindow &&
                 windowVisibility == VISIBLE &&
                 isShown
+
+    private companion object {
+        const val TAG = "ITWingSDKMedia"
+    }
 }

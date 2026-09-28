@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.itwingtech.itwingsdk.data.ConfigRepository
+import com.itwingtech.itwingsdk.core.ITWingSDK
 import org.json.JSONObject
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
@@ -118,7 +119,7 @@ internal object SDKTelemetry {
         return mapOf(
             "package_name" to context.packageName,
             "app_version" to versionName,
-            "sdk_version" to "1.0.0",
+            "sdk_version" to ITWingSDK.VERSION,
             "platform" to "android",
         )
     }

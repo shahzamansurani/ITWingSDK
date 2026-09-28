@@ -54,14 +54,10 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                     it.format == "interstitial"
         } ?: return
 
-        if (customRenderer.canRender(placement)) {
-            customRenderer.preload(activity, placement)
+        val unit = placement.adMobUnitOrNull() ?: run {
+            if (customRenderer.canRender(placement)) customRenderer.preload(activity, placement)
             return
         }
-
-        val unit = placement.units.firstOrNull {
-            it.network == "admob"
-        } ?: return
 
         if (loadedAds.containsKey(placementName)) {
             return
@@ -75,7 +71,22 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         startPreloader(placementName, unit.adUnitId, request)
     }
 
-    fun show(activity: Activity, placementName: String, onComplete: () -> Unit = {}, ) {
+    fun show(activity: Activity, placementName: String, onComplete: () -> Unit = {}) {
+        AdClassCastGuard.run(action = {
+            showInternal(activity, placementName, onComplete)
+        }, onMismatch = {
+            // Ad SDK type mismatches are recoverable; always release the in-flight slot.
+            runCatching {
+                configProvider().ads.placements.firstOrNull { it.name == placementName }?.let { placement ->
+                    AdEventTracker.log("ad_show_failed", placement, mapOf("reason" to "incompatible_ad_type"))
+                }
+            }
+            activeShowRequests.remove(placementName)
+            safeCallback(onComplete)
+        })
+    }
+
+    private fun showInternal(activity: Activity, placementName: String, onComplete: () -> Unit) {
         if (!activity.isUsable()) {
             safeCallback(onComplete)
             return
@@ -118,7 +129,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         }
 
         AdEventTracker.log("ad_show_requested", placement)
-        if (customRenderer.canRender(placement)) {
+        if (placement.adMobUnitOrNull() == null && customRenderer.canRender(placement)) {
             val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
                 armInlineSafetyIfNeeded(placement)
@@ -167,7 +178,6 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         ad.adEventCallback = object : InterstitialAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
-                AdEventTracker.log("ad_impression", placement)
             }
 
             override fun onAdDismissedFullScreenContent() {
@@ -194,7 +204,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             }
 
             override fun onAdImpression() {
-                AdEventTracker.log("ad_impression_recorded", placement)
+                AdEventTracker.log("ad_impression", placement)
             }
 
             override fun onAdPaid(value: AdValue) {

@@ -12,6 +12,7 @@ import com.itwingtech.itwingsdk.core.FirebaseConfig
 import com.itwingtech.itwingsdk.core.InAppUpdateConfig
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.core.ITWingOptions
+import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.core.MediaLibraryConfig
 import com.itwingtech.itwingsdk.core.MediaPlacementConfig
 import com.itwingtech.itwingsdk.core.NotificationConfig
@@ -176,7 +177,7 @@ class ConfigRepository(
             .header("X-ITW-Signature", signature)
             .header("X-ITW-Platform", "android")
             .header("X-ITW-App-Identifier", context.packageName)
-            .header("X-ITW-SDK-Version", "1.0.0")
+            .header("X-ITW-SDK-Version", ITWingSDK.VERSION)
             .build()
 
         chain.proceed(signed)
@@ -860,7 +861,7 @@ class ConfigRepository(
             .header("X-ITW-Signature", signature)
             .header("X-ITW-Platform", "android")
             .header("X-ITW-App-Identifier", context.packageName)
-            .header("X-ITW-SDK-Version", "1.0.0")
+            .header("X-ITW-SDK-Version", ITWingSDK.VERSION)
         extraHeaders.forEach { (name, value) -> builder.header(name, value) }
 
         val request = if (normalizedMethod == "GET") {

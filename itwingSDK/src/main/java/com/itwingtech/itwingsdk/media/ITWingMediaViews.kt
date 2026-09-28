@@ -156,18 +156,23 @@ open class ITWingMediaItemsView @JvmOverloads constructor(
             val placement = resolvePlacement()
             if (!applyPlacement(placement)) return@waitForReady
             val selected = placement?.selectedItemIds.orEmpty()
+            // The SDK endpoint supports up to 500 records. VPN server health is
+            // telemetry, not an implicit visibility rule, so don't cap the UI
+            // to a smaller generic media placement limit.
+            val requestedLimit = if (mediaKind == "vpn_servers") 500 else (placement?.limit ?: limit)
             ITWingSDK.fetchMediaLibrary(
                 kind = mediaKind,
                 categoryId = categoryId ?: placement?.categoryId,
                 categorySlug = categorySlug,
-                limit = placement?.limit ?: limit,
+                limit = requestedLimit,
                 trendingLimit = placement?.limit ?: limit,
                 sort = placement?.sort,
                 selectedItemIds = selected,
                 callback = object : ITWingMediaCallback() {
                     override fun onLoaded(response: ITWingMediaResponse) {
                         val source = if (showTrending || placement?.type == "top_trends") response.trending else response.items
-                        val items = source.filter { shouldDisplayItem(it) && itemFilter?.invoke(it) != false }.take(placement?.limit ?: limit)
+                        val filteredItems = source.filter { shouldDisplayItem(it) && itemFilter?.invoke(it) != false }
+                        val items = if (mediaKind == "vpn_servers") filteredItems else filteredItems.take(requestedLimit)
                         submit(items)
                         if (offlineAtStart && items.isNotEmpty()) showCachedContentNotice()
                     }
@@ -803,7 +808,6 @@ class ITWingVpnServersView @JvmOverloads constructor(context: Context, attrs: At
     }
 
     override fun shouldDisplayItem(item: ITWingMediaItem): Boolean {
-        if (!isVpnServerWorking(item)) return false
         if (!tabsEnabled) return true
         val publicServer = item.isPublicVpnServer()
         return if (selectedTab == ServerTierTab.FREE) {
@@ -878,19 +882,6 @@ class ITWingVpnServersView @JvmOverloads constructor(context: Context, attrs: At
                 1,
             )
         }
-    }
-
-    private fun isVpnServerWorking(item: ITWingMediaItem): Boolean {
-        val serverStatus = item.metadata["server_status"]?.toString()?.trim()?.lowercase()
-        val pingStatus = item.metadata["last_ping_status"]?.toString()?.trim()?.lowercase()
-        if (!serverStatus.isNullOrBlank() && serverStatus != "online") return false
-        if (!pingStatus.isNullOrBlank() && pingStatus != "online") return false
-        if (item.isPublicVpnServer()) {
-            val stability = item.metadata["public_stability_status"]?.toString()?.trim()?.lowercase()
-            val mode = item.metadata["last_ping_mode"]?.toString()?.trim()?.lowercase()
-            if (stability != "stable" || mode !in setOf("tcp_socket", "client_report")) return false
-        }
-        return true
     }
 
     private fun ITWingMediaItem.isPublicVpnServer(): Boolean {

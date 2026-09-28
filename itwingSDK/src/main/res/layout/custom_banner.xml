@@ -1,11 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    app:cardBackgroundColor="@android:color/transparent"
+    app:cardCornerRadius="0dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="0dp"
+    app:useCompatPadding="false"
+    app:cardPreventCornerOverlap="false"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/itwing_purchase_dialog_bg"
+    android:theme="@style/ITWingAdCardTheme">
+
+<LinearLayout
+    android:id="@+id/ad_content_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:padding="@dimen/_7sdp">
+    android:padding="@dimen/_1sdp">
 
     <!-- MEDIA -->
 
@@ -41,7 +53,7 @@
                 android:layout_marginStart="@dimen/_2sdp"
                 android:maxLines="1"
                 android:text="IT Wing Technologies"
-                android:textColor="#F8FAFC"
+                android:textColor="#000000"
                 android:textSize="@dimen/_8ssp"
                 android:textStyle="bold" />
 
@@ -56,7 +68,7 @@
             android:layout_marginTop="@dimen/_1sdp"
             android:maxLines="1"
             android:text="this is headline of the ad"
-            android:textColor="#F8FAFC"
+            android:textColor="#000000"
             android:textSize="@dimen/_7ssp"
             android:textStyle="bold" />
 
@@ -67,7 +79,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:maxLines="2"
-            android:textColor="#CBD5E1"
+            android:textColor="#000000"
             android:textSize="@dimen/_7ssp" />
 
         <!-- BOTTOM -->
@@ -134,9 +146,11 @@
             android:id="@+id/ad_app_icon"
             android:layout_width="match_parent"
             android:layout_height="@dimen/_30sdp"
+            android:layout_marginTop="@dimen/_1sdp"
             android:layout_marginEnd="@dimen/_2sdp"
             android:scaleType="fitCenter" />
     </LinearLayout>
 
 
 </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

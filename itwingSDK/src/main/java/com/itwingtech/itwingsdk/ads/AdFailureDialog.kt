@@ -18,6 +18,7 @@ import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.ui.GlassDialogWindow
 import com.itwingtech.itwingsdk.utils.safeCallback
+import androidx.core.graphics.toColorInt
 
 internal object AdFailureDialog {
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -113,6 +114,6 @@ internal fun ITWingConfig.adPrimaryColor(): Int {
         app["primaryColor"],
     ).firstNotNullOfOrNull { it?.toString()?.takeIf(String::isNotBlank) }
 
-    return runCatching { Color.parseColor(value ?: "#2563EB") }
+    return runCatching { (value ?: "#2563EB").toColorInt() }
         .getOrDefault(Color.rgb(37, 99, 235))
 }

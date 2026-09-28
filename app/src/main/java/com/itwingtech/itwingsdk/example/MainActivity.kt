@@ -1,6 +1,7 @@
 package com.itwingtech.itwingsdk.example
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -15,6 +16,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
+        // A contrasting sample-only page surface makes the SDK's always-on ad
+        // cards easy to see without overriding their SDK/admin-controlled style.
+        binding.root.setBackgroundColor(Color.rgb(243, 244, 246))
         bindSdkExamples()
         renderSdkState()
 
@@ -31,7 +35,6 @@ class MainActivity : AppCompatActivity() {
             }
         })
     }
-
 
     private fun bindSdkExamples() {
         binding.refreshConfig.setOnClickListener {

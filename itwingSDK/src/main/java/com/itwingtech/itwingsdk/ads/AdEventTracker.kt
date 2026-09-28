@@ -6,8 +6,8 @@ import com.itwingtech.itwingsdk.core.AdPlacementConfig
 internal object AdEventTracker {
     fun log(event: String, placement: AdPlacementConfig, extra: Map<String, Any?> = emptyMap()) {
         val network = when {
+            placement.adMobUnitOrNull() != null -> "admob"
             placement.customAd != null -> "custom"
-            placement.units.any { it.network == "admob" } -> "admob"
             else -> "unknown"
         }
 
