@@ -35,9 +35,9 @@ internal object AdTheme {
         val formatBackgroundKey = if (native) "native_card_background_color" else "banner_card_background_color"
         val radiusKeys = if (native) listOf("native_card_corner_radius", "ad_card_corner_radius") else listOf("banner_card_corner_radius", "ad_card_corner_radius")
         val fallbackBackgroundKeys = if (native) {
-            listOf("native_background_color", "banner_background_color", "ad_background_color", "surface_color", "background_color")
+            listOf("native_background_color", "banner_background_color", "ad_background_color", "surface_color", "surface", "background_color", "background")
         } else {
-            listOf("banner_background_color", "ad_background_color", "surface_color", "background_color")
+            listOf("banner_background_color", "ad_background_color", "surface_color", "surface", "background_color", "background")
         }
         val configuredCardBackground = sequence {
             yield(metadata?.get(formatBackgroundKey) as? String)
@@ -430,9 +430,9 @@ internal object AdTheme {
         appColorProvider: (String) -> String? = ITWingSDK::getConfiguredColor,
     ): Int = color(
         fallback = Color.TRANSPARENT,
-        appKeys = listOf("native_background_color", "banner_background_color", "ad_background_color", "surface_color", "background_color"),
+        appKeys = listOf("native_background_color", "banner_background_color", "ad_background_color", "surface_color", "surface", "background_color", "background"),
         metadata = metadata,
-        metadataKeys = listOf("native_background_color", "banner_background_color", "ad_background_color", "background_color"),
+        metadataKeys = listOf("native_background_color", "banner_background_color", "ad_background_color", "surface_color", "surface", "background_color", "background"),
         appColorProvider = appColorProvider,
     )
 
@@ -451,8 +451,8 @@ internal object AdTheme {
         appColorProvider: (String) -> String? = ITWingSDK::getConfiguredColor,
     ): Int? = firstConfiguredColor(
         metadata,
-        listOf("banner_background_color", "background_color"),
-        listOf("banner_background_color", "ad_background_color", "surface_color", "background_color"),
+        listOf("banner_background_color", "surface_color", "surface", "background_color", "background"),
+        listOf("banner_background_color", "ad_background_color", "surface_color", "surface", "background_color", "background"),
         appColorProvider,
     )
 
@@ -491,7 +491,7 @@ internal object AdTheme {
 
     fun nativeText(metadata: Map<String, Any?>? = null, fallback: Int, appColorProvider: (String) -> String? = ITWingSDK::getConfiguredColor): Int = color(
         fallback = fallback,
-        appKeys = listOf("native_text_color", "native_headline_text_color", "headline_text_color", "banner_text_color", "text_color"),
+        appKeys = listOf("native_text_color", "native_headline_text_color", "headline_text_color", "banner_text_color", "text_color", "text"),
         metadata = metadata,
         metadataKeys = listOf("native_headline_text_color", "native_text_color", "headline_text_color", "banner_text_color", "text_color"),
         appColorProvider = appColorProvider,
@@ -499,7 +499,7 @@ internal object AdTheme {
 
     fun nativeBody(metadata: Map<String, Any?>? = null, fallback: Int, appColorProvider: (String) -> String? = ITWingSDK::getConfiguredColor): Int = color(
         fallback = fallback,
-        appKeys = listOf("native_body_text_color", "native_secondary_text_color", "body_text_color", "secondary_text_color", "native_text_color"),
+        appKeys = listOf("native_body_text_color", "native_secondary_text_color", "body_text_color", "secondary_text_color", "native_text_color", "secondary", "text"),
         metadata = metadata,
         metadataKeys = listOf("native_body_text_color", "native_secondary_text_color", "body_text_color", "secondary_text_color"),
         appColorProvider = appColorProvider,
@@ -507,7 +507,7 @@ internal object AdTheme {
 
     fun nativeMeta(metadata: Map<String, Any?>? = null, fallback: Int, appColorProvider: (String) -> String? = ITWingSDK::getConfiguredColor): Int = color(
         fallback = fallback,
-        appKeys = listOf("native_meta_text_color", "native_secondary_text_color", "meta_text_color", "secondary_text_color", "native_text_color"),
+        appKeys = listOf("native_meta_text_color", "native_secondary_text_color", "meta_text_color", "secondary_text_color", "native_text_color", "secondary", "text"),
         metadata = metadata,
         metadataKeys = listOf("native_meta_text_color", "native_secondary_text_color", "meta_text_color", "secondary_text_color"),
         appColorProvider = appColorProvider,
@@ -515,7 +515,7 @@ internal object AdTheme {
 
     fun bannerText(metadata: Map<String, Any?>? = null, fallback: Int, appColorProvider: (String) -> String? = ITWingSDK::getConfiguredColor): Int = color(
         fallback = fallback,
-        appKeys = listOf("banner_text_color", "native_text_color", "text_color"),
+        appKeys = listOf("banner_text_color", "native_text_color", "text_color", "text"),
         metadata = metadata,
         metadataKeys = listOf("banner_text_color", "text_color"),
         appColorProvider = appColorProvider,
@@ -527,7 +527,7 @@ internal object AdTheme {
         appColorProvider: (String) -> String? = ITWingSDK::getConfiguredColor,
     ): Int = color(
         fallback = fallback,
-        appKeys = listOf("native_secondary_text_color", "native_meta_text_color", "banner_text_color", "secondary_text_color", "text_color"),
+        appKeys = listOf("native_secondary_text_color", "native_meta_text_color", "banner_text_color", "secondary_text_color", "text_color", "secondary", "text"),
         metadata = metadata,
         metadataKeys = listOf("native_secondary_text_color", "native_meta_text_color", "banner_text_color", "secondary_text_color", "text_color"),
         appColorProvider = appColorProvider,

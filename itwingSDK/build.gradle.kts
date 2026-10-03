@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 val sdkPublicationGroup = providers.gradleProperty("group")
     .orElse("com.github.shahzamansurani")
 val sdkPublicationVersion = providers.gradleProperty("version")
-    .orElse("v1.51")
+    .orElse("v1.52")
 
 plugins {
     alias(libs.plugins.android.library)

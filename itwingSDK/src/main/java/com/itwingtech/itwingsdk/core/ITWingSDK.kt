@@ -70,7 +70,7 @@ import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 
 object ITWingSDK {
     /** SDK release version reported to the backend and telemetry. */
-    const val VERSION: String = "1.51"
+    const val VERSION: String = "1.52"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -89,6 +89,16 @@ object ITWingSDK {
 
     @Volatile
     private var mobileAdsInitializationFinished = false
+
+    @Volatile
+    private var mobileAdsRequestsAllowed = false
+
+    @Volatile
+    private var subscriptionStartupResolved = false
+
+    private val mobileAdsInitializationLock = Any()
+    private var mobileAdsInitializationInFlight = false
+    private val mobileAdsInitializationCallbacks = mutableListOf<() -> Unit>()
 
     @Volatile
     private var startupPreloadDone = false
@@ -858,6 +868,8 @@ object ITWingSDK {
             config = repository?.loadCachedConfig() ?: ITWingConfig()
             syncRemoteVpnAdBlocking()
             if (config.configVersion > 0) {
+                configureSubscriptionStartupGate(config)
+                initializeMobileAds(activity)
                 if (autoApplyResponsiveLayout) {
                     HostLayoutController.apply(
                         activity = activity,
@@ -892,6 +904,7 @@ object ITWingSDK {
                 subscriptions.connect(activity) {
                     notifyListeners { it.onBillingReady() }
                     subscriptions.restorePurchases {
+                        resolveSubscriptionStartupGate()
                         initializeMobileAds(activity) {
                             ads.startAutomaticAppOpen(activity)
                         }
@@ -904,6 +917,11 @@ object ITWingSDK {
              */
             runCatching { repository!!.bootstrap() }.onSuccess { remote ->
                 config = remote
+                configureSubscriptionStartupGate(remote)
+                // Start consent and Google Mobile Ads initialization as soon as the
+                // authoritative config is available. Billing restore still gates
+                // inline requests when an ad-removing product is configured.
+                initializeMobileAds(activity)
                 syncRemoteVpnAdBlocking()
                 if (autoApplyResponsiveLayout) {
                     getActiveActivity()?.let { active ->
@@ -946,6 +964,7 @@ object ITWingSDK {
                 subscriptions.connect(activity) {
                     notifyListeners { it.onBillingReady() }
                     subscriptions.restorePurchases {
+                        resolveSubscriptionStartupGate()
                         initializeMobileAds(activity) {
                             preloadAdsIfNeeded(activity)
                             ads.startAutomaticAppOpen(activity)
@@ -1172,50 +1191,80 @@ object ITWingSDK {
 
 
     private fun initializeMobileAds(activity: Activity, onInitialized: () -> Unit = {}) {
+        val shouldStart = synchronized(mobileAdsInitializationLock) {
+            if (mobileAdsInitializationFinished) {
+                false
+            } else {
+                mobileAdsInitializationCallbacks.add(onInitialized)
+                if (mobileAdsInitializationInFlight) false else {
+                    mobileAdsInitializationInFlight = true
+                    true
+                }
+            }
+        }
+        if (!shouldStart) {
+            if (mobileAdsInitializationFinished) onInitialized()
+            return
+        }
+
         if (!AdConsentManager.isResolved()) {
             AdConsentManager.requestConsent(activity) { allowed ->
-                if (allowed) {
-                    initializeMobileAds(activity, onInitialized)
-                } else {
+                if (allowed) beginMobileAdsInitialization(activity)
+                else {
                     SDKTelemetry.track("mobile_ads_initialize_skipped", mapOf("reason" to "consent_not_granted_or_unavailable"))
-                    mobileAdsInitializationFinished = true
-                    notifyInlineAdsReady(false)
-                    onInitialized()
+                    finishMobileAdsInitialization(allowed = false)
                 }
             }
             return
         }
+        beginMobileAdsInitialization(activity)
+    }
+
+    private fun beginMobileAdsInitialization(activity: Activity) {
         if (mobileAdsInitialized) {
-            mobileAdsInitializationFinished = true
-            notifyInlineAdsReady(true)
-            onInitialized()
+            finishMobileAdsInitialization(allowed = true)
             return
         }
         val appId = config.ads.admobAppId?.takeIf { it.isNotBlank() } ?: run {
-            SDKTelemetry.track(
-                "mobile_ads_initialize_skipped",
-                mapOf("reason" to "missing_admob_app_id")
-            )
-            mobileAdsInitializationFinished = true
-            notifyInlineAdsReady(true)
-            onInitialized()
+            SDKTelemetry.track("mobile_ads_initialize_skipped", mapOf("reason" to "missing_admob_app_id"))
+            finishMobileAdsInitialization(allowed = true)
             return
         }
         CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
             runCatching {
-                MobileAds.initialize(activity, InitializationConfig.Builder(appId).build()) {
+                MobileAds.initialize(activity.applicationContext, InitializationConfig.Builder(appId).build()) {
                     mobileAdsInitialized = true
-                    mobileAdsInitializationFinished = true
-                    notifyInlineAdsReady(true)
-                    onInitialized()
+                    finishMobileAdsInitialization(allowed = true)
                 }
             }.onFailure {
                 SDKTelemetry.recordNonFatal(it, mapOf("operation" to "mobile_ads_initialize"))
-                mobileAdsInitializationFinished = true
-                notifyInlineAdsReady(false)
-                onInitialized()
+                finishMobileAdsInitialization(allowed = false)
             }
         }
+    }
+
+    private fun finishMobileAdsInitialization(allowed: Boolean) {
+        val callbacks = synchronized(mobileAdsInitializationLock) {
+            mobileAdsInitializationFinished = true
+            mobileAdsRequestsAllowed = allowed
+            mobileAdsInitializationInFlight = false
+            mobileAdsInitializationCallbacks.toList().also { mobileAdsInitializationCallbacks.clear() }
+        }
+        if (subscriptionStartupResolved) notifyInlineAdsReady(allowed)
+        callbacks.forEach { callback -> runCatching(callback) }
+    }
+
+    private fun configureSubscriptionStartupGate(config: ITWingConfig) {
+        subscriptionStartupResolved = config.subscriptions.products.none { product ->
+            val store = product.store.trim().lowercase()
+            product.removesAds && product.productId.isNotBlank() &&
+                (store.isBlank() || store in setOf("google_play", "google-play", "google play", "play", "play_store", "google"))
+        }
+    }
+
+    private fun resolveSubscriptionStartupGate() {
+        subscriptionStartupResolved = true
+        if (mobileAdsInitializationFinished) notifyInlineAdsReady(mobileAdsRequestsAllowed)
     }
 
     @JvmStatic
@@ -1255,7 +1304,7 @@ object ITWingSDK {
     }
 
     internal fun areInlineAdsReady(): Boolean {
-        return config.configVersion > 0 &&
+        return config.configVersion > 0 && subscriptionStartupResolved &&
             (
                 mobileAdsInitialized ||
                     mobileAdsInitializationFinished ||
@@ -1604,11 +1653,11 @@ object ITWingSDK {
         val aliases = when (key) {
             "primary" -> listOf("primary", "primary_color", "ad_primary_color")
             "primary_color" -> listOf("primary_color", "primary", "ad_primary_color")
-            "native_text_color" -> listOf("native_text_color", "native_headline_text_color", "headline_text_color", "banner_text_color", "text_color")
-            "native_headline_text_color", "headline_text_color" -> listOf(key, "native_text_color", "banner_text_color", "text_color")
-            "native_secondary_text_color" -> listOf("native_secondary_text_color", "native_body_text_color", "native_meta_text_color", "banner_secondary_text_color", "secondary_text_color")
-            "native_body_text_color", "body_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "native_text_color")
-            "native_meta_text_color", "meta_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "native_text_color")
+            "native_text_color" -> listOf("native_text_color", "native_headline_text_color", "headline_text_color", "banner_text_color", "text_color", "text")
+            "native_headline_text_color", "headline_text_color" -> listOf(key, "native_text_color", "banner_text_color", "text_color", "text")
+            "native_secondary_text_color" -> listOf("native_secondary_text_color", "native_body_text_color", "native_meta_text_color", "banner_secondary_text_color", "secondary_text_color", "secondary", "text")
+            "native_body_text_color", "body_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "secondary", "native_text_color", "text")
+            "native_meta_text_color", "meta_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "secondary", "native_text_color", "text")
             "native_cta_text_color" -> listOf("native_cta_text_color", "banner_cta_text_color", "cta_text_color")
             "banner_cta_text_color" -> listOf("banner_cta_text_color", "native_cta_text_color", "cta_text_color")
             "native_cta_color", "native_cta_background_color" -> listOf(key, "banner_cta_color", "banner_cta_background_color", "ad_cta_color", "ad_cta_background_color", "primary", "primary_color")
@@ -1618,8 +1667,8 @@ object ITWingSDK {
             "ad_label_text_color", "ad_badge_text_color" -> listOf(key, "native_ad_label_text_color")
             "native_ad_label_color", "native_ad_label_background_color" -> listOf(key, "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color", "primary", "primary_color")
             "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color" -> listOf(key, "native_ad_label_color", "native_ad_label_background_color", "primary", "primary_color")
-            "native_background_color" -> listOf("native_background_color", "banner_background_color", "ad_background_color", "surface_color")
-            "banner_background_color" -> listOf("banner_background_color", "native_background_color", "ad_background_color", "surface_color")
+            "native_background_color" -> listOf("native_background_color", "banner_background_color", "ad_background_color", "surface_color", "surface", "background_color", "background")
+            "banner_background_color" -> listOf("banner_background_color", "native_background_color", "ad_background_color", "surface_color", "surface", "background_color", "background")
             "native_stroke_color" -> listOf("native_stroke_color", "banner_stroke_color", "ad_stroke_color", "stroke_color")
             "banner_stroke_color" -> listOf("banner_stroke_color", "native_stroke_color", "ad_stroke_color", "stroke_color")
             else -> listOf(key)
@@ -2084,8 +2133,14 @@ object ITWingSDK {
                 completeOnce("activity_unavailable_before_ready")
                 return
             }
-            if ((bootstrapFinished && config.configVersion > 0) || (!bootstrapInFlight && config.configVersion > 0) || waitedMs >= 8000L) {
+            if ((config.configVersion > 0 && (mobileAdsInitializationFinished || config.ads.admobAppId.isNullOrBlank()))) {
                 showRuntimeSplash()
+                return
+            }
+            if (waitedMs >= 8000L) {
+                // Do not let a slow bootstrap/consent/billing callback present a
+                // fullscreen ad after the host splash has already moved on.
+                completeOnce("startup_ads_not_ready")
                 return
             }
             mainHandler.postDelayed({ runWhenReady() }, 100L)

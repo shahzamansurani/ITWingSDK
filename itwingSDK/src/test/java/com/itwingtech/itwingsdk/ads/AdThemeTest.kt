@@ -137,6 +137,26 @@ class AdThemeTest {
     }
 
     @Test
+    fun genericApplicationPaletteControlsAllAdSurfacesAndText() {
+        val colors = mapOf(
+            "background" to "#F1F2F3",
+            "text" to "#111213",
+            "secondary" to "#454647",
+        )
+        val provider: (String) -> String? = colors::get
+
+        assertEquals(0xFFF1F2F3.toInt(), AdTheme.nativeBackground(appColorProvider = provider))
+        assertEquals(0xFFF1F2F3.toInt(), AdTheme.bannerBackground(appColorProvider = provider))
+        assertEquals(0xFFF1F2F3.toInt(), AdTheme.cardStyle("native", appColorProvider = provider).backgroundColor)
+        assertEquals(0xFFF1F2F3.toInt(), AdTheme.cardStyle("banner", appColorProvider = provider).backgroundColor)
+        assertEquals(0xFF111213.toInt(), AdTheme.nativeText(fallback = 0, appColorProvider = provider))
+        assertEquals(0xFF111213.toInt(), AdTheme.bannerText(fallback = 0, appColorProvider = provider))
+        assertEquals(0xFF454647.toInt(), AdTheme.nativeBody(fallback = 0, appColorProvider = provider))
+        assertEquals(0xFF454647.toInt(), AdTheme.nativeMeta(fallback = 0, appColorProvider = provider))
+        assertEquals(0xFF454647.toInt(), AdTheme.bannerSecondary(fallback = 0, appColorProvider = provider))
+    }
+
+    @Test
     fun shimmerUsesAdminMediaShimmerColorsAndSafeDefaults() {
         val appColors = mapOf(
             "media_shimmer_base_color" to "#102030",

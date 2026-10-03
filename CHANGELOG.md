@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.52 — palette and startup reliability
+
+- Map the app-level `background`, `surface`, `text`, and `secondary` palette tokens into Native and Banner ad surfaces/text when no more specific ad color is configured.
+- Begin Google Mobile Ads initialization as soon as SDK config is available, deduplicate overlapping initialization requests, and keep inline requests gated until configured Google Play ad-removal purchases have been restored.
+- Prevent the SDK splash flow from starting a late fullscreen ad when startup initialization exceeds its bounded wait.
+- Preserve approved v1.49 ad visuals, AdMob-first/custom-fallback behavior, suppression behavior, and existing host APIs.
+
 ## v1.51 — corrected source release
 
 - Rebuild from the approved v1.49 candidate source so the finalized Native Small/Large, Custom Native, Banner, card, color, and shimmer presentation is included in the published artifact.
