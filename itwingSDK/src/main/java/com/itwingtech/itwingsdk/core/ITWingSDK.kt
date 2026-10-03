@@ -70,7 +70,7 @@ import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 
 object ITWingSDK {
     /** SDK release version reported to the backend and telemetry. */
-    const val VERSION: String = "1.52"
+    const val VERSION: String = "1.52.1"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -89,16 +89,6 @@ object ITWingSDK {
 
     @Volatile
     private var mobileAdsInitializationFinished = false
-
-    @Volatile
-    private var mobileAdsRequestsAllowed = false
-
-    @Volatile
-    private var subscriptionStartupResolved = false
-
-    private val mobileAdsInitializationLock = Any()
-    private var mobileAdsInitializationInFlight = false
-    private val mobileAdsInitializationCallbacks = mutableListOf<() -> Unit>()
 
     @Volatile
     private var startupPreloadDone = false
@@ -868,8 +858,6 @@ object ITWingSDK {
             config = repository?.loadCachedConfig() ?: ITWingConfig()
             syncRemoteVpnAdBlocking()
             if (config.configVersion > 0) {
-                configureSubscriptionStartupGate(config)
-                initializeMobileAds(activity)
                 if (autoApplyResponsiveLayout) {
                     HostLayoutController.apply(
                         activity = activity,
@@ -904,7 +892,6 @@ object ITWingSDK {
                 subscriptions.connect(activity) {
                     notifyListeners { it.onBillingReady() }
                     subscriptions.restorePurchases {
-                        resolveSubscriptionStartupGate()
                         initializeMobileAds(activity) {
                             ads.startAutomaticAppOpen(activity)
                         }
@@ -917,11 +904,6 @@ object ITWingSDK {
              */
             runCatching { repository!!.bootstrap() }.onSuccess { remote ->
                 config = remote
-                configureSubscriptionStartupGate(remote)
-                // Start consent and Google Mobile Ads initialization as soon as the
-                // authoritative config is available. Billing restore still gates
-                // inline requests when an ad-removing product is configured.
-                initializeMobileAds(activity)
                 syncRemoteVpnAdBlocking()
                 if (autoApplyResponsiveLayout) {
                     getActiveActivity()?.let { active ->
@@ -964,7 +946,6 @@ object ITWingSDK {
                 subscriptions.connect(activity) {
                     notifyListeners { it.onBillingReady() }
                     subscriptions.restorePurchases {
-                        resolveSubscriptionStartupGate()
                         initializeMobileAds(activity) {
                             preloadAdsIfNeeded(activity)
                             ads.startAutomaticAppOpen(activity)
@@ -1191,80 +1172,50 @@ object ITWingSDK {
 
 
     private fun initializeMobileAds(activity: Activity, onInitialized: () -> Unit = {}) {
-        val shouldStart = synchronized(mobileAdsInitializationLock) {
-            if (mobileAdsInitializationFinished) {
-                false
-            } else {
-                mobileAdsInitializationCallbacks.add(onInitialized)
-                if (mobileAdsInitializationInFlight) false else {
-                    mobileAdsInitializationInFlight = true
-                    true
-                }
-            }
-        }
-        if (!shouldStart) {
-            if (mobileAdsInitializationFinished) onInitialized()
-            return
-        }
-
         if (!AdConsentManager.isResolved()) {
             AdConsentManager.requestConsent(activity) { allowed ->
-                if (allowed) beginMobileAdsInitialization(activity)
-                else {
+                if (allowed) {
+                    initializeMobileAds(activity, onInitialized)
+                } else {
                     SDKTelemetry.track("mobile_ads_initialize_skipped", mapOf("reason" to "consent_not_granted_or_unavailable"))
-                    finishMobileAdsInitialization(allowed = false)
+                    mobileAdsInitializationFinished = true
+                    notifyInlineAdsReady(false)
+                    onInitialized()
                 }
             }
             return
         }
-        beginMobileAdsInitialization(activity)
-    }
-
-    private fun beginMobileAdsInitialization(activity: Activity) {
         if (mobileAdsInitialized) {
-            finishMobileAdsInitialization(allowed = true)
+            mobileAdsInitializationFinished = true
+            notifyInlineAdsReady(true)
+            onInitialized()
             return
         }
         val appId = config.ads.admobAppId?.takeIf { it.isNotBlank() } ?: run {
-            SDKTelemetry.track("mobile_ads_initialize_skipped", mapOf("reason" to "missing_admob_app_id"))
-            finishMobileAdsInitialization(allowed = true)
+            SDKTelemetry.track(
+                "mobile_ads_initialize_skipped",
+                mapOf("reason" to "missing_admob_app_id")
+            )
+            mobileAdsInitializationFinished = true
+            notifyInlineAdsReady(true)
+            onInitialized()
             return
         }
         CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
             runCatching {
-                MobileAds.initialize(activity.applicationContext, InitializationConfig.Builder(appId).build()) {
+                MobileAds.initialize(activity, InitializationConfig.Builder(appId).build()) {
                     mobileAdsInitialized = true
-                    finishMobileAdsInitialization(allowed = true)
+                    mobileAdsInitializationFinished = true
+                    notifyInlineAdsReady(true)
+                    onInitialized()
                 }
             }.onFailure {
                 SDKTelemetry.recordNonFatal(it, mapOf("operation" to "mobile_ads_initialize"))
-                finishMobileAdsInitialization(allowed = false)
+                mobileAdsInitializationFinished = true
+                notifyInlineAdsReady(false)
+                onInitialized()
             }
         }
-    }
-
-    private fun finishMobileAdsInitialization(allowed: Boolean) {
-        val callbacks = synchronized(mobileAdsInitializationLock) {
-            mobileAdsInitializationFinished = true
-            mobileAdsRequestsAllowed = allowed
-            mobileAdsInitializationInFlight = false
-            mobileAdsInitializationCallbacks.toList().also { mobileAdsInitializationCallbacks.clear() }
-        }
-        if (subscriptionStartupResolved) notifyInlineAdsReady(allowed)
-        callbacks.forEach { callback -> runCatching(callback) }
-    }
-
-    private fun configureSubscriptionStartupGate(config: ITWingConfig) {
-        subscriptionStartupResolved = config.subscriptions.products.none { product ->
-            val store = product.store.trim().lowercase()
-            product.removesAds && product.productId.isNotBlank() &&
-                (store.isBlank() || store in setOf("google_play", "google-play", "google play", "play", "play_store", "google"))
-        }
-    }
-
-    private fun resolveSubscriptionStartupGate() {
-        subscriptionStartupResolved = true
-        if (mobileAdsInitializationFinished) notifyInlineAdsReady(mobileAdsRequestsAllowed)
     }
 
     @JvmStatic
@@ -1304,7 +1255,7 @@ object ITWingSDK {
     }
 
     internal fun areInlineAdsReady(): Boolean {
-        return config.configVersion > 0 && subscriptionStartupResolved &&
+        return config.configVersion > 0 &&
             (
                 mobileAdsInitialized ||
                     mobileAdsInitializationFinished ||
@@ -2133,14 +2084,8 @@ object ITWingSDK {
                 completeOnce("activity_unavailable_before_ready")
                 return
             }
-            if ((config.configVersion > 0 && (mobileAdsInitializationFinished || config.ads.admobAppId.isNullOrBlank()))) {
+            if ((bootstrapFinished && config.configVersion > 0) || (!bootstrapInFlight && config.configVersion > 0) || waitedMs >= 8000L) {
                 showRuntimeSplash()
-                return
-            }
-            if (waitedMs >= 8000L) {
-                // Do not let a slow bootstrap/consent/billing callback present a
-                // fullscreen ad after the host splash has already moved on.
-                completeOnce("startup_ads_not_ready")
                 return
             }
             mainHandler.postDelayed({ runWhenReady() }, 100L)

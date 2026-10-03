@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.52.1 — startup sequence hotfix
+
+- Restore the established Mobile Ads initialization timing from after SDK configuration and purchase restoration; remove the v1.52 speculative parallel startup and extra readiness gate.
+- Keep the v1.52 generic `background`, `surface`, `text`, and `secondary` admin palette mappings.
+- Preserve approved ad visuals, AdMob-first/custom-fallback behavior, and existing host APIs.
+
 ## v1.52 — palette and startup reliability
 
 - Map the app-level `background`, `surface`, `text`, and `secondary` palette tokens into Native and Banner ad surfaces/text when no more specific ad color is configured.
