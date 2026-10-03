@@ -1,10 +1,16 @@
 # Changelog
 
+## v1.51 — corrected source release
+
+- Rebuild from the approved v1.49 candidate source so the finalized Native Small/Large, Custom Native, Banner, card, color, and shimmer presentation is included in the published artifact.
+- Retain v1.50 post-interstitial inline-ad suppression and AdMob-first/custom-fallback behavior.
+- No intentional ad-layout redesign or public API change.
+
 ## v1.50
 
 - Keep Google AdMob as first priority; start Custom fallback only after terminal Google failure/no-fill.
 - Add process-scoped post-interstitial Native/Banner suppression with the admin-controlled `suppress_inline_ads_after_interstitial` setting; suppressed placements make no ad request and show no shimmer.
-- Preserve AdMob-first loading, duplicate Banner fallback/lifecycle guards, foreground-only fullscreen protections, actual-impression callbacks, and the approved card/shimmer presentation.
+- Preserve banner fallback/lifecycle guards, foreground-only fullscreen protections, actual-impression callbacks, and the approved card/shimmer presentation.
 - Maintain the v1.48-compatible public API and existing host integration.
 
 ## v1.49 — release candidate

@@ -70,7 +70,7 @@ import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 
 object ITWingSDK {
     /** SDK release version reported to the backend and telemetry. */
-    const val VERSION: String = "1.50"
+    const val VERSION: String = "1.51"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
