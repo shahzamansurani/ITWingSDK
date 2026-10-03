@@ -33,6 +33,7 @@ class AdManager(
      * Interstitial
      */
     fun showInterstitial(activity: Activity?, placement: String, onComplete: () -> Unit = {}) {
+        PostInterstitialInlineSuppression.consumeAtNextInterstitialCall()
         if (!activity.isUsableForAds()) {
             safeCallback(onComplete)
             return
@@ -210,6 +211,15 @@ class AdManager(
             destroyBanner(container)
             return
         }
+        if (PostInterstitialInlineSuppression.isSuppressed(postInterstitialSuppressionEnabled())) {
+            SDKTelemetry.track(
+                "inline_ad_request_skipped_post_interstitial",
+                mapOf("format" to "banner", "placement" to placement),
+            )
+            container.visibility = android.view.View.GONE
+            destroyBanner(container)
+            return
+        }
         val activityRef = WeakReference(activity!!)
         val containerRef = WeakReference(container)
         if (InlineAdSafetyGate.suppressInlineAd(
@@ -272,6 +282,15 @@ class AdManager(
         nativeRecords[container] = NativeRecord(activity, placement, nativeType)
         if (adsSuppressed()) {
             trackSuppressed("native", placement)
+            destroyNative(container)
+            return
+        }
+        if (PostInterstitialInlineSuppression.isSuppressed(postInterstitialSuppressionEnabled())) {
+            SDKTelemetry.track(
+                "inline_ad_request_skipped_post_interstitial",
+                mapOf("format" to "native", "placement" to placement),
+            )
+            container.visibility = android.view.View.GONE
             destroyNative(container)
             return
         }
@@ -467,6 +486,20 @@ class AdManager(
     private fun adsSuppressed(): Boolean {
         val ads = configProvider().ads
         return suppressAdsReasonProvider() != null || !ads.globalEnabled || ads.blockedReason == "active_subscription"
+    }
+
+    private fun postInterstitialSuppressionEnabled(): Boolean =
+        configProvider().app["suppress_inline_ads_after_interstitial"].asBoolean(default = true)
+
+    private fun Any?.asBoolean(default: Boolean): Boolean = when (this) {
+        is Boolean -> this
+        is Number -> toInt() != 0
+        is String -> when (trim().lowercase()) {
+            "true", "1", "yes", "on" -> true
+            "false", "0", "no", "off" -> false
+            else -> default
+        }
+        else -> default
     }
 
     private fun rewardedSuppressionReason(): String {

@@ -132,7 +132,6 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         if (placement.adMobUnitOrNull() == null && customRenderer.canRender(placement)) {
             val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
-                armInlineSafetyIfNeeded(placement)
                 preloadAfterShowIfEnabled(activity, placementName, placement)
                 guardedComplete()
             })
@@ -144,6 +143,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 AdEventTracker.log("ad_show_started", placement)
                 frequency.markShown(placement)
                 AdEventTracker.log("ad_impression", placement)
+                markInlineAdsSuppressedIfEnabled()
             }
             return
         }
@@ -178,12 +178,12 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         ad.adEventCallback = object : InterstitialAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
+                markInlineAdsSuppressedIfEnabled()
             }
 
             override fun onAdDismissedFullScreenContent() {
                 loadedAds.remove(placementName)
                 AdEventTracker.log("ad_dismissed", placement)
-                armInlineSafetyIfNeeded(placement)
                 preloadAfterShowIfEnabled(activity, placementName, placement)
                 FullscreenAdState.end(fullscreenOwner)
                 completion.complete()
@@ -363,10 +363,12 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
 
     private fun showCustomFallback(activity: Activity, placement: AdPlacementConfig, onComplete: () -> Unit): Boolean {
         val fallback = configProvider().placementWithCustomFallback(placement) ?: return false
-        return customRenderer.show(activity, fallback, onComplete = {
+        val shown = customRenderer.show(activity, fallback, onComplete = {
             frequency.markShown(placement)
             safeCallback(onComplete)
         })
+        if (shown) markInlineAdsSuppressedIfEnabled()
+        return shown
     }
 
     private fun clearPreloader(placementName: String) {
@@ -375,19 +377,15 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         }
     }
 
-    private fun armInlineSafetyIfNeeded(placement: com.itwingtech.itwingsdk.core.AdPlacementConfig) {
-        if (placement.isSplashPlacement()) return
-        InlineAdSafetyGate.arm("interstitial", placement.name)
-    }
-
-    private fun com.itwingtech.itwingsdk.core.AdPlacementConfig.isSplashPlacement(): Boolean {
-        val usage = metadata["usage"]?.toString()?.trim().orEmpty()
-        val splash = metadata["splash"]
-        return name.contains("splash", ignoreCase = true) ||
-            usage.equals("splash", ignoreCase = true) ||
-            splash == true ||
-            splash?.toString()?.equals("true", ignoreCase = true) == true ||
-            splash?.toString() == "1"
+    private fun markInlineAdsSuppressedIfEnabled() {
+        val enabled = when (val value = configProvider().app["suppress_inline_ads_after_interstitial"]) {
+            is Boolean -> value
+            is Number -> value.toInt() != 0
+            is String -> value.trim().lowercase() !in setOf("false", "0", "no", "off")
+            null -> true // Preserve the enabled default for older cached config payloads.
+            else -> true
+        }
+        PostInterstitialInlineSuppression.markPresented(enabled)
     }
 
     private fun Any?.isTruthy(): Boolean {

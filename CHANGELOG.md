@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.50
+
+- Keep Google AdMob as first priority; start Custom fallback only after terminal Google failure/no-fill.
+- Add process-scoped post-interstitial Native/Banner suppression with the admin-controlled `suppress_inline_ads_after_interstitial` setting; suppressed placements make no ad request and show no shimmer.
+- Preserve AdMob-first loading, duplicate Banner fallback/lifecycle guards, foreground-only fullscreen protections, actual-impression callbacks, and the approved card/shimmer presentation.
+- Maintain the v1.48-compatible public API and existing host integration.
+
 ## v1.49 — release candidate
 
 - Normalize native and banner ad presentation from the existing admin `app.colors` contract; honor dedicated CTA, text, background, and stroke colors before generic theme fallbacks.
