@@ -1,5 +1,6 @@
 [versions]
 adsMobileSdk = "1.2.1"
+ump = "4.0.0"
 agp = "9.3.1"
 appUpdateKtx = "2.1.0"
 appReviewKtx = "2.0.2"
@@ -31,6 +32,7 @@ viewpager2 = "1.1.0"
 [libraries]
 androidx-activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activity" }
 ads-mobile-sdk = { module = "com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk", version.ref = "adsMobileSdk" }
+ump = { module = "com.google.android.ump:user-messaging-platform", version.ref = "ump" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycleProcess" }
 androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3Ui" }

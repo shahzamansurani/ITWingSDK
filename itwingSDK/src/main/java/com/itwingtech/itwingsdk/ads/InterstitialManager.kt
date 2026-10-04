@@ -54,14 +54,12 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                     it.format == "interstitial"
         } ?: return
 
-        if (customRenderer.canRender(placement)) {
+        if (placement.shouldRenderCustomBeforeAdMob() && customRenderer.canRender(placement)) {
             customRenderer.preload(activity, placement)
             return
         }
 
-        val unit = placement.units.firstOrNull {
-            it.network == "admob"
-        } ?: return
+        val unit = placement.adMobUnitOrNull() ?: return
 
         if (loadedAds.containsKey(placementName)) {
             return
@@ -118,7 +116,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         }
 
         AdEventTracker.log("ad_show_requested", placement)
-        if (customRenderer.canRender(placement)) {
+        if (placement.shouldRenderCustomBeforeAdMob() && customRenderer.canRender(placement)) {
             val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
                 armInlineSafetyIfNeeded(placement)
@@ -132,6 +130,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             } else {
                 AdEventTracker.log("ad_show_started", placement)
                 frequency.markShown(placement)
+                PostInterstitialInlineSuppression.markPresented(postInterstitialSuppressionEnabled())
                 AdEventTracker.log("ad_impression", placement)
             }
             return
@@ -167,7 +166,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         ad.adEventCallback = object : InterstitialAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
-                AdEventTracker.log("ad_impression", placement)
+                PostInterstitialInlineSuppression.markPresented(postInterstitialSuppressionEnabled())
             }
 
             override fun onAdDismissedFullScreenContent() {
@@ -194,7 +193,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             }
 
             override fun onAdImpression() {
-                AdEventTracker.log("ad_impression_recorded", placement)
+                AdEventTracker.log("ad_impression", placement)
             }
 
             override fun onAdPaid(value: AdValue) {
@@ -353,10 +352,22 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
 
     private fun showCustomFallback(activity: Activity, placement: AdPlacementConfig, onComplete: () -> Unit): Boolean {
         val fallback = configProvider().placementWithCustomFallback(placement) ?: return false
-        return customRenderer.show(activity, fallback, onComplete = {
+        val shown = customRenderer.show(activity, fallback, onComplete = {
             frequency.markShown(placement)
             safeCallback(onComplete)
         })
+        if (shown) PostInterstitialInlineSuppression.markPresented(postInterstitialSuppressionEnabled())
+        return shown
+    }
+
+    private fun postInterstitialSuppressionEnabled(): Boolean {
+        val value = configProvider().app["suppress_inline_ads_after_interstitial"] ?: return true
+        return when (value) {
+            is Boolean -> value
+            is Number -> value.toInt() != 0
+            is String -> value.trim().lowercase() !in setOf("0", "false", "off", "no", "disabled")
+            else -> true
+        }
     }
 
     private fun clearPreloader(placementName: String) {

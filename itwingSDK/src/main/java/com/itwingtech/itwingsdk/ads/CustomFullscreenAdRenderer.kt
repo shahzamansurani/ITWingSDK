@@ -49,7 +49,7 @@ internal class CustomFullscreenAdRenderer {
         placement: AdPlacementConfig
     ): Boolean {
 
-        return !placement.customAd?.mediaUrl().isNullOrBlank()
+        return !placement.customAd?.resolvedMediaUrl().isNullOrBlank()
     }
 
     /*
@@ -68,7 +68,7 @@ internal class CustomFullscreenAdRenderer {
         val ad =
             placement.customAd ?: return
 
-        val mediaUrl = ad.mediaUrl() ?: return
+        val mediaUrl = ad.resolvedMediaUrl() ?: return
 
         activity.runOnUiThread {
             runCatching {
@@ -97,7 +97,7 @@ internal class CustomFullscreenAdRenderer {
         val ad =
             placement.customAd ?: return false
 
-        if (ad.mediaUrl().isNullOrBlank()) return false
+        if (ad.resolvedMediaUrl().isNullOrBlank()) return false
         val completion = FullscreenCompletion(onComplete)
         val isRewardedPlacement = placement.format.contains("rewarded", ignoreCase = true)
         val rewardEarned = AtomicBoolean(false)
@@ -172,8 +172,8 @@ internal class CustomFullscreenAdRenderer {
         )
 
         binding.adMedia.render(
-            url = ad.mediaUrl(),
-            video = ad.isVideo(),
+            url = ad.resolvedMediaUrl(),
+            video = ad.isVideoMedia(),
             loop = !isRewardedPlacement,
             onCompleted = {
                 if (isRewardedPlacement) rewardEarned.compareAndSet(false, true)
@@ -203,8 +203,8 @@ internal class CustomFullscreenAdRenderer {
         |--------------------------------------------------------------------------
         */
 
-        binding.adTitle.text =
-            ad.headline ?: ad.name
+        val displayText = ad.displayText()
+        binding.adTitle.text = displayText.headline ?: ad.name
 
         binding.adBody.text =
             ad.body.orEmpty()
@@ -212,9 +212,7 @@ internal class CustomFullscreenAdRenderer {
         binding.adCta.text =
             ad.cta ?: "Open"
 
-        advertiserView.text =
-            ad.brandName()
-                ?: "Sponsored"
+        advertiserView.text = displayText.advertiser ?: "Sponsored"
 
         ratingView.rating =
             ad.brandRating()

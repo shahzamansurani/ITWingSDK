@@ -32,6 +32,7 @@ class AdManager(
      * Interstitial
      */
     fun showInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
+        PostInterstitialInlineSuppression.consumeAtNextInterstitialCall()
         if (adsSuppressed()) {
             trackSuppressed("interstitial", placement)
             clearCache()
@@ -166,6 +167,10 @@ class AdManager(
         appOpenManager.updateForegroundActivity(activity)
     }
 
+    fun onActivityPaused(activity: Activity) {
+        appOpenManager.onActivityPaused(activity)
+    }
+
     /**
      * Banner
      */
@@ -173,6 +178,11 @@ class AdManager(
         rememberContainer(bannerContainers, container)
         bannerRecords[container] = BannerRecord(activity, placement, bannerType)
         if (adsSuppressed()) {
+            trackSuppressed("banner", placement)
+            destroyBanner(container)
+            return
+        }
+        if (PostInterstitialInlineSuppression.isSuppressed(postInterstitialSuppressionEnabled())) {
             trackSuppressed("banner", placement)
             destroyBanner(container)
             return
@@ -234,6 +244,11 @@ class AdManager(
         rememberContainer(nativeContainers, container)
         nativeRecords[container] = NativeRecord(activity, placement, nativeType)
         if (adsSuppressed()) {
+            trackSuppressed("native", placement)
+            destroyNative(container)
+            return
+        }
+        if (PostInterstitialInlineSuppression.isSuppressed(postInterstitialSuppressionEnabled())) {
             trackSuppressed("native", placement)
             destroyNative(container)
             return
@@ -422,6 +437,16 @@ class AdManager(
     private fun adsSuppressed(): Boolean {
         val ads = configProvider().ads
         return suppressAdsReasonProvider() != null || !ads.globalEnabled || ads.blockedReason == "active_subscription"
+    }
+
+    private fun postInterstitialSuppressionEnabled(): Boolean {
+        val value = configProvider().app["suppress_inline_ads_after_interstitial"] ?: return true
+        return when (value) {
+            is Boolean -> value
+            is Number -> value.toInt() != 0
+            is String -> value.trim().lowercase() !in setOf("0", "false", "off", "no", "disabled")
+            else -> true
+        }
     }
 
     private fun rewardedSuppressionReason(): String {

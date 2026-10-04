@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 val sdkPublicationGroup = providers.gradleProperty("group")
     .orElse("com.github.shahzamansurani")
 val sdkPublicationVersion = providers.gradleProperty("version")
-    .orElse("v1.48")
+    .orElse("v1.53")
 
 plugins {
     alias(libs.plugins.android.library)
@@ -76,6 +76,7 @@ dependencies {
     api(libs.gson)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.ads.mobile.sdk)
+    implementation(libs.ump)
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.viewpager2)

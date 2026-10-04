@@ -57,6 +57,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingResult
 import com.itwingtech.itwingsdk.ads.FullscreenAdState
+import com.itwingtech.itwingsdk.ads.AdConsentManager
 import com.itwingtech.itwingsdk.data.EncryptedConfigStore
 import com.itwingtech.itwingsdk.utils.safeCallback
 import okhttp3.Interceptor
@@ -68,6 +69,7 @@ import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdAdapter
 import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 
 object ITWingSDK {
+    const val VERSION: String = "1.53"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
     private var repository: ConfigRepository? = null
@@ -796,6 +798,7 @@ object ITWingSDK {
         options: ITWingOptions = ITWingOptions(),
         listener: SDKInitListener? = null
     ) {
+        StartupTrace.begin(activity, "sdkVersion=$VERSION activity=${activity.javaClass.simpleName}")
         listener?.let { initListeners.add(it) }
         applicationContext = activity.applicationContext
         blockAdsWhenVpnActive = options.blockAdsWhenVpnActive
@@ -851,6 +854,7 @@ object ITWingSDK {
              * for instant startup.
              */
             config = repository?.loadCachedConfig() ?: ITWingConfig()
+            StartupTrace.event(activity, "CONFIG_CACHE_APPLIED", "present=${config.configVersion > 0}")
             syncRemoteVpnAdBlocking()
             if (config.configVersion > 0) {
                 if (autoApplyResponsiveLayout) {
@@ -897,8 +901,11 @@ object ITWingSDK {
             /*
              * Fetch fresh remote config
              */
+            StartupTrace.event(activity, "BOOTSTRAP_REQUEST")
             runCatching { repository!!.bootstrap() }.onSuccess { remote ->
+                StartupTrace.event(activity, "BOOTSTRAP_SUCCESS", "configVersion=${remote.configVersion}")
                 config = remote
+                StartupTrace.event(activity, "CONFIG_APPLIED", "placements=${remote.ads.placements.size}")
                 syncRemoteVpnAdBlocking()
                 if (autoApplyResponsiveLayout) {
                     getActiveActivity()?.let { active ->
@@ -940,10 +947,13 @@ object ITWingSDK {
                 updates.check(activity)
                 subscriptions.connect(activity) {
                     notifyListeners { it.onBillingReady() }
+                    StartupTrace.event(activity, "PURCHASE_RESTORE_START")
                     subscriptions.restorePurchases {
+                        StartupTrace.event(activity, "PURCHASE_RESTORE_DONE")
                         initializeMobileAds(activity) {
                             preloadAdsIfNeeded(activity)
                             ads.startAutomaticAppOpen(activity)
+                            StartupTrace.event(activity, "ADS_READY")
                             notifyListeners { it.onAdsReady() }
                         }
                     }
@@ -963,6 +973,7 @@ object ITWingSDK {
                 bootstrapFinished = true
                 bootstrapInFlight = false
                 notifyReady(cachedConfigAvailable)
+                StartupTrace.event(activity, "BOOTSTRAP_FAILED", "networkFailure=$networkFailure")
                 SDKTelemetry.track(
                     "sdk_bootstrap_failed",
                     mapOf("message" to message, "network_failure" to networkFailure)
@@ -1183,19 +1194,31 @@ object ITWingSDK {
             onInitialized()
             return
         }
-        CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
-            runCatching {
-                MobileAds.initialize(activity, InitializationConfig.Builder(appId).build()) {
-                    mobileAdsInitialized = true
-                    mobileAdsInitializationFinished = true
-                    notifyInlineAdsReady(true)
-                    onInitialized()
-                }
-            }.onFailure {
-                SDKTelemetry.recordNonFatal(it, mapOf("operation" to "mobile_ads_initialize"))
+        StartupTrace.event(activity, "CONSENT_REQUEST_START")
+        AdConsentManager.requestConsent(activity) { consentAllowed ->
+            StartupTrace.event(activity, "CONSENT_REQUEST_DONE", "allowed=$consentAllowed")
+            if (!consentAllowed) {
                 mobileAdsInitializationFinished = true
                 notifyInlineAdsReady(false)
                 onInitialized()
+                return@requestConsent
+            }
+            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
+                runCatching {
+                    StartupTrace.event(activity, "GMA_INIT_START")
+                    MobileAds.initialize(activity, InitializationConfig.Builder(appId).build()) {
+                        mobileAdsInitialized = true
+                        mobileAdsInitializationFinished = true
+                        StartupTrace.event(activity, "GMA_INIT_DONE")
+                        notifyInlineAdsReady(true)
+                        onInitialized()
+                    }
+                }.onFailure {
+                    SDKTelemetry.recordNonFatal(it, mapOf("operation" to "mobile_ads_initialize"))
+                    mobileAdsInitializationFinished = true
+                    notifyInlineAdsReady(false)
+                    onInitialized()
+                }
             }
         }
     }
@@ -1375,9 +1398,7 @@ object ITWingSDK {
 
     @JvmStatic
     fun getApiBaseUrl(key: String, defaultValue: String = ""): String {
-        return config.apiKeys[key]?.baseUrl.normalizeBaseUrl()
-            ?: defaultValue.normalizeBaseUrl()
-            ?: defaultValue
+        return ApiBaseUrlResolver.resolve(config.apiKeys[key]?.baseUrl, defaultValue)
     }
 
     @JvmStatic
@@ -1557,11 +1578,11 @@ object ITWingSDK {
         val aliases = when (key) {
             "primary" -> listOf("primary", "primary_color", "ad_primary_color")
             "primary_color" -> listOf("primary_color", "primary", "ad_primary_color")
-            "native_text_color" -> listOf("native_text_color", "native_headline_text_color", "headline_text_color", "banner_text_color", "text_color")
-            "native_headline_text_color", "headline_text_color" -> listOf(key, "native_text_color", "banner_text_color", "text_color")
-            "native_secondary_text_color" -> listOf("native_secondary_text_color", "native_body_text_color", "native_meta_text_color", "banner_secondary_text_color", "secondary_text_color")
-            "native_body_text_color", "body_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "native_text_color")
-            "native_meta_text_color", "meta_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "native_text_color")
+            "native_text_color" -> listOf("native_text_color", "native_headline_text_color", "headline_text_color", "banner_text_color", "text_color", "text")
+            "native_headline_text_color", "headline_text_color" -> listOf(key, "native_text_color", "banner_text_color", "text_color", "text")
+            "native_secondary_text_color" -> listOf("native_secondary_text_color", "native_body_text_color", "native_meta_text_color", "banner_secondary_text_color", "secondary_text_color", "secondary", "text")
+            "native_body_text_color", "body_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "secondary", "text", "native_text_color")
+            "native_meta_text_color", "meta_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "secondary", "text", "native_text_color")
             "native_cta_text_color" -> listOf("native_cta_text_color", "banner_cta_text_color", "cta_text_color")
             "banner_cta_text_color" -> listOf("banner_cta_text_color", "native_cta_text_color", "cta_text_color")
             "native_cta_color", "native_cta_background_color" -> listOf(key, "banner_cta_color", "banner_cta_background_color", "ad_cta_color", "ad_cta_background_color", "primary", "primary_color")
@@ -1571,8 +1592,8 @@ object ITWingSDK {
             "ad_label_text_color", "ad_badge_text_color" -> listOf(key, "native_ad_label_text_color")
             "native_ad_label_color", "native_ad_label_background_color" -> listOf(key, "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color", "primary", "primary_color")
             "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color" -> listOf(key, "native_ad_label_color", "native_ad_label_background_color", "primary", "primary_color")
-            "native_background_color" -> listOf("native_background_color", "banner_background_color", "ad_background_color", "surface_color")
-            "banner_background_color" -> listOf("banner_background_color", "native_background_color", "ad_background_color", "surface_color")
+            "native_background_color" -> listOf("native_background_color", "banner_background_color", "ad_background_color", "surface_color", "surface", "background_color", "background")
+            "banner_background_color" -> listOf("banner_background_color", "native_background_color", "ad_background_color", "surface_color", "surface", "background_color", "background")
             "native_stroke_color" -> listOf("native_stroke_color", "banner_stroke_color", "ad_stroke_color", "stroke_color")
             "banner_stroke_color" -> listOf("banner_stroke_color", "native_stroke_color", "ad_stroke_color", "stroke_color")
             else -> listOf(key)
@@ -2408,6 +2429,7 @@ object ITWingSDK {
                 override fun onActivityPaused(
                     activity: Activity
                 ) {
+                    ads.onActivityPaused(activity)
                 }
 
                 override fun onActivityStopped(

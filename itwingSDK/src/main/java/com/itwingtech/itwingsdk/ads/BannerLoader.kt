@@ -44,6 +44,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
     private val adViews = WeakHashMap<ViewGroup, AdView>()
     private val loadTokens = WeakHashMap<ViewGroup, Int>()
     private val activeLoadKeys = WeakHashMap<ViewGroup, String>()
+    private val terminalRealTokens = WeakHashMap<ViewGroup, Int>()
 
     @MainThread
     fun load(
@@ -97,7 +98,8 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
 
         showShimmer(container, loadingView)
 
-        val customAd = selectedCustomAd(config, placement)
+        val unit = placement.adMobUnitOrNull()
+        val customAd = if (unit == null) selectedCustomAd(config, placement) else null
 
         if (customAd != null) {
             AdEventTracker.log("ad_load_requested", placement)
@@ -112,7 +114,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             return
         }
 
-        val unit = placement.units.firstOrNull { it.network == "admob" } ?: run {
+        unit ?: run {
             synchronized(activeLoadKeys) {
                 activeLoadKeys.remove(container)
             }
@@ -157,6 +159,10 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
 
                     override fun onAdLoaded(ad: BannerAd) {
                         activity.runOnUiThread {
+                            if (!isCurrentLoad(container, token) || !resolveRealLoad(container, token)) {
+                                runCatching { ad.destroy() }
+                                return@runOnUiThread
+                            }
                             if (
                                 !activity.isUsable() ||
                                 !container.isAttachedToWindow ||
@@ -192,9 +198,11 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                                 loadingView = loadingView,
                                 realView = adView
                             )
-                            AdEventTracker.log("ad_impression", placement)
-
                             ad.adEventCallback = object : BannerAdEventCallback {
+                                override fun onAdImpression() {
+                                    AdEventTracker.log("ad_impression", placement)
+                                }
+
                                 override fun onAdPaid(adValue: AdValue) {
                                     AdEventTracker.log(
                                         "ad_paid",
@@ -219,6 +227,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
 
                     override fun onAdFailedToLoad(adError: LoadAdError) {
                         activity.runOnUiThread {
+                            if (!isCurrentLoad(container, token) || !resolveRealLoad(container, token)) return@runOnUiThread
                             if (
                                 !activity.isUsable() ||
                                 !container.isAttachedToWindow ||
@@ -337,9 +346,10 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         val ratingView = root.findViewById<RatingBar>(R.id.ad_stars)
         val adTag = root.findViewById<TextView>(R.id.ad_ic)
 
-        headlineView.text = ad.headline?.takeIf { it.isNotBlank() } ?: ad.name.ifBlank { "Sponsored" }
+        val displayText = ad.displayText()
+        headlineView.text = displayText.headline ?: ad.name.ifBlank { "Sponsored" }
         bodyView.text = ad.body?.takeIf { it.isNotBlank() } ?: "Promoted content"
-        advertiserView.text = ad.brandName() ?: "Sponsored"
+        advertiserView.text = displayText.advertiser ?: "Sponsored"
         ctaView.text = ad.cta?.takeIf { it.isNotBlank() } ?: "Install"
         ratingView.rating = ad.brandRating()
         adTag.text = ad.adIcon()
@@ -363,7 +373,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         adTag.setTextColor(parseColorSafe(sdkColor("native_ad_label_text_color", "ad_label_text_color") ?: placement.metadata.stringValue("native_ad_label_text_color", "ad_label_text_color"), Color.WHITE))
 
         mediaView.apply {
-            render(ad.mediaUrl(), ad.isVideo())
+            render(ad.resolvedMediaUrl(), ad.isVideoMedia())
             play()
         }
 
@@ -431,7 +441,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         loadingView: View?,
         token: Int
     ) {
-        val media = ad.mediaUrl()
+        val media = ad.resolvedMediaUrl()
 
         if (media.isNullOrBlank()) {
             activity.runOnUiThread {
@@ -558,6 +568,9 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             synchronized(loadTokens) {
                 loadTokens.clear()
             }
+            synchronized(terminalRealTokens) {
+                terminalRealTokens.clear()
+            }
 
             synchronized(activeLoadKeys) {
                 activeLoadKeys.clear()
@@ -568,6 +581,9 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
 
         nextToken(container)
         destroyLoadedAd(container)
+        synchronized(terminalRealTokens) {
+            terminalRealTokens.remove(container)
+        }
 
         container.let {
             releaseMediaViews(it)
@@ -679,6 +695,12 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         return synchronized(loadTokens) {
             loadTokens[container] == token
         }
+    }
+
+    private fun resolveRealLoad(container: ViewGroup, token: Int): Boolean = synchronized(terminalRealTokens) {
+        if (terminalRealTokens[container] == token) return@synchronized false
+        terminalRealTokens[container] = token
+        true
     }
 
     private fun CustomAdConfig.mediaUrl(): String? =

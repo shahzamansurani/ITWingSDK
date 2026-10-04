@@ -35,6 +35,10 @@ class AppOpenManager(
     private var appOpenAd: AppOpenAd? = null
     private var appOpenLoadedAtMs: Long = 0L
     private var foregroundActivity: WeakReference<Activity>? = null
+    private var foregroundSessionId = 0L
+    private var backgroundedAtMs = 0L
+    private var sawForegroundBefore = false
+    private var firstUseSession = true
     private val lastLoadAttemptAt = ConcurrentHashMap<String, Long>()
     private val activeShowRequests = ConcurrentHashMap<String, Boolean>()
     private val customRenderer = CustomFullscreenAdRenderer()
@@ -44,6 +48,9 @@ class AppOpenManager(
 
     fun startAutomatic(activity: Activity) {
         updateForegroundActivity(activity)
+        val preferences = activity.getSharedPreferences("itwing_sdk_app_open", Activity.MODE_PRIVATE)
+        firstUseSession = !preferences.getBoolean("has_opened_before", false)
+        preferences.edit().putBoolean("has_opened_before", true).apply()
         safeCallback {
             if (!automaticStarted.compareAndSet(false, true)) {
                 return@safeCallback
@@ -54,9 +61,21 @@ class AppOpenManager(
                     object : DefaultLifecycleObserver {
                         override fun onStart(owner: LifecycleOwner) {
                             runCatching {
+                                foregroundSessionId += 1L
+                                val sessionId = foregroundSessionId
                                 val currentActivity = foregroundActivity?.get()?.takeUnless {
                                     it.isFinishing || it.isDestroyed
                                 } ?: return
+                                val backgroundDuration = if (backgroundedAtMs > 0L) {
+                                    SystemClock.elapsedRealtime() - backgroundedAtMs
+                                } else 0L
+                                val isFirstUse = firstUseSession
+                                firstUseSession = false
+                                val hadForegroundSession = sawForegroundBefore
+                                sawForegroundBefore = true
+                                if (isFirstUse || !AppOpenPresentationPolicy.shouldAutomaticallyPresentResume(hadForegroundSession, backgroundDuration)) {
+                                    return@runCatching
+                                }
                                 if (SystemClock.elapsedRealtime() < automaticSuppressedUntilMs) {
                                     SDKTelemetry.track(
                                         "ad_suppressed",
@@ -81,7 +100,7 @@ class AppOpenManager(
                                     )
                                     return
                                 }
-                                if (FullscreenAdState.isActive()) {
+                                if (FullscreenAdState.isActive() || FullscreenAdState.wasRecentlyEnded()) {
                                     SDKTelemetry.track(
                                         "ad_suppressed",
                                         mapOf(
@@ -94,12 +113,19 @@ class AppOpenManager(
                                     return
                                 }
                                 val placement = automaticPlacementName() ?: return
-                                if (validAppOpenAd() != null || hasLoadedCustomAd(placement)) {
-                                    show(currentActivity, placement, waitForLoad = false)
-                                } else {
-                                    show(currentActivity, placement, waitForLoad = true)
-                                }
+                                mainHandler.postDelayed({
+                                    if (sessionId != foregroundSessionId || currentActivity.isFinishing || currentActivity.isDestroyed || !currentActivity.window.decorView.isShown) return@postDelayed
+                if (validAppOpenAd() != null || (placementConfig(placement)?.shouldRenderCustomBeforeAdMob() == true && hasLoadedCustomAd(placement))) {
+                                        show(currentActivity, placement, waitForLoad = false)
+                                    } else {
+                                        show(currentActivity, placement, waitForLoad = true)
+                                    }
+                                }, 0L)
                             }
+                        }
+
+                        override fun onStop(owner: LifecycleOwner) {
+                            backgroundedAtMs = SystemClock.elapsedRealtime()
                         }
                     },
                 )
@@ -108,6 +134,10 @@ class AppOpenManager(
 
     fun updateForegroundActivity(activity: Activity) {
         foregroundActivity = WeakReference(activity)
+    }
+
+    fun onActivityPaused(activity: Activity) {
+        if (foregroundActivity?.get() === activity) foregroundActivity = null
     }
 
     fun suppressAutomaticFor(durationMs: Long) {
@@ -147,15 +177,13 @@ class AppOpenManager(
 
         } ?: return
 
-        if (customRenderer.canRender(placement)) {
+        if (placement.shouldRenderCustomBeforeAdMob() && customRenderer.canRender(placement)) {
             customRenderer.preload(activity, placement)
             loadedPlacement = placementName
             return
         }
 
-        val unit = placement.units.firstOrNull {
-            it.network == "admob"
-        } ?: return
+        val unit = placement.adMobUnitOrNull() ?: return
         if (!canStartLoad(placementName, placement, forceRequest)) return
         loading.set(true)
         AdEventTracker.log("ad_load_requested", placement)
@@ -233,7 +261,7 @@ class AppOpenManager(
         }
 
         AdEventTracker.log("ad_show_requested", placement)
-        if (customRenderer.canRender(placement)) {
+        if (placement.shouldRenderCustomBeforeAdMob() && customRenderer.canRender(placement)) {
             val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
                 armInlineSafetyIfNeeded(placement)
@@ -313,6 +341,9 @@ class AppOpenManager(
             object : AppOpenAdEventCallback {
                 override fun onAdShowedFullScreenContent() {
                     frequency.markShown(placement)
+                }
+
+                override fun onAdImpression() {
                     AdEventTracker.log("ad_impression", placement)
                 }
 
@@ -445,10 +476,11 @@ class AppOpenManager(
 
     private fun showCustomFallback(activity: Activity, placement: com.itwingtech.itwingsdk.core.AdPlacementConfig, onComplete: () -> Unit): Boolean {
         val fallback = configProvider().placementWithCustomFallback(placement) ?: return false
-        return customRenderer.show(activity, fallback, onComplete = {
+        val shown = customRenderer.show(activity, fallback, onComplete = {
             frequency.markShown(placement)
             safeCallback(onComplete)
         })
+        return shown
     }
 
     private fun validAppOpenAd(): AppOpenAd? {
@@ -465,8 +497,11 @@ class AppOpenManager(
         val placement = configProvider().ads.placements.firstOrNull {
             it.name == placementName && it.enabled && it.format == "app_open"
         } ?: return false
-        return customRenderer.canRender(placement)
+        return placement.shouldRenderCustomBeforeAdMob() && customRenderer.canRender(placement)
     }
+
+    private fun placementConfig(name: String): com.itwingtech.itwingsdk.core.AdPlacementConfig? =
+        configProvider().ads.placements.firstOrNull { it.name == name && it.enabled && it.format == "app_open" }
 
     private fun clearExpiredAppOpenAd() {
         if (appOpenAd == null) return

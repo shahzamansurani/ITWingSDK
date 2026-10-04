@@ -46,6 +46,7 @@ class NativeLoader(
     private val nativeAds = WeakHashMap<ViewGroup, NativeAd>()
     private val loadTokens = WeakHashMap<ViewGroup, Int>()
     private val activeLoadKeys = WeakHashMap<ViewGroup, String>()
+    private val terminalRealTokens = WeakHashMap<ViewGroup, Int>()
 
     /*
     |--------------------------------------------------------------------------
@@ -136,7 +137,8 @@ class NativeLoader(
         |--------------------------------------------------------------------------
         */
 
-        val customAd = selectedCustomAd(config, placement)
+        val unit = placement.adMobUnitOrNull()
+        val customAd = if (unit == null) selectedCustomAd(config, placement) else null
 
         if (customAd != null) {
             AdEventTracker.log("ad_load_requested", placement)
@@ -159,10 +161,7 @@ class NativeLoader(
         |--------------------------------------------------------------------------
         */
 
-        val unit =
-            placement.units.firstOrNull {
-                it.network == "admob"
-            } ?: run {
+        unit ?: run {
                 synchronized(activeLoadKeys) {
                     activeLoadKeys.remove(container)
                 }
@@ -208,6 +207,10 @@ class NativeLoader(
                     ) {
 
                         activity.runOnUiThread {
+                            if (!isCurrentLoad(container, token) || !resolveRealLoad(container, token)) {
+                                nativeAd.destroy()
+                                return@runOnUiThread
+                            }
                             if (
                                 activity.isFinishing ||
                                 activity.isDestroyed ||
@@ -226,6 +229,10 @@ class NativeLoader(
                             AdLoadBackoff.recordSuccess(placement)
 
                             nativeAd.adEventCallback = object : NativeAdEventCallback {
+                                override fun onAdImpression() {
+                                    AdEventTracker.log("ad_impression", placement)
+                                }
+
                                 override fun onAdPaid(adValue: AdValue) {
                                     AdEventTracker.log(
                                         "ad_paid",
@@ -259,7 +266,13 @@ class NativeLoader(
                                         layoutRes,
                                         container,
                                         false
-                                    ) as NativeAdView
+                                    ) as? NativeAdView ?: run {
+                                    nativeAd.destroy()
+                                    synchronized(nativeAds) { nativeAds.remove(container) }
+                                    stopShimmer(loadingView)
+                                    container.visibility = View.GONE
+                                    return@runOnUiThread
+                                }
                             adView.applyTransparentNativeRoot()
                             adView.applyNativePlacementStyle(placement.metadata)
 
@@ -279,8 +292,6 @@ class NativeLoader(
                                 adView,
                                 placement.metadata
                             )
-                            AdEventTracker.log("ad_impression", placement)
-
                             adView.alpha = 0f
 
                             adView.animate()
@@ -295,6 +306,7 @@ class NativeLoader(
                     ) {
 
                             activity.runOnUiThread {
+                            if (!isCurrentLoad(container, token) || !resolveRealLoad(container, token)) return@runOnUiThread
 
                             if (!isCurrentLoad(container, token)) {
                                 return@runOnUiThread
@@ -337,6 +349,9 @@ class NativeLoader(
             synchronized(activeLoadKeys) {
                 activeLoadKeys.remove(container)
             }
+            synchronized(terminalRealTokens) {
+                terminalRealTokens.remove(container)
+            }
             val message = exception.message
                 ?.take(180)
                 ?: exception::class.java.simpleName
@@ -360,6 +375,9 @@ class NativeLoader(
                 nativeAds.values.toList().also { nativeAds.clear() }
             }
             ads.forEach { ad -> runCatching { ad.destroy() } }
+            synchronized(terminalRealTokens) {
+                terminalRealTokens.clear()
+            }
         } else {
             val ad = synchronized(nativeAds) { nativeAds.remove(container) }
             runCatching { ad?.destroy() }
@@ -368,6 +386,9 @@ class NativeLoader(
             }
             synchronized(activeLoadKeys) {
                 activeLoadKeys.remove(container)
+            }
+            synchronized(terminalRealTokens) {
+                terminalRealTokens.remove(container)
             }
         }
 
@@ -634,13 +655,8 @@ class NativeLoader(
         |--------------------------------------------------------------------------
         */
 
-        headlineView?.text =
-            ad.headline?.takeIf {
-                it.isNotBlank()
-            }
-                ?: ad.name.ifBlank {
-                    "Sponsored"
-                }
+        val displayText = ad.displayText()
+        headlineView?.text = displayText.headline ?: ad.name.ifBlank { "Sponsored" }
 
         bodyView?.text =
             ad.body?.takeIf {
@@ -655,9 +671,7 @@ class NativeLoader(
                 ?: "Install"
         ctaView?.normalizeNativeCtaButton()
 
-        advertiserView?.text =
-            ad.brandName()
-                ?: "Sponsored"
+        advertiserView?.text = displayText.advertiser ?: "Sponsored"
 
         storeView?.text = ""
 
@@ -752,8 +766,8 @@ class NativeLoader(
         mediaView?.apply {
 
             render(
-                ad.mediaUrl(),
-                ad.isVideo()
+                ad.resolvedMediaUrl(),
+                ad.isVideoMedia()
             )
 
             play()
@@ -1194,6 +1208,12 @@ class NativeLoader(
         return synchronized(loadTokens) {
             loadTokens[container] == token
         }
+    }
+
+    private fun resolveRealLoad(container: ViewGroup, token: Int): Boolean = synchronized(terminalRealTokens) {
+        if (terminalRealTokens[container] == token) return@synchronized false
+        terminalRealTokens[container] = token
+        true
     }
 
     private fun releaseMediaViews(
