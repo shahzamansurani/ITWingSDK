@@ -142,8 +142,7 @@ class ITWingActionDialog internal constructor(
 
         nativeContainer = content.findViewById(R.id.itwing_action_native_container)
         val shouldLoadNative =
-            !isReviewSectionVisible &&
-                !resolvedNativePlacement.isNullOrBlank() &&
+            !resolvedNativePlacement.isNullOrBlank() &&
                 normalizedNativeType != null
         nativeContainer?.visibility = if (shouldLoadNative) View.VISIBLE else View.GONE
         if (shouldLoadNative) {

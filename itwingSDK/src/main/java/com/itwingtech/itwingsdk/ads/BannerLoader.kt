@@ -555,15 +555,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         config: ITWingConfig,
         placement: AdPlacementConfig
     ): CustomAdConfig? {
-        val source = placement.metadata["source"]?.toString()?.lowercase()
-
-        if (
-            source != "custom" &&
-            source != "custom_ad" &&
-            placement.customAd == null
-        ) {
-            return null
-        }
+        if (!placement.allowsCustomFallback()) return null
 
         placement.customAd?.takeIf { !it.mediaUrl().isNullOrBlank() }?.let { return it }
 

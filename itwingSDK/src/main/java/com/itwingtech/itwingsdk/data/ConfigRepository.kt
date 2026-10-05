@@ -566,6 +566,7 @@ class ConfigRepository(
         return (0 until placements.length()).mapNotNull { index ->
             val item = placements.optJSONObject(index) ?: return@mapNotNull null
             val units = item.optJSONArray("units")
+            val metadata = item.optJSONObject("metadata")?.toMap() ?: emptyMap()
             AdPlacementConfig(
                 name = item.optString("name"),
                 format = item.optString("format"),
@@ -577,7 +578,7 @@ class ConfigRepository(
                 cooldownSeconds = item.optNullableInt("cooldown_seconds"),
                 sessionCap = item.optNullableInt("session_cap"),
                 dailyCap = item.optNullableInt("daily_cap"),
-                metadata = item.optJSONObject("metadata")?.toMap() ?: emptyMap(),
+                metadata = metadata,
                 customAd = parseCustomAd(item.optJSONObject("custom_ad")),
                 units = if (units == null) emptyList() else (0 until units.length()).mapNotNull { unitIndex ->
                     val unit = units.optJSONObject(unitIndex) ?: return@mapNotNull null
@@ -587,6 +588,7 @@ class ConfigRepository(
                         waterfallOrder = unit.optInt("waterfall_order", 1),
                     )
                 },
+                sourceMode = item.optCleanString("source_mode") ?: metadata["source_mode"]?.toString(),
             )
         }
     }
