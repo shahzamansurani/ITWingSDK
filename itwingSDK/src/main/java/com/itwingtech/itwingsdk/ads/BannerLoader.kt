@@ -44,6 +44,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
     private val adViews = WeakHashMap<ViewGroup, AdView>()
     private val loadTokens = WeakHashMap<ViewGroup, Int>()
     private val activeLoadKeys = WeakHashMap<ViewGroup, String>()
+    private val inlineLoadStates = WeakHashMap<ViewGroup, InlineLoadState>()
     private val terminalRealTokens = WeakHashMap<ViewGroup, Int>()
 
     @MainThread
@@ -87,12 +88,26 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         }
 
         val activeKey = listOf(placementName, bannerType?.name.orEmpty()).joinToString("|")
+        val canReuse = synchronized(activeLoadKeys) {
+            activeLoadKeys[container] == activeKey && InlineLoadReusePolicy.canReuse(
+                state = inlineLoadStates[container],
+                requestedKey = activeKey,
+                hasVisibleContent = container.visibility == View.VISIBLE && container.childCount > 0,
+            )
+        }
+        if (canReuse) {
+            container.visibility = View.VISIBLE
+            return
+        }
+
+        val hasStaleState = synchronized(activeLoadKeys) { inlineLoadStates.containsKey(container) }
+        if (container.childCount > 0 || hasStaleState) {
+            destroy(container)
+        }
+
         synchronized(activeLoadKeys) {
-            if (activeLoadKeys[container] == activeKey && container.childCount > 0) {
-                container.visibility = View.VISIBLE
-                return
-            }
             activeLoadKeys[container] = activeKey
+            inlineLoadStates[container] = InlineLoadState(activeKey, InlineLoadPhase.LOADING)
         }
 
         val token = nextToken(container)
@@ -124,6 +139,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             AdPriorityTrace.blocked(activity, "banner", placementName, "missing_admob_unit_and_custom_fallback")
             synchronized(activeLoadKeys) {
                 activeLoadKeys.remove(container)
+                inlineLoadStates.remove(container)
             }
             if (isCurrentLoad(container, token)) {
                 stopShimmer(loadingView)
@@ -262,6 +278,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                             container.visibility = View.GONE
                             synchronized(activeLoadKeys) {
                                 activeLoadKeys.remove(container)
+                                inlineLoadStates.remove(container)
                             }
 
                             runCatching { adView.destroy() }
@@ -284,6 +301,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                 container.visibility = View.GONE
                 synchronized(activeLoadKeys) {
                     activeLoadKeys.remove(container)
+                    inlineLoadStates.remove(container)
                 }
                 AdEventTracker.log(
                     "ad_load_failed",
@@ -326,6 +344,11 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         AdTheme.attachCardSurface(container, realView, "banner", metadata, clipContent = false)
 
         stopShimmer(loadingView)
+        synchronized(activeLoadKeys) {
+            inlineLoadStates[container]?.let { state ->
+                inlineLoadStates[container] = state.copy(phase = InlineLoadPhase.RENDERED)
+            }
+        }
 
         realView.alpha = 0f
         realView.animate()
@@ -584,6 +607,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
 
             synchronized(activeLoadKeys) {
                 activeLoadKeys.clear()
+                inlineLoadStates.clear()
             }
 
             return
@@ -593,6 +617,10 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         destroyLoadedAd(container)
         synchronized(terminalRealTokens) {
             terminalRealTokens.remove(container)
+        }
+        synchronized(activeLoadKeys) {
+            activeLoadKeys.remove(container)
+            inlineLoadStates.remove(container)
         }
 
         container.let {
@@ -624,9 +652,6 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             }
         }
 
-        synchronized(activeLoadKeys) {
-            activeLoadKeys.remove(container)
-        }
     }
 
     private fun releaseMediaViews(parent: ViewGroup) {

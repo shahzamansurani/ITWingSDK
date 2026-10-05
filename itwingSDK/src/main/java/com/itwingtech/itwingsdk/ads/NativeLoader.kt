@@ -46,6 +46,7 @@ class NativeLoader(
     private val nativeAds = WeakHashMap<ViewGroup, NativeAd>()
     private val loadTokens = WeakHashMap<ViewGroup, Int>()
     private val activeLoadKeys = WeakHashMap<ViewGroup, String>()
+    private val inlineLoadStates = WeakHashMap<ViewGroup, InlineLoadState>()
     private val terminalRealTokens = WeakHashMap<ViewGroup, Int>()
 
     /*
@@ -105,12 +106,26 @@ class NativeLoader(
             )
 
         val activeKey = listOf(placementName, resolvedNativeType.name).joinToString("|")
+        val canReuse = synchronized(activeLoadKeys) {
+            activeLoadKeys[container] == activeKey && InlineLoadReusePolicy.canReuse(
+                state = inlineLoadStates[container],
+                requestedKey = activeKey,
+                hasVisibleContent = container.visibility == View.VISIBLE && container.childCount > 0,
+            )
+        }
+        if (canReuse) {
+            container.visibility = View.VISIBLE
+            return
+        }
+
+        val hasStaleState = synchronized(activeLoadKeys) { inlineLoadStates.containsKey(container) }
+        if (container.childCount > 0 || hasStaleState) {
+            destroy(container)
+        }
+
         synchronized(activeLoadKeys) {
-            if (activeLoadKeys[container] == activeKey && container.childCount > 0) {
-                container.visibility = View.VISIBLE
-                return
-            }
             activeLoadKeys[container] = activeKey
+            inlineLoadStates[container] = InlineLoadState(activeKey, InlineLoadPhase.LOADING)
         }
 
         val token = nextToken(container)
@@ -173,6 +188,7 @@ class NativeLoader(
                 AdPriorityTrace.blocked(activity, "native", placementName, "missing_admob_unit_and_custom_fallback")
                 synchronized(activeLoadKeys) {
                     activeLoadKeys.remove(container)
+                    inlineLoadStates.remove(container)
                 }
                 stopShimmer(
                     loadingView
@@ -307,6 +323,7 @@ class NativeLoader(
 
                             container.visibility =
                                 View.VISIBLE
+                            markRendered(container)
 
                             populateNativeAdView(
                                 nativeAd,
@@ -333,15 +350,6 @@ class NativeLoader(
                                 return@runOnUiThread
                             }
 
-                            stopShimmer(
-                                loadingView
-                            )
-
-                            container.visibility =
-                                View.GONE
-                            synchronized(activeLoadKeys) {
-                                activeLoadKeys.remove(container)
-                            }
                             AdEventTracker.log(
                                 "ad_load_failed",
                                 placement,
@@ -354,6 +362,12 @@ class NativeLoader(
                                 AdEventTracker.log("ad_custom_fallback", placement, mapOf("reason" to adError.message))
                                 preloadCustomAd(activity, container, fallback, placement, resolvedNativeType, loadingView, token)
                                 return@runOnUiThread
+                            }
+                            stopShimmer(loadingView)
+                            container.visibility = View.GONE
+                            synchronized(activeLoadKeys) {
+                                activeLoadKeys.remove(container)
+                                inlineLoadStates.remove(container)
                             }
                         }
                     }
@@ -370,6 +384,7 @@ class NativeLoader(
                 View.GONE
             synchronized(activeLoadKeys) {
                 activeLoadKeys.remove(container)
+                inlineLoadStates.remove(container)
             }
             synchronized(terminalRealTokens) {
                 terminalRealTokens.remove(container)
@@ -400,6 +415,10 @@ class NativeLoader(
             synchronized(terminalRealTokens) {
                 terminalRealTokens.clear()
             }
+            synchronized(activeLoadKeys) {
+                activeLoadKeys.clear()
+                inlineLoadStates.clear()
+            }
         } else {
             val ad = synchronized(nativeAds) { nativeAds.remove(container) }
             runCatching { ad?.destroy() }
@@ -408,6 +427,7 @@ class NativeLoader(
             }
             synchronized(activeLoadKeys) {
                 activeLoadKeys.remove(container)
+                inlineLoadStates.remove(container)
             }
             synchronized(terminalRealTokens) {
                 terminalRealTokens.remove(container)
@@ -592,7 +612,7 @@ class NativeLoader(
         type: NativeType
     ) {
 
-        destroy(container)
+        clearRenderedContent(container)
 
         @LayoutRes
         val layoutRes =
@@ -922,6 +942,7 @@ class NativeLoader(
 
         container.visibility =
             View.VISIBLE
+        markRendered(container)
 
         /*
         |--------------------------------------------------------------------------
@@ -936,6 +957,22 @@ class NativeLoader(
                 "native_type" to type.name.lowercase()
             )
         )
+    }
+
+    private fun clearRenderedContent(container: ViewGroup) {
+        synchronized(nativeAds) {
+            nativeAds.remove(container)?.let { ad -> runCatching { ad.destroy() } }
+        }
+        releaseMediaViews(container)
+        container.removeAllViews()
+    }
+
+    private fun markRendered(container: ViewGroup) {
+        synchronized(activeLoadKeys) {
+            inlineLoadStates[container]?.let { state ->
+                inlineLoadStates[container] = state.copy(phase = InlineLoadPhase.RENDERED)
+            }
+        }
     }
 
     private fun loadImage(url: String?, imageView: ImageView?, activity: Activity) {
