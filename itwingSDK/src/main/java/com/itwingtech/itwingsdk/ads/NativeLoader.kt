@@ -70,11 +70,13 @@ class NativeLoader(
             configProvider()
 
         if (!config.ads.globalEnabled) {
+            AdPriorityTrace.blocked(activity, "native", placementName, "global_ads_disabled")
             destroy(container)
             return
         }
 
         if (!NetworkState.isOnline(activity)) {
+            AdPriorityTrace.blocked(activity, "native", placementName, "offline")
             destroy(container)
             return
         }
@@ -84,6 +86,8 @@ class NativeLoader(
                         it.enabled &&
                         it.format == "native"
             } ?: run {
+
+                AdPriorityTrace.blocked(activity, "native", placementName, "missing_or_disabled_placement")
 
                 destroy(container)
 
@@ -126,8 +130,9 @@ class NativeLoader(
 
         loadingView?.let {
             container.removeAllViews()
-            container.addView(it)
             it.visibility = View.VISIBLE
+            AdTheme.styleShimmer(it)
+            AdTheme.attachCardSurface(container, it, "native", placement.metadata, clipContent = false)
             (it as? ShimmerFrameLayout)?.startShimmer()
         }
 
@@ -138,9 +143,12 @@ class NativeLoader(
         */
 
         val unit = placement.adMobUnitOrNull()
-        val customAd = if (unit == null) selectedCustomAd(config, placement) else null
+        val customAd = if (unit == null || !ITWingSDK.isGoogleAdsInitialized()) {
+            selectedCustomAd(config, placement)
+        } else null
 
         if (customAd != null) {
+            AdPriorityTrace.request(activity, "native", placementName, "custom_fallback")
             AdEventTracker.log("ad_load_requested", placement)
             preloadCustomAd(
                 activity = activity,
@@ -162,6 +170,7 @@ class NativeLoader(
         */
 
         unit ?: run {
+                AdPriorityTrace.blocked(activity, "native", placementName, "missing_admob_unit_and_custom_fallback")
                 synchronized(activeLoadKeys) {
                     activeLoadKeys.remove(container)
                 }
@@ -187,6 +196,8 @@ class NativeLoader(
         }
 
         try {
+
+            AdPriorityTrace.request(activity, "native", placementName, "admob")
 
             val request =
                 NativeAdRequest.Builder(
@@ -226,11 +237,13 @@ class NativeLoader(
                                 nativeAds[container] = nativeAd
                             }
                             AdEventTracker.log("ad_loaded", placement)
+                            AdPriorityTrace.loaded(activity, "native", placementName, "admob")
                             AdLoadBackoff.recordSuccess(placement)
 
                             nativeAd.adEventCallback = object : NativeAdEventCallback {
                                 override fun onAdImpression() {
                                     AdEventTracker.log("ad_impression", placement)
+                                    AdPriorityTrace.impression(activity, "native", placementName)
                                 }
 
                                 override fun onAdPaid(adValue: AdValue) {
@@ -260,13 +273,22 @@ class NativeLoader(
                                         R.layout.native_admob_small
                                 }
 
-                            val adView =
+                            val cardView =
                                 LayoutInflater.from(activity)
                                     .inflate(
                                         layoutRes,
                                         container,
                                         false
-                                    ) as? NativeAdView ?: run {
+                                    ) as? ViewGroup ?: run {
+                                    nativeAd.destroy()
+                                    synchronized(nativeAds) { nativeAds.remove(container) }
+                                    stopShimmer(loadingView)
+                                    container.visibility = View.GONE
+                                    return@runOnUiThread
+                                }
+                            val adView = cardView.findViewById<NativeAdView>(R.id.ad_native_view)
+                                ?: (cardView as? NativeAdView)
+                                ?: run {
                                     nativeAd.destroy()
                                     synchronized(nativeAds) { nativeAds.remove(container) }
                                     stopShimmer(loadingView)
@@ -281,8 +303,7 @@ class NativeLoader(
                             )
 
                             container.removeAllViews()
-
-                            container.addView(adView)
+                            AdTheme.attachCardSurface(container, cardView, "native", placement.metadata, clipContent = false)
 
                             container.visibility =
                                 View.VISIBLE
@@ -326,6 +347,7 @@ class NativeLoader(
                                 placement,
                                 mapOf("message" to adError.message),
                             )
+                            AdPriorityTrace.blocked(activity, "native", placementName, "admob_${adError.code}")
                             AdLoadBackoff.recordFailure(placement, adError.message)
                             val fallback = config.customFallbackFor(placement)
                             if (fallback != null) {
@@ -590,8 +612,9 @@ class NativeLoader(
                     container,
                     false
                 )
-        root.applyTransparentNativeRoot()
-        root.applyNativePlacementStyle(placement.metadata)
+        val contentRoot = root.findViewById<View>(R.id.ad_content_root) ?: root
+        contentRoot.applyTransparentNativeRoot()
+        contentRoot.applyNativePlacementStyle(placement.metadata)
 
         /*
         |--------------------------------------------------------------------------
@@ -895,9 +918,7 @@ class NativeLoader(
         |--------------------------------------------------------------------------
         */
 
-        container.removeAllViews()
-
-        container.addView(root)
+        AdTheme.attachCardSurface(container, root, "native", placement.metadata, clipContent = false)
 
         container.visibility =
             View.VISIBLE
@@ -936,15 +957,24 @@ class NativeLoader(
     }
 
     private fun View.applyTransparentNativeRoot() {
-        setBackgroundResource(R.drawable.itwing_purchase_dialog_bg)
+        // The approved v1.49 MaterialCardView owns the visible ad surface.
+        // The Google NativeAdView and its content must stay transparent so the
+        // admin-controlled card surface is not covered by the legacy dialog
+        // gradient.
+        setBackgroundColor(Color.TRANSPARENT)
         findViewById<View?>(R.id.ad_unit_content)?.setBackgroundColor(Color.TRANSPARENT)
         clearNativeChildBackgrounds()
     }
 
     private fun View.applyNativePlacementStyle(metadata: Map<String, Any?>) {
+        val cardStyle = AdTheme.cardStyle("native", metadata)
         val transparent = metadata.booleanValue("native_transparent_background", true)
-        if (transparent) {
-            setBackgroundResource(R.drawable.itwing_purchase_dialog_bg)
+        if (cardStyle.cardSettingsConfigured) {
+            setBackgroundColor(Color.TRANSPARENT)
+            findViewById<View?>(R.id.ad_unit_content)?.setBackgroundColor(Color.TRANSPARENT)
+            clearNativeChildBackgrounds()
+        } else if (transparent) {
+            setBackgroundColor(Color.TRANSPARENT)
             findViewById<View?>(R.id.ad_unit_content)?.setBackgroundColor(Color.TRANSPARENT)
             clearNativeChildBackgrounds()
         } else {

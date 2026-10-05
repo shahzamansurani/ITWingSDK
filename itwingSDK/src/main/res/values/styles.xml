@@ -1,5 +1,8 @@
 <resources>
 
+    <!-- Scoped only to SDK MaterialCardView ad roots; host application theme is untouched. -->
+    <style name="ITWingAdCardTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+
     <style name="RatingBar" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="colorControlNormal">@color/grey</item>
         <item name="colorControlActivated">@color/orange</item>
@@ -8,6 +11,39 @@
     <style name="ITWingMaterialRatingStyle" parent="Widget.AppCompat.RatingBar">
         <item name="android:progressDrawable">@drawable/itwing_review_ratingbar</item>
         <item name="android:indeterminateDrawable">@drawable/itwing_review_ratingbar</item>
+    </style>
+
+    <style name="ITWingNativeAdSmallCTA" parent="Widget.AppCompat.Button">
+        <item name="android:background">@drawable/start_bg</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:gravity">center</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:paddingStart">@dimen/_8sdp</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:paddingEnd">@dimen/_8sdp</item>
+        <item name="android:paddingBottom">0dp</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <style name="ITWingNativeAdLargeCTA" parent="Widget.AppCompat.Button">
+        <item name="android:background">@drawable/start_bg</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:gravity">center</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:paddingStart">@dimen/_8sdp</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:paddingEnd">@dimen/_8sdp</item>
+        <item name="android:paddingBottom">0dp</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textSize">@dimen/_10ssp</item>
+        <item name="android:textStyle">bold</item>
     </style>
 
     <style name="CustomCardShape" parent="ShapeAppearance.MaterialComponents.SmallComponent">

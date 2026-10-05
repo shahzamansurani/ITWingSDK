@@ -69,7 +69,8 @@ import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdAdapter
 import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 
 object ITWingSDK {
-    const val VERSION: String = "1.53"
+    const val VERSION: String = "1.54"
+    private const val BILLING_STARTUP_TIMEOUT_MS = 8_000L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
     private var repository: ConfigRepository? = null
@@ -888,13 +889,8 @@ object ITWingSDK {
                 NotificationRuntimeManager.configure(activity, config, repository)
                 notifyListeners { it.onNotificationsReady() }
                 updates.check(activity)
-                subscriptions.connect(activity) {
-                    notifyListeners { it.onBillingReady() }
-                    subscriptions.restorePurchases {
-                        initializeMobileAds(activity) {
-                            ads.startAutomaticAppOpen(activity)
-                        }
-                    }
+                restorePurchasesBeforeAds(activity) {
+                    ads.startAutomaticAppOpen(activity)
                 }
             }
 
@@ -905,7 +901,18 @@ object ITWingSDK {
             runCatching { repository!!.bootstrap() }.onSuccess { remote ->
                 StartupTrace.event(activity, "BOOTSTRAP_SUCCESS", "configVersion=${remote.configVersion}")
                 config = remote
-                StartupTrace.event(activity, "CONFIG_APPLIED", "placements=${remote.ads.placements.size}")
+                StartupTrace.event(
+                    activity,
+                    "CONFIG_APPLIED",
+                    "configVersion=${remote.configVersion} " +
+                        "adsEnabled=${remote.ads.globalEnabled} " +
+                        "blockedReason=${remote.ads.blockedReason ?: "none"} " +
+                        "placements=${remote.ads.placements.size} " +
+                        "enabledPlacements=${remote.ads.placements.count { it.enabled }} " +
+                        "adMobUnits=${remote.ads.placements.sumOf { placement -> placement.units.count { it.network.equals("admob", true) && it.adUnitId.isNotBlank() } }} " +
+                        "customFallbacks=${remote.ads.placements.count { it.customAd != null } + remote.ads.customAds.size} " +
+                        "admobAppIdPresent=${!remote.ads.admobAppId.isNullOrBlank()}",
+                )
                 syncRemoteVpnAdBlocking()
                 if (autoApplyResponsiveLayout) {
                     getActiveActivity()?.let { active ->
@@ -945,18 +952,10 @@ object ITWingSDK {
                 NotificationRuntimeManager.configure(activity, config, repository)
                 notifyListeners { it.onNotificationsReady() }
                 updates.check(activity)
-                subscriptions.connect(activity) {
-                    notifyListeners { it.onBillingReady() }
-                    StartupTrace.event(activity, "PURCHASE_RESTORE_START")
-                    subscriptions.restorePurchases {
-                        StartupTrace.event(activity, "PURCHASE_RESTORE_DONE")
-                        initializeMobileAds(activity) {
-                            preloadAdsIfNeeded(activity)
-                            ads.startAutomaticAppOpen(activity)
-                            StartupTrace.event(activity, "ADS_READY")
-                            notifyListeners { it.onAdsReady() }
-                        }
-                    }
+                restorePurchasesBeforeAds(activity) {
+                    preloadAdsIfNeeded(activity)
+                    ads.startAutomaticAppOpen(activity)
+                    notifyListeners { it.onAdsReady() }
                 }
 
             }.onFailure {
@@ -1181,6 +1180,7 @@ object ITWingSDK {
         if (mobileAdsInitialized) {
             mobileAdsInitializationFinished = true
             notifyInlineAdsReady(true)
+            StartupTrace.event(activity, "ADS_READY", "gmaInitialized=true")
             onInitialized()
             return
         }
@@ -1190,16 +1190,25 @@ object ITWingSDK {
                 mapOf("reason" to "missing_admob_app_id")
             )
             mobileAdsInitializationFinished = true
+            StartupTrace.event(activity, "ADS_BLOCKED", "reason=missing_admob_app_id")
             notifyInlineAdsReady(true)
             onInitialized()
             return
         }
+        StartupTrace.event(activity, "ADMOB_APP_ID_READY", "present=true source=backend")
         StartupTrace.event(activity, "CONSENT_REQUEST_START")
-        AdConsentManager.requestConsent(activity) { consentAllowed ->
-            StartupTrace.event(activity, "CONSENT_REQUEST_DONE", "allowed=$consentAllowed")
-            if (!consentAllowed) {
+        AdConsentManager.requestConsent(activity, appId) { consent ->
+            StartupTrace.event(
+                activity,
+                "CONSENT_FINAL",
+                "state=${consent.state} canRequestAds=${consent.canRequestAds} reason=${consent.reason}",
+            )
+            if (!consent.canRequestAds) {
                 mobileAdsInitializationFinished = true
-                notifyInlineAdsReady(false)
+                StartupTrace.event(activity, "ADS_BLOCKED", "reason=${consent.reason}")
+                // The initialization attempt is terminal for this startup. Notify
+                // inline views so they can use a configured custom fallback.
+                notifyInlineAdsReady(true)
                 onInitialized()
                 return@requestConsent
             }
@@ -1210,13 +1219,15 @@ object ITWingSDK {
                         mobileAdsInitialized = true
                         mobileAdsInitializationFinished = true
                         StartupTrace.event(activity, "GMA_INIT_DONE")
+                        StartupTrace.event(activity, "ADS_READY", "gmaInitialized=true")
                         notifyInlineAdsReady(true)
                         onInitialized()
                     }
                 }.onFailure {
                     SDKTelemetry.recordNonFatal(it, mapOf("operation" to "mobile_ads_initialize"))
                     mobileAdsInitializationFinished = true
-                    notifyInlineAdsReady(false)
+                    StartupTrace.event(activity, "ADS_BLOCKED", "reason=gma_initialize_error")
+                    notifyInlineAdsReady(true)
                     onInitialized()
                 }
             }
@@ -1313,6 +1324,34 @@ object ITWingSDK {
             )
         }
     }
+
+
+    /**
+     * Billing is useful for entitlement reconciliation but it is not allowed to
+     * strand ad initialization when Play services or the network is unavailable.
+     * A timeout never grants an entitlement; cached/verified entitlement state
+     * remains authoritative and a later restore can still disable ads.
+     */
+    private fun restorePurchasesBeforeAds(activity: Activity, onAdsInitialized: () -> Unit) {
+        val completed = AtomicBoolean(false)
+        StartupTrace.event(activity, "PURCHASE_RESTORE_START")
+
+        fun finish(reason: String) {
+            if (!completed.compareAndSet(false, true)) return
+            StartupTrace.event(activity, "PURCHASE_RESTORE_DONE", "reason=$reason isAdFree=${isAdFree()}")
+            initializeMobileAds(activity, onAdsInitialized)
+        }
+
+        mainHandler.postDelayed({ finish("timeout") }, BILLING_STARTUP_TIMEOUT_MS)
+        subscriptions.connect(activity) {
+            notifyListeners { it.onBillingReady() }
+            subscriptions.restorePurchases {
+                finish("callback")
+            }
+        }
+    }
+
+    internal fun isGoogleAdsInitialized(): Boolean = mobileAdsInitialized
 
     @JvmStatic
     fun onReady(callback: (Boolean) -> Unit) {
@@ -1571,6 +1610,10 @@ object ITWingSDK {
         }
         return defaultValue
     }
+
+    /** Internal bridge used by the approved v1.49 ad-card renderer. */
+    internal fun getConfiguredColor(name: String): String? =
+        getColor(name).takeIf { it.isNotBlank() }
 
     private fun colorLookupKeys(name: String): List<String> {
         val key = name.trim()

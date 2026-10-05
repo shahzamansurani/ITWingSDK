@@ -62,11 +62,13 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         val config = configProvider()
 
         if (!config.ads.globalEnabled) {
+            AdPriorityTrace.blocked(activity, "banner", placementName, "global_ads_disabled")
             destroy(container)
             return
         }
 
         if (!NetworkState.isOnline(activity)) {
+            AdPriorityTrace.blocked(activity, "banner", placementName, "offline")
             destroy(container)
             return
         }
@@ -74,6 +76,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         val placement = config.ads.placements.firstOrNull {
             it.name == placementName && it.enabled && it.format == "banner"
         } ?: run {
+            AdPriorityTrace.blocked(activity, "banner", placementName, "missing_or_disabled_placement")
             destroy(container)
             return
         }
@@ -96,12 +99,15 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
 
         val loadingView = shimmerView ?: createDefaultShimmer(activity, container)
 
-        showShimmer(container, loadingView)
+        showShimmer(container, loadingView, placement.metadata)
 
         val unit = placement.adMobUnitOrNull()
-        val customAd = if (unit == null) selectedCustomAd(config, placement) else null
+        val customAd = if (unit == null || !ITWingSDK.isGoogleAdsInitialized()) {
+            selectedCustomAd(config, placement)
+        } else null
 
         if (customAd != null) {
+            AdPriorityTrace.request(activity, "banner", placementName, "custom_fallback")
             AdEventTracker.log("ad_load_requested", placement)
             preloadCustomBanner(
                 activity = activity,
@@ -115,6 +121,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         }
 
         unit ?: run {
+            AdPriorityTrace.blocked(activity, "banner", placementName, "missing_admob_unit_and_custom_fallback")
             synchronized(activeLoadKeys) {
                 activeLoadKeys.remove(container)
             }
@@ -128,6 +135,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         val resolvedBannerType = resolveBannerType(placement, bannerType)
 
         try {
+            AdPriorityTrace.request(activity, "banner", placementName, "admob")
             destroyLoadedAd(container)
 
             val adView = AdView(activity)
@@ -180,6 +188,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                             }
 
                             AdEventTracker.log("ad_loaded", placement)
+                            AdPriorityTrace.loaded(activity, "banner", placementName, "admob")
                             AdLoadBackoff.recordSuccess(placement)
 
                             adView.registerBannerAd(ad, activity)
@@ -196,11 +205,13 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                             replaceShimmerWithView(
                                 container = container,
                                 loadingView = loadingView,
-                                realView = adView
+                                realView = adView,
+                                metadata = placement.metadata
                             )
                             ad.adEventCallback = object : BannerAdEventCallback {
                                 override fun onAdImpression() {
                                     AdEventTracker.log("ad_impression", placement)
+                                    AdPriorityTrace.impression(activity, "banner", placementName)
                                 }
 
                                 override fun onAdPaid(adValue: AdValue) {
@@ -260,6 +271,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                                 placement,
                                 mapOf("message" to adError.message)
                             )
+                            AdPriorityTrace.blocked(activity, "banner", placementName, "admob_${adError.code}")
                             AdLoadBackoff.recordFailure(placement, adError.message)
                         }
                     }
@@ -283,7 +295,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         }
     }
 
-    private fun showShimmer(container: ViewGroup, loadingView: View?) {
+    private fun showShimmer(container: ViewGroup, loadingView: View?, metadata: Map<String, Any?>) {
         container.visibility = View.VISIBLE
         container.alpha = 1f
         container.removeAllViews()
@@ -296,7 +308,8 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
 
             view.visibility = View.VISIBLE
             view.alpha = 1f
-
+            AdTheme.styleShimmer(view)
+            AdTheme.attachCardSurface(container, view, "banner", metadata, clipContent = false)
             (view as? ShimmerFrameLayout)?.startShimmer()
         }
     }
@@ -304,17 +317,13 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
     private fun replaceShimmerWithView(
         container: ViewGroup,
         loadingView: View?,
-        realView: View
+        realView: View,
+        metadata: Map<String, Any?>,
     ) {
         container.visibility = View.VISIBLE
         container.alpha = 1f
 
-        if (realView.parent !== container) {
-            (realView.parent as? ViewGroup)?.removeView(realView)
-        }
-
-        container.removeAllViews()
-        container.addView(realView)
+        AdTheme.attachCardSurface(container, realView, "banner", metadata, clipContent = false)
 
         stopShimmer(loadingView)
 
@@ -424,7 +433,8 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         replaceShimmerWithView(
             container = container,
             loadingView = loadingView,
-            realView = root
+            realView = root,
+            metadata = placement.metadata
         )
 
         ITWingSDK.trackCustomAdImpression(

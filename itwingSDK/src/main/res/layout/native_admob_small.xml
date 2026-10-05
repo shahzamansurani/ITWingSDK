@@ -1,17 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdView xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_gravity="center"
-    android:background="@drawable/itwing_purchase_dialog_bg"
-    android:padding="@dimen/_6sdp">
+    android:theme="@style/ITWingAdCardTheme"
+    app:cardBackgroundColor="@android:color/transparent"
+    app:cardCornerRadius="0dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="0dp"
+    app:useCompatPadding="false"
+    app:cardPreventCornerOverlap="false">
+
+    <com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdView
+        android:id="@+id/ad_native_view"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:padding="@dimen/_5sdp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@android:color/transparent"
         android:gravity="center"
-        android:padding="@dimen/_5sdp"
         android:orientation="vertical">
 
         <RelativeLayout
@@ -41,10 +53,11 @@
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"
                 android:layout_marginLeft="5dp"
+                android:layout_marginEnd="36dp"
                 android:layout_toRightOf="@+id/ad_ic"
                 android:maxLines="3"
                 android:text="Discription"
-                android:textColor="#CBD5E1"
+                android:textColor="#000000"
                 android:textSize="12sp" />
 
         </RelativeLayout>
@@ -76,7 +89,7 @@
                         android:layout_height="wrap_content"
                         android:paddingLeft="3dp"
                         android:text="App Name"
-                        android:textColor="#F8FAFC"
+                        android:textColor="#000000"
                         android:textSize="12dp"
                         android:textStyle="bold" />
 
@@ -106,7 +119,7 @@
                             android:layout_height="wrap_content"
                             android:gravity="center"
                             android:text="Google Play"
-                            android:textColor="#CBD5E1"
+                            android:textColor="#000000"
                             android:textSize="12dp"
                             android:textStyle="bold" />
 
@@ -135,7 +148,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Ad Price"
-                        android:textColor="#CBD5E1"
+                        android:textColor="#000000"
                         android:textSize="12sp" />
 
                     <TextView
@@ -144,7 +157,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginLeft="@dimen/_2sdp"
                         android:text="Advertiser"
-                        android:textColor="#CBD5E1"
+                        android:textColor="#000000"
                         android:textSize="12sp" />
                 </LinearLayout>
 
@@ -181,4 +194,5 @@
     </LinearLayout>
 
 
-</com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdView>
+    </com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdView>
+</com.google.android.material.card.MaterialCardView>

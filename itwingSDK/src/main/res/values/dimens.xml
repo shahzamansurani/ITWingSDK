@@ -1,0 +1,8 @@
+<resources>
+    <dimen name="itwing_native_small_icon_size">40dp</dimen>
+    <dimen name="itwing_native_small_cta_height">40dp</dimen>
+    <dimen name="itwing_native_small_media_height">130dp</dimen>
+    <item type="dimen" name="itwing_native_large_icon_size">@dimen/_35sdp</item>
+    <item type="dimen" name="itwing_native_large_cta_height">@dimen/_35sdp</item>
+    <item type="dimen" name="itwing_native_large_media_height">@dimen/_110sdp</item>
+</resources>
