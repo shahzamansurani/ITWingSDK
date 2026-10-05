@@ -17,6 +17,7 @@ import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.core.ITWingSDK
 import com.itwingtech.itwingsdk.ui.GlassDialogWindow
+import com.itwingtech.itwingsdk.ui.SdkDialogTheme
 import com.itwingtech.itwingsdk.utils.safeCallback
 
 internal object AdFailureDialog {
@@ -32,6 +33,7 @@ internal object AdFailureDialog {
             if (!activity.isFinishing && !activity.isDestroyed) {
                 runCatching {
                     val content = LayoutInflater.from(activity).inflate(R.layout.dialog_itwing_action, null, false)
+                    SdkDialogTheme.apply(content, activity)
                     val retryColor = sdkColor("ad_failure_button_color", "dialog_positive_button_color", fallback = primaryColor)
                     val retryTextFallback = if (ColorUtils.calculateLuminance(retryColor) > 0.58) Color.BLACK else Color.WHITE
                     content.findViewById<TextView>(R.id.itwing_action_title).apply {

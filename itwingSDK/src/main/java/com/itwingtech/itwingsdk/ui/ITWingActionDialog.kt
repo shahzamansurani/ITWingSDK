@@ -11,6 +11,7 @@ import android.os.Build
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
+import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -81,6 +82,10 @@ class ITWingActionDialog internal constructor(
         val content = LayoutInflater.from(activity).inflate(R.layout.dialog_itwing_action, null, false)
         val primaryColor = primaryColorProvider()
         val onPrimary = if (ColorUtils.calculateLuminance(primaryColor) > 0.58) Color.BLACK else Color.WHITE
+        // Glass/blur is deliberately transparent at the Window level. This
+        // semantic surface is the approved fallback when blur is unavailable
+        // and also prevents the XML default from winning over Admin config.
+        SdkDialogTheme.apply(content, activity)
         val titleColor = sdkColor("dialog_title_color", "text_color", fallback = Color.rgb(17, 24, 39))
         val descriptionColor = sdkColor("dialog_description_color", "secondary_text_color", fallback = Color.rgb(107, 114, 128))
         val closeColor = sdkColor("dialog_close_icon_color", "icon_tint_color", fallback = descriptionColor)
@@ -142,6 +147,20 @@ class ITWingActionDialog internal constructor(
         )
 
         nativeContainer = content.findViewById(R.id.itwing_action_native_container)
+        nativeContainer?.let { container ->
+            // The dialog shell already owns the 18dp content inset. The native
+            // renderer owns the ad card inset, so keep the ad card at the same
+            // available width as the approved Native layout elsewhere instead of
+            // applying two horizontal insets.
+            (container.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+                val inset = (18 * activity.resources.displayMetrics.density).toInt()
+                params.leftMargin = -inset
+                params.rightMargin = -inset
+                params.marginStart = -inset
+                params.marginEnd = -inset
+                container.layoutParams = params
+            }
+        }
         val shouldLoadNative =
             !resolvedNativePlacement.isNullOrBlank() &&
                 normalizedNativeType != null
@@ -217,6 +236,13 @@ class ITWingActionDialog internal constructor(
         dialog = alert
         runCatching {
             alert.show()
+            content.post {
+                StartupTrace.event(
+                    activity,
+                    "EXIT_DIALOG_LAYOUT",
+                    "dialogWidth=${content.width} nativeWidth=${nativeContainer?.width ?: 0} nativeHeight=${nativeContainer?.height ?: 0} nativeType=${normalizedNativeType?.name ?: "none"}",
+                )
+            }
         }.onFailure { error ->
             dialog = null
             nativeContainer = null
@@ -404,7 +430,7 @@ class ITWingActionDialog internal constructor(
 
     private fun sdkColor(vararg keys: String, fallback: Int): Int {
         keys.forEach { key ->
-            ITWingSDK.getColor(key)
+            ITWingSDK.getSemanticColor(key, defaultValue = "#%08X".format(fallback), context = activity)
                 .takeIf { it.isNotBlank() }
                 ?.let { value -> runCatching { Color.parseColor(value) }.getOrNull() }
                 ?.let { return it }

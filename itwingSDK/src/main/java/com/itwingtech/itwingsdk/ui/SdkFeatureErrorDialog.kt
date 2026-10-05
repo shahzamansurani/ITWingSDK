@@ -40,11 +40,18 @@ internal object SdkFeatureErrorDialog {
             if (activity.isFinishing || activity.isDestroyed) return@action
             runCatching {
                 val content = LayoutInflater.from(activity).inflate(R.layout.dialog_itwing_action, null, false)
+                SdkDialogTheme.apply(content, activity)
                 val onPrimary = if (ColorUtils.calculateLuminance(primaryColor) > 0.58) Color.BLACK else Color.WHITE
                 content.findViewById<TextView>(R.id.itwing_action_title).text =
                     "${feature.trim().ifBlank { "SDK feature" }} unavailable"
+                content.findViewById<TextView>(R.id.itwing_action_title).setTextColor(
+                    SdkDialogTheme.color(activity, "dialog_title_color", Color.rgb(17, 24, 39)),
+                )
                 content.findViewById<TextView>(R.id.itwing_action_description).text =
                     reason.cleanReason()
+                content.findViewById<TextView>(R.id.itwing_action_description).setTextColor(
+                    SdkDialogTheme.color(activity, "dialog_description_color", Color.rgb(107, 114, 128)),
+                )
                 content.findViewById<View>(R.id.itwing_action_native_container).visibility = View.GONE
 
                 val dialog = AlertDialog.Builder(activity)

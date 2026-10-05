@@ -69,7 +69,7 @@ import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdAdapter
 import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 
 object ITWingSDK {
-    const val VERSION: String = "1.56"
+    const val VERSION: String = "1.57"
     private const val BILLING_STARTUP_TIMEOUT_MS = 8_000L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -1596,19 +1596,48 @@ object ITWingSDK {
 
     @JvmStatic
     fun getColor(name: String, defaultValue: String = ""): String {
+        return resolveColor(name, defaultValue).value
+    }
+
+    /**
+     * Resolves an SDK semantic color and emits a debug-only source trace for
+     * SDK-managed surfaces. The public getColor API remains unchanged.
+     */
+    internal fun getSemanticColor(
+        name: String,
+        defaultValue: String = "",
+        context: Context? = null,
+    ): String {
+        val resolved = resolveColor(name, defaultValue)
+        StartupTrace.event(
+            context,
+            "SDK_SEMANTIC_COLOR",
+            "semanticRole=${name.trim()} resolvedValue=${resolved.value.ifBlank { "none" }} source=${resolved.source}",
+        )
+        return resolved.value
+    }
+
+    private data class ResolvedColor(
+        val value: String,
+        val source: String,
+    )
+
+    private fun resolveColor(name: String, defaultValue: String): ResolvedColor {
         val colorMaps = listOfNotNull(
             config.app["colors"] as? Map<*, *>,
             config.app["sdk_colors"] as? Map<*, *>,
             config.app["sdkColors"] as? Map<*, *>,
         )
-        if (colorMaps.isEmpty()) return defaultValue
-        for (key in colorLookupKeys(name)) {
+        if (colorMaps.isEmpty()) return ResolvedColor(defaultValue, "default")
+        for ((index, key) in colorLookupKeys(name).withIndex()) {
             for (colors in colorMaps) {
                 val value = colors[key].asNonBlankString()
-                if (value != null) return value
+                if (value != null) {
+                    return ResolvedColor(value, if (index == 0) "explicit" else "generic")
+                }
             }
         }
-        return defaultValue
+        return ResolvedColor(defaultValue, "default")
     }
 
     /** Internal bridge used by the approved v1.49 ad-card renderer. */
@@ -1621,6 +1650,33 @@ object ITWingSDK {
         val aliases = when (key) {
             "primary" -> listOf("primary", "primary_color", "ad_primary_color")
             "primary_color" -> listOf("primary_color", "primary", "ad_primary_color")
+            "dialog_background_color", "dialog_glass_fallback_background" -> listOf(
+                key,
+                "dialog_background_color",
+                "surface_color",
+                "surface",
+                "background_color",
+                "background",
+            )
+            "dialog_title_color" -> listOf(key, "text_color", "text")
+            "dialog_description_color" -> listOf(key, "secondary_text_color", "secondary_text", "secondary", "text_color", "text")
+            "dialog_close_icon_color" -> listOf(key, "icon_tint_color", "secondary_text_color", "text_color", "text")
+            "dialog_positive_button_color", "dialog_negative_text_color" -> listOf(key, "primary", "primary_color", "accent")
+            "dialog_positive_text_color", "dialog_negative_button_color" -> listOf(key, "text_color", "text", "surface", "background")
+            "dialog_positive_stroke_color", "dialog_negative_stroke_color" -> listOf(key, "stroke_color", "outline", "divider_color")
+            "onboarding_background_color" -> listOf(key, "background_color", "background", "surface_color", "surface")
+            "onboarding_title_color" -> listOf(key, "text_color", "text")
+            "onboarding_description_color" -> listOf(key, "secondary_text_color", "secondary_text", "secondary", "text_color", "text")
+            "onboarding_button_color" -> listOf(key, "primary", "primary_color", "accent")
+            "onboarding_button_text_color" -> listOf(key, "white", "text_color", "text")
+            "onboarding_button_stroke_color" -> listOf(key, "stroke_color", "outline", "divider_color")
+            "onboarding_back_icon_color" -> listOf(key, "icon_tint_color", "primary", "primary_color")
+            "onboarding_dot_active_color" -> listOf(key, "primary", "primary_color", "accent")
+            "onboarding_dot_inactive_color" -> listOf(key, "stroke_color", "outline", "divider_color", "secondary_text_color")
+            "background_color" -> listOf("background_color", "background", "surface_color", "surface")
+            "surface_color" -> listOf("surface_color", "surface", "background_color", "background")
+            "text_color" -> listOf("text_color", "text")
+            "secondary_text_color" -> listOf("secondary_text_color", "secondary_text", "secondary", "text_color", "text")
             "native_text_color" -> listOf("native_text_color", "native_headline_text_color", "headline_text_color", "banner_text_color", "text_color", "text")
             "native_headline_text_color", "headline_text_color" -> listOf(key, "native_text_color", "banner_text_color", "text_color", "text")
             "native_secondary_text_color" -> listOf("native_secondary_text_color", "native_body_text_color", "native_meta_text_color", "banner_secondary_text_color", "secondary_text_color", "secondary", "text")
