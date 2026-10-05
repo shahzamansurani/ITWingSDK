@@ -24,6 +24,7 @@ import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.ads.NativeType
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingSDK
+import com.itwingtech.itwingsdk.core.StartupTrace
 import java.util.concurrent.atomic.AtomicBoolean
 import androidx.core.graphics.drawable.toDrawable
 
@@ -144,6 +145,11 @@ class ITWingActionDialog internal constructor(
         val shouldLoadNative =
             !resolvedNativePlacement.isNullOrBlank() &&
                 normalizedNativeType != null
+        StartupTrace.event(
+            activity,
+            "EXIT_DIALOG_CONFIG",
+            "nativePlacement=${resolvedNativePlacement ?: "none"} nativeType=${normalizedNativeType?.name ?: "none"} shouldLoadNative=$shouldLoadNative",
+        )
         nativeContainer?.visibility = if (shouldLoadNative) View.VISIBLE else View.GONE
         if (shouldLoadNative) {
             restoreHiddenInlineAds = ITWingSDK.ads.hideInlineAdsForDialog(activity)
@@ -187,8 +193,10 @@ class ITWingActionDialog internal constructor(
         }
         alert.setOnShowListener {
             GlassDialogWindow.apply(alert.window, activity.dialogWidth())
+            StartupTrace.event(activity, "EXIT_DIALOG_SHOW", "nativeContainer=${nativeContainer != null} shouldLoadNative=$shouldLoadNative")
             if (shouldLoadNative && activity.isUsable()) {
                 nativeContainer?.let { container ->
+                    StartupTrace.event(activity, "EXIT_DIALOG_NATIVE_REQUEST", "placement=$resolvedNativePlacement type=${normalizedNativeType?.name}")
                     runCatching {
                         ITWingSDK.ads.loadNativeForDialog(
                             activity = activity,

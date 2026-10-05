@@ -69,7 +69,7 @@ import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdAdapter
 import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 
 object ITWingSDK {
-    const val VERSION: String = "1.55"
+    const val VERSION: String = "1.56"
     private const val BILLING_STARTUP_TIMEOUT_MS = 8_000L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())

@@ -10,7 +10,7 @@ class ConfigRepositoryVersionTest {
     fun everySignedRequestUsesTheRuntimeSdkVersion() {
         assertEquals("X-ITW-SDK-Version", SDK_VERSION_HEADER)
         assertEquals(ITWingSDK.VERSION, sdkVersionHeaderValue())
-        assertEquals("1.55", sdkVersionHeaderValue())
+        assertEquals("1.56", sdkVersionHeaderValue())
         assertNotEquals("1.0.0", sdkVersionHeaderValue())
     }
 }
