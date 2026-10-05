@@ -2,4 +2,4 @@ jdk:
   - openjdk17
 
 install:
-  - ./gradlew clean :itwingSDK:publishToMavenLocal -Pgroup=com.github.shahzamansurani -Pversion=v1.54 --no-daemon
+  - ./gradlew clean :itwingSDK:publishToMavenLocal -Pgroup=com.github.shahzamansurani -Pversion=$VERSION --no-daemon
