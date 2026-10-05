@@ -57,4 +57,17 @@ class AdDeliveryPolicyTest {
         assertTrue(current.shouldRenderCustomBeforeAdMob())
         assertEquals(null, config.customFallbackFor(current))
     }
+
+    @Test fun fullscreenFallbackAcceptsGenericCampaignCreative() {
+        val campaignCreative = customNative.copy(format = "image")
+        val config = ITWingConfig(ads = AdsConfig(customAds = listOf(campaignCreative)))
+        val current = AdPlacementConfig(
+            name = "interstitial",
+            format = "interstitial",
+            enabled = true,
+            testMode = false,
+        )
+
+        assertEquals(campaignCreative, config.customFallbackFor(current))
+    }
 }

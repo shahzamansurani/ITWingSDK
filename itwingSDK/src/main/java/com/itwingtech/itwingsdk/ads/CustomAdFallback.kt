@@ -9,13 +9,13 @@ internal fun ITWingConfig.customFallbackFor(placement: AdPlacementConfig): Custo
     if (!placement.allowsCustomFallback()) return null
 
     val requested = placement.format.lowercase()
+    val genericCreativeFormats = setOf("image", "video", "html")
     fun CustomAdConfig.hasCreative(): Boolean = !resolvedMediaUrl().isNullOrBlank() || !html.isNullOrBlank()
     fun CustomAdConfig.matchesFormat(): Boolean {
         val format = this.format.lowercase()
         return format == requested || when (requested) {
-            "native" -> format == "image" || format == "html"
-            "banner" -> format == "image" || format == "html"
-            "rewarded_interstitial" -> format == "interstitial"
+            "native", "banner", "interstitial", "app_open", "rewarded", "rewarded_interstitial" ->
+                format in genericCreativeFormats || (requested == "rewarded_interstitial" && format == "interstitial")
             else -> false
         }
     }
