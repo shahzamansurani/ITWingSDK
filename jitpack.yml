@@ -1,5 +1,5 @@
 jdk:
-  - openjdk21
+  - openjdk17
 
 install:
-  - gradle clean :itwingSDK:publishToMavenLocal -Pgroup=com.github.shahzamansurani -Pversion=v1.54
+  - ./gradlew clean :itwingSDK:publishToMavenLocal -Pgroup=com.github.shahzamansurani -Pversion=v1.54 --no-daemon
