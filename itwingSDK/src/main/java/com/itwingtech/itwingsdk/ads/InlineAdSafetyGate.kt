@@ -91,6 +91,19 @@ internal object InlineAdSafetyGate {
         return true
     }
 
+    /**
+     * A subsequent interstitial call starts a new re-entry boundary. The prior
+     * interstitial's safety gate must not suppress the inline request that
+     * follows that boundary; if the new interstitial is actually presented,
+     * its dismissal arms a fresh gate.
+     */
+    fun releaseForNextInterstitialCall() {
+        if (!pending && suppressedActivityRef?.get() == null && reloadCallbacks.isEmpty() && windowCallbackRef?.get() == null) {
+            return
+        }
+        clear(null, "next_interstitial_call", reload = false)
+    }
+
     private fun scheduleAutoRelease(activity: Activity) {
         mainHandler.postDelayed({
             val suppressedActivity = suppressedActivityRef?.get()
@@ -143,7 +156,7 @@ internal object InlineAdSafetyGate {
     }
 
     private fun clear(activity: Activity?, reason: String, reload: Boolean) {
-        mainHandler.post {
+        val clearOnMain = {
             val targetActivity = activity ?: suppressedActivityRef?.get()
             val wrapper = windowCallbackRef?.get()
             if (targetActivity != null && wrapper != null && wrapper.activityRef.get() === targetActivity) {
@@ -174,6 +187,11 @@ internal object InlineAdSafetyGate {
             callbacks.forEach { callback ->
                 runCatching { callback() }
             }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            clearOnMain()
+        } else {
+            mainHandler.post(clearOnMain)
         }
     }
 

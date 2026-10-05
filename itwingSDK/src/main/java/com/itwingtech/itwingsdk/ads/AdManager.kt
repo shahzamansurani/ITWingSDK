@@ -33,6 +33,7 @@ class AdManager(
      */
     fun showInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
         PostInterstitialInlineSuppression.consumeAtNextInterstitialCall()
+        InlineAdSafetyGate.releaseForNextInterstitialCall()
         if (adsSuppressed()) {
             trackSuppressed("interstitial", placement)
             clearCache()
