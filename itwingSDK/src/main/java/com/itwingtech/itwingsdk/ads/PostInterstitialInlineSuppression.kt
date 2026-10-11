@@ -10,6 +10,11 @@ internal object PostInterstitialInlineSuppression {
         suppressed.set(false)
     }
 
+    /** Releases inline suppression after the user's explicit re-entry interaction. */
+    fun releaseForInlineRecovery() {
+        suppressed.set(false)
+    }
+
     fun isSuppressed(enabled: Boolean): Boolean {
         if (!enabled) suppressed.set(false)
         return enabled && suppressed.get()

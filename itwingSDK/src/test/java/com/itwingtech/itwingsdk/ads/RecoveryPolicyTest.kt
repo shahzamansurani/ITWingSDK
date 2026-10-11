@@ -22,6 +22,16 @@ class RecoveryPolicyTest {
         assertFalse(PostInterstitialInlineSuppression.isSuppressed(true))
     }
 
+    @Test fun inlineRecoveryReleasesSuppressionAtInteractionBoundary() {
+        PostInterstitialInlineSuppression.resetForTests()
+        PostInterstitialInlineSuppression.markPresented(true)
+        assertTrue(PostInterstitialInlineSuppression.isSuppressed(true))
+
+        PostInterstitialInlineSuppression.releaseForInlineRecovery()
+
+        assertFalse(PostInterstitialInlineSuppression.isSuppressed(true))
+    }
+
     @Test fun duplicateBrandDoesNotBecomeHeadline() {
         val text = CustomAdConfig(name = "Brand", headline = "Brand", campaignGroup = "Brand").displayText()
         assertEquals("Brand", text.advertiser)

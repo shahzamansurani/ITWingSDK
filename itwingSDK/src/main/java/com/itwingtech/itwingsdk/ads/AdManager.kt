@@ -7,6 +7,7 @@ import android.content.ContextWrapper
 import android.view.ViewGroup
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingConfig
+import com.itwingtech.itwingsdk.utils.safeCallback
 import java.lang.ref.WeakReference
 import java.util.Collections
 import java.util.WeakHashMap
@@ -37,7 +38,7 @@ class AdManager(
         if (adsSuppressed()) {
             trackSuppressed("interstitial", placement)
             clearCache()
-            onComplete()
+            safeCallback(onComplete)
             return
         }
         interstitialManager.show(activity = activity, placementName = placement, onComplete = onComplete,)
@@ -194,12 +195,17 @@ class AdManager(
                 activity = activity,
                 inlineFormat = "banner",
                 placement = placement,
+                recoveryKey = "banner:${System.identityHashCode(container)}:$placement",
                 reloadAfterInteraction = {
                     val resumedActivity = activityRef.get()
                     val resumedContainer = containerRef.get()
+                    val currentRecord = resumedContainer?.let { bannerRecords[it] }
                     if (
                         resumedActivity != null &&
                         resumedContainer != null &&
+                        currentRecord?.activityRef?.get() === resumedActivity &&
+                        currentRecord.placement == placement &&
+                        currentRecord.bannerType == bannerType &&
                         !resumedActivity.isFinishing &&
                         !resumedActivity.isDestroyed &&
                         resumedContainer.isAttachedToWindow
@@ -260,12 +266,17 @@ class AdManager(
                 activity = activity,
                 inlineFormat = "native",
                 placement = placement,
+                recoveryKey = "native:${System.identityHashCode(container)}:$placement",
                 reloadAfterInteraction = {
                     val resumedActivity = activityRef.get()
                     val resumedContainer = containerRef.get()
+                    val currentRecord = resumedContainer?.let { nativeRecords[it] }
                     if (
                         resumedActivity != null &&
                         resumedContainer != null &&
+                        currentRecord?.activityRef?.get() === resumedActivity &&
+                        currentRecord.placement == placement &&
+                        currentRecord.nativeType == nativeType &&
                         !resumedActivity.isFinishing &&
                         !resumedActivity.isDestroyed &&
                         resumedContainer.isAttachedToWindow

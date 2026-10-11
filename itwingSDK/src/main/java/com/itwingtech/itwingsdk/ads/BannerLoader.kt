@@ -161,11 +161,11 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
             }
 
             val extras = Bundle()
-
-            when (resolvedBannerType) {
-                BannerType.COLLAPSIBLE_TOP -> extras.putString("collapsible", "top")
-                BannerType.COLLAPSIBLE_BOTTOM -> extras.putString("collapsible", "bottom")
-                BannerType.ADAPTIVE -> Unit
+            resolvedBannerType.collapsibleDirection?.let { direction ->
+                // Google Mobile Ads defines only "top" and "bottom" for this
+                // extra. Adaptive banners deliberately send no collapsible
+                // extra and remain the safe fallback for invalid metadata.
+                extras.putString("collapsible", direction)
             }
 
             val request = BannerAdRequest.Builder(
@@ -206,6 +206,18 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                             AdEventTracker.log("ad_loaded", placement)
                             AdPriorityTrace.loaded(activity, "banner", placementName, "admob")
                             AdLoadBackoff.recordSuccess(placement)
+
+                            val wasRequestedAsCollapsible = resolvedBannerType.collapsibleDirection != null
+                            val wasServedAsCollapsible = runCatching { ad.isCollapsible() }.getOrDefault(false)
+                            AdEventTracker.log(
+                                "banner_collapsible_result",
+                                placement,
+                                mapOf(
+                                    "requested" to wasRequestedAsCollapsible,
+                                    "served" to wasServedAsCollapsible,
+                                    "direction" to (resolvedBannerType.collapsibleDirection ?: "none"),
+                                ),
+                            )
 
                             adView.registerBannerAd(ad, activity)
 
@@ -684,20 +696,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
     ): BannerType {
         if (override != null) return override
 
-        val value = (
-                placement.metadata["banner_type"]
-                    ?: placement.metadata["collapsible_position"]
-                )
-            ?.toString()
-            ?.lowercase()
-
-        return when (value) {
-            "top" -> BannerType.COLLAPSIBLE_TOP
-            "bottom" -> BannerType.COLLAPSIBLE_BOTTOM
-            "collapsible_top" -> BannerType.COLLAPSIBLE_TOP
-            "collapsible_bottom" -> BannerType.COLLAPSIBLE_BOTTOM
-            else -> BannerType.ADAPTIVE
-        }
+        return BannerType.fromMetadata(placement.metadata)
     }
 
     private fun createDefaultShimmer(

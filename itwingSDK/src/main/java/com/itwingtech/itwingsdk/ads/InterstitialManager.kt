@@ -11,6 +11,7 @@ import com.google.android.libraries.ads.mobile.sdk.common.PreloadConfiguration
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAd
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.core.AdPlacementConfig
+import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import java.util.concurrent.ConcurrentHashMap
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdEventCallback
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdPreloader
@@ -28,15 +29,32 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     private val minLoadIntervalMs = 20_000L
 
     fun preloadAll(activity: Activity) {
-        val config = configProvider()
-        config.ads.placements.filter {
-            config.ads.globalEnabled &&
-                    it.enabled &&
-                    it.format == "interstitial" &&
-                    it.metadata["preload_on_start"].isTruthy()
-        }
-            .forEach {
-                preload(activity, it.name)
+        if (!activity.isUsable()) return
+        val config = runCatching { configProvider() }
+            .onFailure { error ->
+                SDKTelemetry.recordNonFatal(error, mapOf("operation" to "interstitial_preload_config"))
+            }
+            .getOrNull()
+            ?: return
+
+        if (!config.ads.globalEnabled) return
+        config.ads.placements
+            .filter {
+                it.enabled &&
+                        it.format == "interstitial" &&
+                        it.metadata["preload_on_start"].isTruthy()
+            }
+            .forEach { placement ->
+                runCatching { preload(activity, placement.name) }
+                    .onFailure { error ->
+                        SDKTelemetry.recordNonFatal(
+                            error,
+                            mapOf(
+                                "operation" to "interstitial_preload",
+                                "placement" to placement.name.take(80),
+                            ),
+                        )
+                    }
             }
     }
 
@@ -45,7 +63,19 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     }
 
     fun load(activity: Activity, placementName: String, forceRequest: Boolean = false) {
-        val config = configProvider()
+        if (!activity.isUsable()) return
+        val config = runCatching { configProvider() }
+            .onFailure { error ->
+                SDKTelemetry.recordNonFatal(
+                    error,
+                    mapOf(
+                        "operation" to "interstitial_load_config",
+                        "placement" to placementName.take(80),
+                    ),
+                )
+            }
+            .getOrNull()
+            ?: return
         if (!config.ads.globalEnabled) {
             AdPriorityTrace.blocked(activity, "interstitial", placementName, "global_ads_disabled")
             return
@@ -88,6 +118,22 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     }
 
     fun show(activity: Activity, placementName: String, onComplete: () -> Unit = {}, ) {
+        AdClassCastGuard.run(
+            action = { showInternal(activity, placementName, onComplete) },
+            onMismatch = { error ->
+                SDKTelemetry.recordNonFatal(
+                    error,
+                    mapOf(
+                        "operation" to "interstitial_show_type_mismatch",
+                        "placement" to placementName.take(80),
+                    ),
+                )
+                safeCallback(onComplete)
+            },
+        )
+    }
+
+    private fun showInternal(activity: Activity, placementName: String, onComplete: () -> Unit = {}, ) {
         if (!activity.isUsable()) {
             AdPriorityTrace.blocked(activity, "interstitial", placementName, "activity_unusable")
             safeCallback(onComplete)
@@ -262,13 +308,23 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
 
     fun clear(placementName: String, ) {
         loadedAds.remove(placementName)
-        preloaderKeys[placementName]?.let { InterstitialAdPreloader.destroy(it) }
+        preloaderKeys[placementName]?.let { key ->
+            runCatching { InterstitialAdPreloader.destroy(key) }
+                .onFailure { error ->
+                    SDKTelemetry.recordNonFatal(error, mapOf("operation" to "interstitial_clear", "placement" to placementName.take(80)))
+                }
+        }
         preloaderKeys.remove(placementName)
     }
 
     fun clearAll() {
         loadedAds.clear()
-        preloaderKeys.values.forEach { InterstitialAdPreloader.destroy(it) }
+        preloaderKeys.values.forEach { key ->
+            runCatching { InterstitialAdPreloader.destroy(key) }
+                .onFailure { error ->
+                    SDKTelemetry.recordNonFatal(error, mapOf("operation" to "interstitial_clear_all"))
+                }
+        }
         preloaderKeys.clear()
     }
 
@@ -276,12 +332,24 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         if (preloaderKeys[placementName] == adUnitId) {
             return
         }
-        preloaderKeys[placementName]?.let { InterstitialAdPreloader.destroy(it) }
-        preloaderKeys[placementName] = adUnitId
+        preloaderKeys[placementName]?.let { key ->
+            runCatching { InterstitialAdPreloader.destroy(key) }
+        }
         runCatching {
             InterstitialAdPreloader.start(
                 adUnitId,
                 PreloadConfiguration(request, 1),
+            )
+        }.onSuccess {
+            preloaderKeys[placementName] = adUnitId
+        }.onFailure { error ->
+            preloaderKeys.remove(placementName, adUnitId)
+            SDKTelemetry.recordNonFatal(
+                error,
+                mapOf(
+                    "operation" to "interstitial_preloader_start",
+                    "placement" to placementName.take(80),
+                ),
             )
         }
     }
