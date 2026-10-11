@@ -143,11 +143,6 @@ class NativeLoader(
                 resolvedNativeType
             )
 
-        // A suppressed request hides the container. The normal loader owns
-        // visibility, so restore it before installing the existing shimmer.
-        container.visibility = View.VISIBLE
-        container.alpha = 1f
-
         loadingView?.let {
             container.removeAllViews()
             it.visibility = View.VISIBLE

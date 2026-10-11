@@ -1,5 +1,13 @@
 # Changelog
 
+## ITWingSDK v1.59
+
+- Restored the approved v1.57 runtime baseline and layouts.
+- Added safe collapsible-banner requests for supported top and bottom metadata.
+- Added first-touch post-interstitial inline-ad recovery for current destination
+  Native and Banner containers, preserving the normal shimmer, AdMob-first, and
+  Custom-fallback loading path.
+
 ## ITWingSDK v1.58
 
 - Hardened placement-format conversion against malformed or unsupported values.

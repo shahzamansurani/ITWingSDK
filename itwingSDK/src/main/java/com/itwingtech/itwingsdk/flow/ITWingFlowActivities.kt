@@ -6,9 +6,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -27,9 +25,7 @@ import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
-import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -42,7 +38,6 @@ import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.ads.InlineAdSafetyGate
 import com.itwingtech.itwingsdk.ads.ITWingBannerView
 import com.itwingtech.itwingsdk.ads.ITWingNativeAdView
-import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingAppFlowOptions
 import com.itwingtech.itwingsdk.core.ITWingAppFlowRegistry
 import com.itwingtech.itwingsdk.core.ITWingAppFlowSession
@@ -537,31 +532,12 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
             heightDp = options.onboardingButtonHeightDp,
         )
         nextButton.applySdkTextSize(options.onboardingUi.nextButton.textSize, options.onboardingUi.nextButton.textSizeSp ?: options.onboardingButtonTextSizeSp)
-        val backTint = (
+        options.onboardingUi.backButton.drawableRes?.let(backButton::setImageResource)
+        backButton.imageTintList = (
             options.onboardingUi.backButton.tintColor
                 ?: options.onboardingBackTintColor
                 ?: semanticColor("onboarding_back_icon_color", primaryColor())
-            )
-        val customBackDrawable = options.onboardingUi.backButton.drawableRes
-        if (customBackDrawable != null) {
-            // Preserve the existing public custom-drawable behavior.
-            backButton.setImageResource(customBackDrawable)
-            backButton.imageTintList = ColorStateList.valueOf(backTint)
-        } else {
-            // The approved default icon is two-tone: the container follows the
-            // configured onboarding color while the arrow remains white. A
-            // single ImageView tint would recolor both vector paths.
-            val container = ContextCompat.getDrawable(this, R.drawable.itwing_flow_back_container)?.mutate()
-            val arrow = ContextCompat.getDrawable(this, R.drawable.itwing_flow_back_arrow)?.mutate()
-            if (container != null && arrow != null) {
-                DrawableCompat.setTint(container, backTint)
-                backButton.setImageDrawable(LayerDrawable(arrayOf<Drawable>(container, arrow)))
-                backButton.imageTintList = null
-            } else {
-                backButton.setImageResource(R.drawable.ic_back)
-                backButton.imageTintList = ColorStateList.valueOf(backTint)
-            }
-        }
+            ).let(ColorStateList::valueOf)
         val backSizePx = dimensionPx(options.onboardingUi.backButton.size)
         val backSizeDp = options.onboardingUi.backButton.sizeDp ?: options.onboardingBackSizeDp
         backButton.applyViewSize(widthPx = backSizePx, heightPx = backSizePx, widthDp = backSizeDp, heightDp = backSizeDp)
@@ -1071,25 +1047,13 @@ private fun termsAdFormat(options: ITWingAppFlowOptions): String? {
     return configured.trim().lowercase().takeIf { it in setOf("native", "banner") }
 }
 
-private fun placementFormat(placement: String): String {
-    if (placement.isBlank()) return "native"
-
-    val configuredFormat = runCatching {
-        ITWingSDK.currentConfig().ads.placements
-            .firstOrNull { it.name == placement }
-            ?.format
-    }.onFailure { error ->
-        SDKTelemetry.recordNonFatal(
-            error,
-            mapOf(
-                "operation" to "placement_format",
-                "placement" to placement.take(80),
-            ),
-        )
-    }.getOrNull()
-
-    return normalizePlacementFormat(configuredFormat)
-}
+private fun placementFormat(placement: String): String =
+    ITWingSDK.currentConfig().ads.placements
+        .firstOrNull { it.name == placement }
+        ?.format
+        ?.lowercase()
+        ?.takeIf { it in setOf("banner", "native") }
+        ?: "native"
 
 private fun splashStyle(options: ITWingAppFlowOptions): String =
     (options.splashStyle

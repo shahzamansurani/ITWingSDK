@@ -7,7 +7,6 @@ import android.content.ContextWrapper
 import android.view.ViewGroup
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingConfig
-import com.itwingtech.itwingsdk.utils.safeCallback
 import java.lang.ref.WeakReference
 import java.util.Collections
 import java.util.WeakHashMap
@@ -38,7 +37,7 @@ class AdManager(
         if (adsSuppressed()) {
             trackSuppressed("interstitial", placement)
             clearCache()
-            safeCallback(onComplete)
+            onComplete()
             return
         }
         interstitialManager.show(activity = activity, placementName = placement, onComplete = onComplete,)
@@ -184,11 +183,6 @@ class AdManager(
             destroyBanner(container)
             return
         }
-        if (PostInterstitialInlineSuppression.isSuppressed(postInterstitialSuppressionEnabled())) {
-            trackSuppressed("banner", placement)
-            destroyBanner(container)
-            return
-        }
         val activityRef = WeakReference(activity)
         val containerRef = WeakReference(container)
         if (InlineAdSafetyGate.suppressInlineAd(
@@ -251,11 +245,6 @@ class AdManager(
         rememberContainer(nativeContainers, container)
         nativeRecords[container] = NativeRecord(activity, placement, nativeType)
         if (adsSuppressed()) {
-            trackSuppressed("native", placement)
-            destroyNative(container)
-            return
-        }
-        if (PostInterstitialInlineSuppression.isSuppressed(postInterstitialSuppressionEnabled())) {
             trackSuppressed("native", placement)
             destroyNative(container)
             return

@@ -174,29 +174,12 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
         }
         val minStalenessDays = settings?.int("min_staleness_days", 0) ?: 0
         val minPriority = settings?.int("priority", 0) ?: 0
-        val appUpdateManager = manager ?: runCatching {
-            AppUpdateManagerFactory.create(activity)
-        }.onFailure {
-            SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_manager_create"))
-            SDKTelemetry.track("in_app_update_unavailable", mapOf("reason" to "manager_create_failed"))
-            onResult?.invoke("In-app updates are unavailable on this device.")
-            onNoFlow?.invoke()
-        }.getOrNull()?.also {
+        val appUpdateManager = manager ?: AppUpdateManagerFactory.create(activity).also {
             manager = it
-        } ?: return
-
+        }
         registerFlexibleListener(appUpdateManager)
-        val updateInfoTask = runCatching { appUpdateManager.appUpdateInfo }
-            .onFailure {
-                SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_info"))
-                SDKTelemetry.track("in_app_update_check_failed", mapOf("message" to (it.message ?: "unknown")))
-                onResult?.invoke("In-app update check failed: ${it.message ?: "unknown error"}")
-                onNoFlow?.invoke()
-            }
-            .getOrNull()
-            ?: return
 
-        updateInfoTask.addOnSuccessListener { info ->
+        appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
             val staleEnough = force || minStalenessDays <= 0 || (info.clientVersionStalenessDays() ?: -1) >= minStalenessDays
             val priorityEnough = force || minPriority <= 0 || info.updatePriority() >= minPriority
             SDKTelemetry.track(
@@ -280,13 +263,7 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
 
     private fun resumeIfNeeded(activity: Activity) {
         val appUpdateManager = manager ?: return
-        val updateInfoTask = runCatching { appUpdateManager.appUpdateInfo }
-            .onFailure {
-                SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_resume_info"))
-            }
-            .getOrNull()
-            ?: return
-        updateInfoTask.addOnSuccessListener { info ->
+        appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
             when {
                 info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS -> {
                     startUpdateFlow(appUpdateManager, activity, info, AppUpdateType.IMMEDIATE, automaticLauncher, null)
@@ -376,22 +353,11 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
             return
         }
 
-        val updateTask = runCatching {
-            appUpdateManager.startUpdateFlow(
-                info,
-                activity,
-                AppUpdateOptions.newBuilder(updateType).build(),
-            )
-        }.onFailure {
-            flowInProgress.set(false)
-            endActiveFullscreenOwner()
-            SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_flow", "type" to updateType.label()))
-            SDKTelemetry.track("in_app_update_flow_failed", mapOf("type" to updateType.label(), "message" to (it.message ?: "unknown")))
-            onResult?.invoke("In-app update flow failed: ${it.message ?: "unknown error"}")
-            onNoFlow?.invoke()
-        }.getOrNull() ?: return
-
-        updateTask.addOnSuccessListener {
+        appUpdateManager.startUpdateFlow(
+            info,
+            activity,
+            AppUpdateOptions.newBuilder(updateType).build(),
+        ).addOnSuccessListener {
             SDKTelemetry.track("in_app_update_flow_started", mapOf("type" to updateType.label(), "result" to it))
             onResult?.invoke("In-app update flow started (${updateType.label()}).")
             onFlowStarted?.invoke()
@@ -407,32 +373,19 @@ class InAppUpdateManager(private val configProvider: () -> ITWingConfig) {
 
     private fun registerFlexibleListener(appUpdateManager: AppUpdateManager) {
         if (installStateListener != null) return
-        val listener = InstallStateUpdatedListener { state ->
+        installStateListener = InstallStateUpdatedListener { state ->
             SDKTelemetry.track("in_app_update_install_state", mapOf("status" to state.installStatus()))
             if (state.installStatus() == InstallStatus.DOWNLOADED) {
                 completeFlexibleUpdate(appUpdateManager)
             }
+        }.also {
+            appUpdateManager.registerListener(it)
         }
-        runCatching { appUpdateManager.registerListener(listener) }
-            .onSuccess { installStateListener = listener }
-            .onFailure {
-                SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_register_listener"))
-                SDKTelemetry.track("in_app_update_listener_unavailable")
-            }
     }
 
     private fun completeFlexibleUpdate(appUpdateManager: AppUpdateManager) {
         SDKTelemetry.track("in_app_update_completing")
-        val completionTask = runCatching { appUpdateManager.completeUpdate() }
-            .onFailure {
-                flowInProgress.set(false)
-                endActiveFullscreenOwner()
-                completePendingUpdateContinuation()
-                SDKTelemetry.recordNonFatal(it, mapOf("operation" to "in_app_update_complete"))
-            }
-            .getOrNull()
-            ?: return
-        completionTask
+        appUpdateManager.completeUpdate()
             .addOnSuccessListener {
                 flowInProgress.set(false)
                 endActiveFullscreenOwner()

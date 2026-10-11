@@ -5,41 +5,18 @@ import org.junit.Test
 
 class BannerTypeTest {
     @Test
-    fun supportedDirectionsMapToGoogleExtras() {
-        assertEquals("top", BannerType.COLLAPSIBLE_TOP.collapsibleDirection)
-        assertEquals("bottom", BannerType.COLLAPSIBLE_BOTTOM.collapsibleDirection)
-        assertEquals(null, BannerType.ADAPTIVE.collapsibleDirection)
+    fun resolvesSupportedCollapsibleMetadata() {
+        assertEquals(BannerType.COLLAPSIBLE_TOP, BannerType.fromMetadata(mapOf("banner_type" to "top")))
+        assertEquals(BannerType.COLLAPSIBLE_BOTTOM, BannerType.fromMetadata(mapOf("banner_type" to "bottom")))
+        assertEquals(BannerType.COLLAPSIBLE_TOP, BannerType.fromMetadata(mapOf("banner_type" to "collapsible_top")))
+        assertEquals(BannerType.COLLAPSIBLE_TOP, BannerType.fromMetadata(mapOf("banner_type" to "collapsible", "collapsible_position" to "top")))
+        assertEquals(BannerType.COLLAPSIBLE_BOTTOM, BannerType.fromMetadata(mapOf("collapsible_position" to "bottom")))
     }
 
     @Test
-    fun metadataSupportsExplicitTypeAndSeparatePosition() {
-        assertEquals(
-            BannerType.COLLAPSIBLE_TOP,
-            BannerType.fromMetadata(mapOf("banner_type" to "collapsible_top")),
-        )
-        assertEquals(
-            BannerType.COLLAPSIBLE_BOTTOM,
-            BannerType.fromMetadata(
-                mapOf("banner_type" to "collapsible", "collapsible_position" to "bottom"),
-            ),
-        )
-        assertEquals(
-            BannerType.COLLAPSIBLE_TOP,
-            BannerType.fromMetadata(mapOf("collapsible_position" to "TOP")),
-        )
-    }
-
-    @Test
-    fun malformedMetadataFallsBackToAdaptiveWithoutThrowing() {
-        assertEquals(
-            BannerType.ADAPTIVE,
-            BannerType.fromMetadata(
-                mapOf("banner_type" to mapOf("unexpected" to true), "collapsible_position" to 1),
-            ),
-        )
-        assertEquals(
-            BannerType.ADAPTIVE,
-            BannerType.fromMetadata(mapOf("banner_type" to "unsupported")),
-        )
+    fun malformedMetadataFallsBackToAdaptive() {
+        assertEquals(BannerType.ADAPTIVE, BannerType.fromMetadata(mapOf("banner_type" to "unsupported")))
+        assertEquals(BannerType.ADAPTIVE, BannerType.fromMetadata(mapOf("banner_type" to "  ")))
+        assertEquals(BannerType.ADAPTIVE, BannerType.fromMetadata(emptyMap()))
     }
 }

@@ -160,20 +160,23 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                 adViews[container] = adView
             }
 
-            val extras = Bundle()
-            resolvedBannerType.collapsibleDirection?.let { direction ->
-                // Google Mobile Ads defines only "top" and "bottom" for this
-                // extra. Adaptive banners deliberately send no collapsible
-                // extra and remain the safe fallback for invalid metadata.
-                extras.putString("collapsible", direction)
-            }
-
-            val request = BannerAdRequest.Builder(
+            val requestBuilder = BannerAdRequest.Builder(
                 adUnitId = unit.adUnitId,
                 adSize = getAdaptiveAdSize(activity, container)
             )
-                .setGoogleExtrasBundle(extras)
-                .build()
+
+            val collapsibleDirection = when (resolvedBannerType) {
+                BannerType.COLLAPSIBLE_TOP -> "top"
+                BannerType.COLLAPSIBLE_BOTTOM -> "bottom"
+                BannerType.ADAPTIVE -> null
+            }
+            collapsibleDirection?.let { direction ->
+                requestBuilder.setGoogleExtrasBundle(Bundle().apply {
+                    putString("collapsible", direction)
+                })
+            }
+
+            val request = requestBuilder.build()
 
             AdEventTracker.log("ad_load_requested", placement)
 
@@ -206,16 +209,13 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                             AdEventTracker.log("ad_loaded", placement)
                             AdPriorityTrace.loaded(activity, "banner", placementName, "admob")
                             AdLoadBackoff.recordSuccess(placement)
-
-                            val wasRequestedAsCollapsible = resolvedBannerType.collapsibleDirection != null
-                            val wasServedAsCollapsible = runCatching { ad.isCollapsible() }.getOrDefault(false)
                             AdEventTracker.log(
                                 "banner_collapsible_result",
                                 placement,
                                 mapOf(
-                                    "requested" to wasRequestedAsCollapsible,
-                                    "served" to wasServedAsCollapsible,
-                                    "direction" to (resolvedBannerType.collapsibleDirection ?: "none"),
+                                    "requested" to (collapsibleDirection != null),
+                                    "served" to runCatching { ad.isCollapsible() }.getOrDefault(false),
+                                    "direction" to (collapsibleDirection ?: "none"),
                                 ),
                             )
 
@@ -695,7 +695,6 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         override: BannerType?
     ): BannerType {
         if (override != null) return override
-
         return BannerType.fromMetadata(placement.metadata)
     }
 

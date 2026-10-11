@@ -16,14 +16,13 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import java.lang.ref.WeakReference
+import java.util.LinkedHashMap
 
 internal object InlineAdSafetyGate {
-    private const val PENDING_WINDOW_MS = 30_000L
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val reloadCallbacks = InlineRecoveryRegistry()
+    private val reloadCallbacks = LinkedHashMap<String, () -> Unit>()
 
     @Volatile private var pending = false
-    @Volatile private var armedAtMs = 0L
     @Volatile private var sourceFormat = ""
     @Volatile private var sourcePlacement = ""
     @Volatile private var suppressedActivityRef: WeakReference<Activity>? = null
@@ -42,11 +41,12 @@ internal object InlineAdSafetyGate {
 
     private fun armOnMain(sourceFormat: String, placement: String) {
         pending = true
-        armedAtMs = System.currentTimeMillis()
         this.sourceFormat = sourceFormat
         sourcePlacement = placement
         suppressedActivityRef = null
-        reloadCallbacks.clear()
+        synchronized(reloadCallbacks) {
+            reloadCallbacks.clear()
+        }
         SDKTelemetry.track(
             "inline_ad_safety_armed",
             mapOf(
@@ -75,7 +75,14 @@ internal object InlineAdSafetyGate {
     ): Boolean {
         if (!shouldSuppress(activity)) return false
 
-        val registered = reloadCallbacks.addIfAbsent(recoveryKey, reloadAfterInteraction)
+        val registered = synchronized(reloadCallbacks) {
+            if (reloadCallbacks.containsKey(recoveryKey)) {
+                false
+            } else {
+                reloadCallbacks[recoveryKey] = reloadAfterInteraction
+                true
+            }
+        }
         installInteractionWatcher(activity)
         if (registered) {
             SDKTelemetry.track(
@@ -98,19 +105,14 @@ internal object InlineAdSafetyGate {
      * its dismissal arms a fresh gate.
      */
     fun releaseForNextInterstitialCall() {
-        if (!pending && suppressedActivityRef?.get() == null && reloadCallbacks.isEmpty() && windowCallbackRef?.get() == null) {
+        if (!pending && suppressedActivityRef?.get() == null && synchronized(reloadCallbacks) { reloadCallbacks.isEmpty() } && windowCallbackRef?.get() == null) {
             return
         }
         clear(null, "next_interstitial_call", reload = false)
     }
 
     private fun shouldSuppress(activity: Activity): Boolean {
-        val now = System.currentTimeMillis()
         if (!pending && suppressedActivityRef?.get() == null) return false
-        if (now - armedAtMs > PENDING_WINDOW_MS) {
-            clear(activity, "expired", reload = false)
-            return false
-        }
 
         val bypassClass = bypassNextActivityName
         if (bypassClass != null && activity.javaClass.name == bypassClass) {
@@ -121,7 +123,24 @@ internal object InlineAdSafetyGate {
 
         val suppressedActivity = suppressedActivityRef?.get()
         if (suppressedActivity != null) {
-            return suppressedActivity === activity
+            if (suppressedActivity === activity) return true
+
+            // A destination may be a different Activity. The first inline
+            // request from that current screen becomes the recovery target;
+            // stale callbacks from the previous screen are discarded.
+            if (suppressedActivity.isFinishing || suppressedActivity.isDestroyed) {
+                suppressedActivityRef = WeakReference(activity)
+                synchronized(reloadCallbacks) {
+                    reloadCallbacks.clear()
+                }
+                return true
+            }
+
+            suppressedActivityRef = WeakReference(activity)
+            synchronized(reloadCallbacks) {
+                reloadCallbacks.clear()
+            }
+            return true
         }
 
         if (!pending) return false
@@ -139,11 +158,9 @@ internal object InlineAdSafetyGate {
             activity = activity,
             original = current,
             onInteraction = {
-                // Window.Callback is currently executing an input dispatch
-                // when this callback is reached. Restoring the callback and
-                // reloading an inline ad synchronously can mutate the window
-                // while Android is recycling the same InputEvent. Defer the
-                // mutation to the next main-loop turn, after dispatch returns.
+                // The callback is running inside Android's input dispatch. Restore
+                // the window and reload only after dispatch has returned so the
+                // original event remains untouched and the host receives it.
                 mainHandler.post {
                     clear(activity, "user_interaction", reload = true)
                 }
@@ -165,20 +182,20 @@ internal object InlineAdSafetyGate {
                 }
             }
 
-            if (reason == "user_interaction" || reason == "expired") {
-                // This releases inline suppression only. Interstitial frequency
-                // and eligibility state remain owned by their existing systems.
-                // Expiry prevents a screen that never receives input from
-                // retaining a process-scoped suppression indefinitely.
-                PostInterstitialInlineSuppression.releaseForInlineRecovery()
+            val callbacks = if (reload) {
+                synchronized(reloadCallbacks) {
+                    reloadCallbacks.values.toList()
+                }
+            } else {
+                emptyList()
             }
-            val callbacks = if (reload) reloadCallbacks.drain() else emptyList()
-            if (!reload) reloadCallbacks.clear()
             pending = false
             suppressedActivityRef = null
             windowCallbackRef = null
             bypassNextActivityName = null
-            reloadCallbacks.clear()
+            synchronized(reloadCallbacks) {
+                reloadCallbacks.clear()
+            }
 
             SDKTelemetry.track(
                 "inline_ad_safety_cleared",
@@ -190,9 +207,7 @@ internal object InlineAdSafetyGate {
                 ),
             )
 
-            callbacks.forEach { callback ->
-                runCatching { callback() }
-            }
+            callbacks.forEach { callback -> runCatching { callback() } }
         }
         if (Looper.myLooper() == Looper.getMainLooper()) {
             clearOnMain()
@@ -269,9 +284,7 @@ internal object InlineAdSafetyGate {
             val activity = activityRef.get()
             if (activity == null || activity.isFinishing || activity.isDestroyed) {
                 cleared = true
-                mainHandler.post {
-                    clear(activity, "activity_destroyed", reload = false)
-                }
+                mainHandler.post { clear(activity, "activity_destroyed", reload = false) }
             }
             original.onDetachedFromWindow()
         }
