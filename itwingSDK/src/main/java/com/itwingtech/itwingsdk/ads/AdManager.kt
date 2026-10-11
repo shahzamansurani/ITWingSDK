@@ -7,11 +7,11 @@ import android.content.ContextWrapper
 import android.view.ViewGroup
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingConfig
+import com.itwingtech.itwingsdk.utils.safeCallback
 import java.lang.ref.WeakReference
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.CopyOnWriteArrayList
-import com.itwingtech.itwingsdk.utils.safeCallback
 
 
 class AdManager(
@@ -32,24 +32,21 @@ class AdManager(
     /**
      * Interstitial
      */
-    fun showInterstitial(activity: Activity?, placement: String, onComplete: () -> Unit = {}) {
-        if (!activity.isUsableForAds()) {
-            safeCallback(onComplete)
-            return
-        }
+    fun showInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
+        PostInterstitialInlineSuppression.consumeAtNextInterstitialCall()
+        InlineAdSafetyGate.releaseForNextInterstitialCall()
         if (adsSuppressed()) {
             trackSuppressed("interstitial", placement)
             clearCache()
-            onComplete()
+            safeCallback(onComplete)
             return
         }
-        interstitialManager.show(activity = activity!!, placementName = placement, onComplete = onComplete)
+        interstitialManager.show(activity = activity, placementName = placement, onComplete = onComplete,)
     }
 
-    fun preloadInterstitial(activity: Activity?, placement: String) {
-        if (!activity.isUsableForAds()) return
+    fun preloadInterstitial(activity: Activity, placement: String) {
         if (adsSuppressed()) return
-        interstitialManager.preload(activity = activity!!, placementName = placement)
+        interstitialManager.preload(activity = activity, placementName = placement)
     }
 
     fun isInterstitialLoaded(placement: String): Boolean {
@@ -60,123 +57,104 @@ class AdManager(
      * Rewarded
      */
     fun showRewarded(
-        activity: Activity?,
+        activity: Activity,
         placement: String,
         onReward: () -> Unit,
         onComplete: () -> Unit = {},
         onUnavailableOrSkipped: () -> Unit = {},
     ) {
-        val activeActivity = activity?.takeIf { it.isUsableForAds() } ?: run {
-            safeCallback(onUnavailableOrSkipped)
-            return
-        }
         if (adsSuppressed()) {
             trackSuppressed("rewarded", placement)
             clearCache()
-            AdFailureDialog.show(activeActivity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
+            AdFailureDialog.show(activity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
             onUnavailableOrSkipped()
             return
         }
-        rewardedManager.show(activeActivity, placement, onReward, onComplete, onUnavailableOrSkipped)
+        rewardedManager.show(activity, placement, onReward, onComplete, onUnavailableOrSkipped)
     }
 
     fun showRewardedDirect(
-        activity: Activity?,
+        activity: Activity,
         placement: String,
         onReward: () -> Unit,
         onComplete: () -> Unit = {},
         onUnavailableOrSkipped: () -> Unit = {},
     ) {
-        val activeActivity = activity?.takeIf { it.isUsableForAds() } ?: run {
-            safeCallback(onUnavailableOrSkipped)
-            return
-        }
         if (adsSuppressed()) {
             trackSuppressed("rewarded", placement)
             clearCache()
-            AdFailureDialog.show(activeActivity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
+            AdFailureDialog.show(activity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
             onUnavailableOrSkipped()
             return
         }
-        rewardedManager.show(activeActivity, placement, onReward, onComplete, onUnavailableOrSkipped, showIntro = false)
+        rewardedManager.show(activity, placement, onReward, onComplete, onUnavailableOrSkipped, showIntro = false)
     }
 
-    fun showRewarded(activity: Activity?, placement: String, onComplete: () -> Unit = {}) {
-        val activeActivity = activity?.takeIf { it.isUsableForAds() } ?: return
+    fun showRewarded(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
         if (adsSuppressed()) {
             trackSuppressed("rewarded", placement)
             clearCache()
-            AdFailureDialog.show(activeActivity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
+            AdFailureDialog.show(activity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
             return
         }
-        rewardedManager.show(activeActivity, placement, onReward = {}, onComplete = onComplete)
+        rewardedManager.show(activity, placement, onReward = {}, onComplete = onComplete)
     }
 
     /**
      * Rewarded Interstitial
      */
-    fun showRewardedInterstitial(activity: Activity?, placement: String, onReward: () -> Unit={}, onComplete: () -> Unit = {}) {
-        val activeActivity = activity?.takeIf { it.isUsableForAds() } ?: return
+    fun showRewardedInterstitial(activity: Activity, placement: String, onReward: () -> Unit={}, onComplete: () -> Unit = {}) {
         if (adsSuppressed()) {
             trackSuppressed("rewarded_interstitial", placement)
             clearCache()
-            AdFailureDialog.show(activeActivity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
+            AdFailureDialog.show(activity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
             return
         }
-        rewardedInterstitialManager.show(activeActivity, placement, onReward, onComplete)
+        rewardedInterstitialManager.show(activity, placement, onReward, onComplete)
     }
 
-    fun showRewardedInterstitial(activity: Activity?, placement: String, onComplete: () -> Unit = {}) {
-        val activeActivity = activity?.takeIf { it.isUsableForAds() } ?: return
+    fun showRewardedInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
         if (adsSuppressed()) {
             trackSuppressed("rewarded_interstitial", placement)
             clearCache()
-            AdFailureDialog.show(activeActivity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
+            AdFailureDialog.show(activity, configProvider().adPrimaryColor(), rewardedSuppressionReason())
             return
         }
-        rewardedInterstitialManager.show(activeActivity, placement, onReward = {}, onComplete = onComplete)
+        rewardedInterstitialManager.show(activity, placement, onReward = {}, onComplete = onComplete)
     }
 
-    fun preloadRewarded(activity: Activity?, placement: String) {
-        if (!activity.isUsableForAds()) return
+    fun preloadRewarded(activity: Activity, placement: String) {
         if (adsSuppressed()) return
-        rewardedManager.preload(activity!!, placement)
+        rewardedManager.preload(activity, placement)
     }
 
-    fun preloadRewardedInterstitial(activity: Activity?, placement: String) {
-        if (!activity.isUsableForAds()) return
+    fun preloadRewardedInterstitial(activity: Activity, placement: String) {
         if (adsSuppressed()) return
-        rewardedInterstitialManager.preload(activity!!, placement)
+        rewardedInterstitialManager.preload(activity, placement)
     }
 
-    fun showAppOpen(activity: Activity?, placement: String, onComplete: () -> Unit = {}) {
-        if (!activity.isUsableForAds()) {
-            safeCallback(onComplete)
-            return
-        }
+    fun showAppOpen(activity: Activity, placement: String, onComplete: () -> Unit = {}) {
         if (adsSuppressed()) {
             trackSuppressed("app_open", placement)
             clearCache()
             onComplete()
             return
         }
-        appOpenManager.show(activity!!, placement, onComplete)
+        appOpenManager.show(activity, placement, onComplete)
     }
 
-    fun preloadAppOpen(activity: Activity?, placement: String) {
-        if (!activity.isUsableForAds()) return
+    fun preloadAppOpen(activity: Activity, placement: String) {
         if (adsSuppressed()) return
-        appOpenManager.preload(activity!!, placement)
+        appOpenManager.preload(activity, placement)
     }
 
-    fun startAutomaticAppOpen(activity: Activity?) {
-        if (!activity.isUsableForAds()) return
+    fun startAutomaticAppOpen(activity: Activity) {
         if (adsSuppressed()) {
             trackSuppressed("app_open_automatic", "automatic")
             clearCache()
             return
         }
-        appOpenManager.startAutomatic(activity!!)
+        appOpenManager.startAutomatic(activity)
     }
 
     fun suppressAutomaticAppOpenFor(durationMs: Long) {
@@ -187,41 +165,47 @@ class AdManager(
         appOpenManager.clearAutomaticSuppression()
     }
 
-    fun updateForegroundActivity(activity: Activity?) {
-        if (activity.isUsableForAds()) appOpenManager.updateForegroundActivity(activity!!)
+    fun updateForegroundActivity(activity: Activity) {
+        appOpenManager.updateForegroundActivity(activity)
     }
 
-    internal fun onActivityPaused(activity: Activity) {
+    fun onActivityPaused(activity: Activity) {
         appOpenManager.onActivityPaused(activity)
     }
 
     /**
      * Banner
      */
-    fun loadBanner(activity: Activity?, container: ViewGroup, placement: String, bannerType: BannerType? = null) {
-        if (!activity.isUsableForAds()) {
-            container.visibility = android.view.View.GONE
-            return
-        }
+    fun loadBanner(activity: Activity, container: ViewGroup, placement: String, bannerType: BannerType? = null) {
         rememberContainer(bannerContainers, container)
-        bannerRecords[container] = BannerRecord(activity!!, placement, bannerType)
+        bannerRecords[container] = BannerRecord(activity, placement, bannerType)
         if (adsSuppressed()) {
             trackSuppressed("banner", placement)
             destroyBanner(container)
             return
         }
-        val activityRef = WeakReference(activity!!)
+        if (PostInterstitialInlineSuppression.isSuppressed(postInterstitialSuppressionEnabled())) {
+            trackSuppressed("banner", placement)
+            destroyBanner(container)
+            return
+        }
+        val activityRef = WeakReference(activity)
         val containerRef = WeakReference(container)
         if (InlineAdSafetyGate.suppressInlineAd(
                 activity = activity,
                 inlineFormat = "banner",
                 placement = placement,
+                recoveryKey = "banner:${System.identityHashCode(container)}:$placement",
                 reloadAfterInteraction = {
                     val resumedActivity = activityRef.get()
                     val resumedContainer = containerRef.get()
+                    val currentRecord = resumedContainer?.let { bannerRecords[it] }
                     if (
                         resumedActivity != null &&
                         resumedContainer != null &&
+                        currentRecord?.activityRef?.get() === resumedActivity &&
+                        currentRecord.placement == placement &&
+                        currentRecord.bannerType == bannerType &&
                         !resumedActivity.isFinishing &&
                         !resumedActivity.isDestroyed &&
                         resumedContainer.isAttachedToWindow
@@ -234,7 +218,7 @@ class AdManager(
             container.visibility = android.view.View.GONE
             return
         }
-        bannerLoader.load(activity = activity!!, container = container, placementName = placement, bannerType = bannerType)
+        bannerLoader.load(activity = activity, container = container, placementName = placement, bannerType = bannerType)
     }
 
     fun destroyBanner(container: ViewGroup) {
@@ -244,12 +228,8 @@ class AdManager(
     /**
      * Native
      */
-    fun loadNative(activity: Activity?, container: ViewGroup, placement: String, nativeType: NativeType? = null) {
-        if (!activity.isUsableForAds()) {
-            container.visibility = android.view.View.GONE
-            return
-        }
-        loadNative(activity!!, container, placement, nativeType, respectInlineSafetyGate = true)
+    fun loadNative(activity: Activity, container: ViewGroup, placement: String, nativeType: NativeType? = null) {
+        loadNative(activity, container, placement, nativeType, respectInlineSafetyGate = true)
     }
 
     internal fun loadNativeForDialog(
@@ -275,18 +255,28 @@ class AdManager(
             destroyNative(container)
             return
         }
+        if (PostInterstitialInlineSuppression.isSuppressed(postInterstitialSuppressionEnabled())) {
+            trackSuppressed("native", placement)
+            destroyNative(container)
+            return
+        }
         val activityRef = WeakReference(activity)
         val containerRef = WeakReference(container)
         if (respectInlineSafetyGate && InlineAdSafetyGate.suppressInlineAd(
                 activity = activity,
                 inlineFormat = "native",
                 placement = placement,
+                recoveryKey = "native:${System.identityHashCode(container)}:$placement",
                 reloadAfterInteraction = {
                     val resumedActivity = activityRef.get()
                     val resumedContainer = containerRef.get()
+                    val currentRecord = resumedContainer?.let { nativeRecords[it] }
                     if (
                         resumedActivity != null &&
                         resumedContainer != null &&
+                        currentRecord?.activityRef?.get() === resumedActivity &&
+                        currentRecord.placement == placement &&
+                        currentRecord.nativeType == nativeType &&
                         !resumedActivity.isFinishing &&
                         !resumedActivity.isDestroyed &&
                         resumedContainer.isAttachedToWindow
@@ -428,45 +418,47 @@ class AdManager(
         return current as? Activity
     }
 
-    fun preloadAll(activity: Activity?){
-        if (!activity.isUsableForAds()) return
+    fun preloadAll(activity: Activity){
         preloadStartup(activity)
     }
 
-    fun preloadStartup(activity: Activity?) {
-        if (!activity.isUsableForAds()) return
+    fun preloadStartup(activity: Activity) {
         preloadInterstitials(activity)
     }
 
-    fun preloadInterstitials(activity: Activity?) {
-        if (!activity.isUsableForAds()) return
+    fun preloadInterstitials(activity: Activity) {
         if (adsSuppressed()) return
-        interstitialManager.preloadAll(activity!!)
+        interstitialManager.preloadAll(activity)
     }
 
-    fun preloadRewardedAds(activity: Activity?) {
-        if (!activity.isUsableForAds()) return
+    fun preloadRewardedAds(activity: Activity) {
         if (adsSuppressed()) return
-        rewardedManager.preloadAll(activity!!)
+        rewardedManager.preloadAll(activity)
     }
 
-    fun preloadRewardedInterstitials(activity: Activity?) {
-        if (!activity.isUsableForAds()) return
+    fun preloadRewardedInterstitials(activity: Activity) {
         if (adsSuppressed()) return
-        rewardedInterstitialManager.preloadAll(activity!!)
+        rewardedInterstitialManager.preloadAll(activity)
     }
 
-    fun preloadAppOpen(activity: Activity?) {
-        if (!activity.isUsableForAds()) return
+    fun preloadAppOpen(activity: Activity) {
         if (adsSuppressed()) return
-        appOpenManager.preloadAll(activity!!)
+        appOpenManager.preloadAll(activity)
     }
-
-    private fun Activity?.isUsableForAds(): Boolean = this != null && !isFinishing && !isDestroyed
 
     private fun adsSuppressed(): Boolean {
         val ads = configProvider().ads
         return suppressAdsReasonProvider() != null || !ads.globalEnabled || ads.blockedReason == "active_subscription"
+    }
+
+    private fun postInterstitialSuppressionEnabled(): Boolean {
+        val value = configProvider().app["suppress_inline_ads_after_interstitial"] ?: return true
+        return when (value) {
+            is Boolean -> value
+            is Number -> value.toInt() != 0
+            is String -> value.trim().lowercase() !in setOf("0", "false", "off", "no", "disabled")
+            else -> true
+        }
     }
 
     private fun rewardedSuppressionReason(): String {

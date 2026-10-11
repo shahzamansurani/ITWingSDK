@@ -10,6 +10,7 @@ import com.facebook.shimmer.Shimmer
 import com.facebook.shimmer.ShimmerFrameLayout
 import com.google.android.material.card.MaterialCardView
 import com.itwingtech.itwingsdk.core.ITWingSDK
+import com.itwingtech.itwingsdk.core.StartupTrace
 
 /** Normalizes the admin app.colors contract for every SDK-rendered ad surface. */
 internal object AdTheme {
@@ -39,6 +40,12 @@ internal object AdTheme {
         } else {
             listOf("banner_background_color", "ad_background_color", "surface_color", "background_color")
         }
+        // The placement editor's legacy native_background_color defaults to
+        // black even when native_transparent_background is enabled. In that
+        // mode it is explicitly not the surface color; the app-level SDK
+        // palette must control the approved MaterialCardView instead.
+        val useLegacyPlacementBackground = !native ||
+            metadata?.get("native_transparent_background")?.toString()?.toBooleanStrictOrNull() != true
         val configuredCardBackground = sequence {
             yield(metadata?.get(formatBackgroundKey) as? String)
             yield(appColorProvider(formatBackgroundKey))
@@ -49,7 +56,7 @@ internal object AdTheme {
             // only painted the legacy inner layout, leaving the Material card
             // on its default white surface.
             fallbackBackgroundKeys.forEach { key ->
-                yield(metadata?.get(key) as? String)
+                if (useLegacyPlacementBackground) yield(metadata?.get(key) as? String)
                 yield(appColorProvider(key))
             }
         }.filterNotNull().firstNotNullOfOrNull(::parseCardColor)
@@ -143,6 +150,20 @@ internal object AdTheme {
         val backgroundColor = if (style.enabled) {
             if (!style.backgroundConfigured) themeSurfaceColor(view) else style.backgroundColor
         } else Color.TRANSPARENT
+        StartupTrace.event(
+            view.context,
+            "AD_THEME",
+            "format=${format.take(16)} view=${view.javaClass.simpleName.take(32)} " +
+                "bgConfigured=${style.backgroundConfigured} bg=${colorHex(backgroundColor)} " +
+                "appNativeBg=${debugColor(ITWingSDK.getConfiguredColor("native_background_color"))} " +
+                "appBannerBg=${debugColor(ITWingSDK.getConfiguredColor("banner_background_color"))} " +
+                "appPrimary=${debugColor(ITWingSDK.getConfiguredColor("primary"))} " +
+                "appText=${debugColor(ITWingSDK.getConfiguredColor("${format.lowercase()}_text_color"))} " +
+                "metaCardBg=${debugColor(metadata?.get(if (format.equals("native", true)) "native_card_background_color" else "banner_card_background_color") as? String)} " +
+                "metaBg=${debugColor(metadata?.get(if (format.equals("native", true)) "native_background_color" else "banner_background_color") as? String)} " +
+                "radiusDp=${style.cornerRadiusDp} elevationDp=${style.elevationDp} " +
+                "paddingDp=${style.innerPaddingDp} cardSettings=${style.cardSettingsConfigured}",
+        )
         val material = view as? MaterialCardView
         val cardView = view as? CardView
         val originalPadding = view.getTag(com.itwingtech.itwingsdk.R.id.ad_card_original_padding) as? IntArray
@@ -574,6 +595,13 @@ internal object AdTheme {
                 .build()
         )
     }
+
+    private fun debugColor(value: String?): String = value
+        ?.trim()
+        ?.takeIf { it.matches(Regex("(?i)(#[0-9a-f]{3,8}|transparent|none)")) }
+        ?: "none"
+
+    private fun colorHex(value: Int): String = "#%08X".format(value)
 
     fun shimmerBaseColor(appColorProvider: (String) -> String? = ITWingSDK::getConfiguredColor): Int = color(
         fallback = 0xFF404040.toInt(),

@@ -1,5 +1,13 @@
 [![](https://jitpack.io/v/shahzamansurani/ITWingSDK.svg)](https://jitpack.io/#shahzamansurani/ITWingSDK)
 
-# IT Wing SDK for Android
+## v1.58
 
-The v1.49 release candidate is a drop-in Android library update for v1.48 applications. No host integration changes are required. See [CHANGELOG.md](CHANGELOG.md) for release notes and the local validation boundary.
+```kotlin
+implementation("com.github.shahzamansurani:ITWingSDK:v1.58")
+```
+
+This release includes the production crash-hardening changes already present in
+the v1.57 working tree, safer placement-format handling, interstitial preload
+and lifecycle protection, post-interstitial inline-ad recovery, shimmer
+restoration, and collapsible-banner request resolution with normal-banner
+fallback behavior.

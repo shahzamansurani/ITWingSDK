@@ -1,25 +1,22 @@
 package com.itwingtech.itwingsdk.ads
 
-import android.util.Log
-import com.itwingtech.itwingsdk.core.AdPlacementConfig
+import android.app.Activity
+import com.itwingtech.itwingsdk.core.StartupTrace
 
-/** Debug-only diagnostics for the real-first decision; never writes ad unit IDs or creative data. */
 internal object AdPriorityTrace {
-    private const val TAG = "ITWingAdPriority"
-
-    fun decision(placement: AdPlacementConfig, hasFallback: Boolean) {
-        if (!Log.isLoggable(TAG, Log.DEBUG)) return
-        val unit = placement.adMobUnitOrNull()
-        Log.d(
-            TAG,
-            "Placement=${placement.name} Format=${placement.format} " +
-                "Mode=${placement.deliveryMode(hasFallback)} AdMobUnitPresent=${unit != null} " +
-                "CustomFallbackAvailable=$hasFallback",
-        )
+    fun request(activity: Activity, format: String, placement: String, source: String) {
+        StartupTrace.event(activity, "${format.uppercase()}_REQUEST", "placement=${placement.take(80)} source=$source")
     }
 
-    fun event(placement: AdPlacementConfig, event: String, detail: String? = null) {
-        if (!Log.isLoggable(TAG, Log.DEBUG)) return
-        Log.d(TAG, "Placement=${placement.name} Format=${placement.format} $event${detail?.let { " reason=$it" }.orEmpty()}")
+    fun blocked(activity: Activity, format: String, placement: String, reason: String) {
+        StartupTrace.event(activity, "AD_BLOCKED", "format=$format placement=${placement.take(80)} reason=$reason")
+    }
+
+    fun loaded(activity: Activity, format: String, placement: String, source: String) {
+        StartupTrace.event(activity, "${format.uppercase()}_AD_LOADED", "placement=${placement.take(80)} source=$source")
+    }
+
+    fun impression(activity: Activity, format: String, placement: String) {
+        StartupTrace.event(activity, "${format.uppercase()}_IMPRESSION", "placement=${placement.take(80)}")
     }
 }

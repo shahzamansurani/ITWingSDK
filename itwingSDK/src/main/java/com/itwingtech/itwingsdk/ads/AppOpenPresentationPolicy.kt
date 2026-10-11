@@ -1,11 +1,12 @@
 package com.itwingtech.itwingsdk.ads
 
-/** Pure final gate shared by automatic and explicit App Open presentation requests. */
 internal object AppOpenPresentationPolicy {
-    fun mayPresentFirstEverLaunch(hasCompletedPreviousSession: Boolean): Boolean = hasCompletedPreviousSession
+    fun mayPresentFirstEverLaunch(hasCompletedPreviousSession: Boolean) = hasCompletedPreviousSession
 
-    fun shouldAutomaticallyPresentResume(hasEnteredForegroundBefore: Boolean, backgroundDurationMs: Long): Boolean =
-        hasEnteredForegroundBefore && backgroundDurationMs >= MINIMUM_RESUME_BACKGROUND_MS
+    fun shouldAutomaticallyPresentResume(
+        hasEnteredForegroundBefore: Boolean,
+        backgroundDurationMs: Long,
+    ) = hasEnteredForegroundBefore && backgroundDurationMs >= 2_000L
 
     fun rejectionReason(
         processForeground: Boolean,
@@ -22,6 +23,4 @@ internal object AppOpenPresentationPolicy {
         fullscreenConflict && !ownsFullscreenSlot -> "SKIPPED_FULLSCREEN_CONFLICT"
         else -> null
     }
-
-    private const val MINIMUM_RESUME_BACKGROUND_MS = 2_000L
 }

@@ -45,8 +45,9 @@ class NativeLoader(
 
     private val nativeAds = WeakHashMap<ViewGroup, NativeAd>()
     private val loadTokens = WeakHashMap<ViewGroup, Int>()
-    private val terminalRealTokens = WeakHashMap<ViewGroup, Int>()
     private val activeLoadKeys = WeakHashMap<ViewGroup, String>()
+    private val inlineLoadStates = WeakHashMap<ViewGroup, InlineLoadState>()
+    private val terminalRealTokens = WeakHashMap<ViewGroup, Int>()
 
     /*
     |--------------------------------------------------------------------------
@@ -70,11 +71,13 @@ class NativeLoader(
             configProvider()
 
         if (!config.ads.globalEnabled) {
+            AdPriorityTrace.blocked(activity, "native", placementName, "global_ads_disabled")
             destroy(container)
             return
         }
 
         if (!NetworkState.isOnline(activity)) {
+            AdPriorityTrace.blocked(activity, "native", placementName, "offline")
             destroy(container)
             return
         }
@@ -84,6 +87,8 @@ class NativeLoader(
                         it.enabled &&
                         it.format == "native"
             } ?: run {
+
+                AdPriorityTrace.blocked(activity, "native", placementName, "missing_or_disabled_placement")
 
                 destroy(container)
 
@@ -101,12 +106,26 @@ class NativeLoader(
             )
 
         val activeKey = listOf(placementName, resolvedNativeType.name).joinToString("|")
+        val canReuse = synchronized(activeLoadKeys) {
+            activeLoadKeys[container] == activeKey && InlineLoadReusePolicy.canReuse(
+                state = inlineLoadStates[container],
+                requestedKey = activeKey,
+                hasVisibleContent = container.visibility == View.VISIBLE && container.childCount > 0,
+            )
+        }
+        if (canReuse) {
+            container.visibility = View.VISIBLE
+            return
+        }
+
+        val hasStaleState = synchronized(activeLoadKeys) { inlineLoadStates.containsKey(container) }
+        if (container.childCount > 0 || hasStaleState) {
+            destroy(container)
+        }
+
         synchronized(activeLoadKeys) {
-            if (activeLoadKeys[container] == activeKey && container.childCount > 0) {
-                container.visibility = View.VISIBLE
-                return
-            }
             activeLoadKeys[container] = activeKey
+            inlineLoadStates[container] = InlineLoadState(activeKey, InlineLoadPhase.LOADING)
         }
 
         val token = nextToken(container)
@@ -124,6 +143,11 @@ class NativeLoader(
                 resolvedNativeType
             )
 
+        // A suppressed request hides the container. The normal loader owns
+        // visibility, so restore it before installing the existing shimmer.
+        container.visibility = View.VISIBLE
+        container.alpha = 1f
+
         loadingView?.let {
             container.removeAllViews()
             it.visibility = View.VISIBLE
@@ -139,12 +163,12 @@ class NativeLoader(
         */
 
         val unit = placement.adMobUnitOrNull()
-        val fallbackAd = config.customFallbackFor(placement)
-        AdPriorityTrace.decision(placement, fallbackAd != null)
-        val customAd = if (unit == null) selectedCustomAd(config, placement) else null
+        val customAd = if (unit == null || !ITWingSDK.isGoogleAdsInitialized()) {
+            selectedCustomAd(config, placement)
+        } else null
 
         if (customAd != null) {
-            AdPriorityTrace.event(placement, "CUSTOM_ONLY_START")
+            AdPriorityTrace.request(activity, "native", placementName, "custom_fallback")
             AdEventTracker.log("ad_load_requested", placement)
             preloadCustomAd(
                 activity = activity,
@@ -165,9 +189,11 @@ class NativeLoader(
         |--------------------------------------------------------------------------
         */
 
-        val admobUnit = unit ?: run {
+        unit ?: run {
+                AdPriorityTrace.blocked(activity, "native", placementName, "missing_admob_unit_and_custom_fallback")
                 synchronized(activeLoadKeys) {
                     activeLoadKeys.remove(container)
+                    inlineLoadStates.remove(container)
                 }
                 stopShimmer(
                     loadingView
@@ -192,11 +218,11 @@ class NativeLoader(
 
         try {
 
-            AdPriorityTrace.event(placement, "REAL_REQUEST_START")
+            AdPriorityTrace.request(activity, "native", placementName, "admob")
 
             val request =
                 NativeAdRequest.Builder(
-                    adUnitId = admobUnit.adUnitId,
+                    adUnitId = unit.adUnitId,
                     nativeAdTypes = listOf(
                         NativeAd.NativeAdType.NATIVE
                     )
@@ -213,6 +239,10 @@ class NativeLoader(
                     ) {
 
                         activity.runOnUiThread {
+                            if (!isCurrentLoad(container, token) || !resolveRealLoad(container, token)) {
+                                nativeAd.destroy()
+                                return@runOnUiThread
+                            }
                             if (
                                 activity.isFinishing ||
                                 activity.isDestroyed ||
@@ -222,21 +252,19 @@ class NativeLoader(
                                 nativeAd.destroy()
                                 return@runOnUiThread
                             }
-                            if (!resolveRealLoad(container, token)) {
-                                nativeAd.destroy()
-                                return@runOnUiThread
-                            }
 
                             synchronized(nativeAds) {
                                 nativeAds.remove(container)?.destroy()
                                 nativeAds[container] = nativeAd
                             }
                             AdEventTracker.log("ad_loaded", placement)
+                            AdPriorityTrace.loaded(activity, "native", placementName, "admob")
                             AdLoadBackoff.recordSuccess(placement)
 
                             nativeAd.adEventCallback = object : NativeAdEventCallback {
                                 override fun onAdImpression() {
                                     AdEventTracker.log("ad_impression", placement)
+                                    AdPriorityTrace.impression(activity, "native", placementName)
                                 }
 
                                 override fun onAdPaid(adValue: AdValue) {
@@ -247,7 +275,7 @@ class NativeLoader(
                                             "revenue_micros" to adValue.valueMicros,
                                             "currency" to adValue.currencyCode,
                                             "precision" to adValue.precisionType,
-                                            "ad_unit_id" to admobUnit.adUnitId,
+                                            "ad_unit_id" to unit.adUnitId,
                                         ),
                                     )
                                 }
@@ -266,21 +294,28 @@ class NativeLoader(
                                         R.layout.native_admob_small
                                 }
 
-                            val cardView = LayoutInflater.from(activity)
-                                .inflate(layoutRes, container, false) as? ViewGroup
-                            if (cardView == null) {
-                                synchronized(nativeAds) {
-                                    if (nativeAds[container] === nativeAd) nativeAds.remove(container)
+                            val cardView =
+                                LayoutInflater.from(activity)
+                                    .inflate(
+                                        layoutRes,
+                                        container,
+                                        false
+                                    ) as? ViewGroup ?: run {
+                                    nativeAd.destroy()
+                                    synchronized(nativeAds) { nativeAds.remove(container) }
+                                    stopShimmer(loadingView)
+                                    container.visibility = View.GONE
+                                    return@runOnUiThread
                                 }
-                                nativeAd.destroy()
-                                AdPriorityTrace.event(placement, "REAL_RENDER_FAILED", "native_layout_unavailable")
-                                stopShimmer(loadingView)
-                                container.visibility = View.GONE
-                                synchronized(activeLoadKeys) { activeLoadKeys.remove(container) }
-                                return@runOnUiThread
-                            }
-                            AdPriorityTrace.event(placement, "REAL_LOAD_SUCCESS")
                             val adView = cardView.findViewById<NativeAdView>(R.id.ad_native_view)
+                                ?: (cardView as? NativeAdView)
+                                ?: run {
+                                    nativeAd.destroy()
+                                    synchronized(nativeAds) { nativeAds.remove(container) }
+                                    stopShimmer(loadingView)
+                                    container.visibility = View.GONE
+                                    return@runOnUiThread
+                                }
                             adView.applyTransparentNativeRoot()
                             adView.applyNativePlacementStyle(placement.metadata)
 
@@ -288,21 +323,21 @@ class NativeLoader(
                                 loadingView
                             )
 
+                            container.removeAllViews()
                             AdTheme.attachCardSurface(container, cardView, "native", placement.metadata, clipContent = false)
 
                             container.visibility =
                                 View.VISIBLE
-
-                            AdPriorityTrace.event(placement, "DISPLAY_SOURCE=ADMOB")
+                            markRendered(container)
 
                             populateNativeAdView(
                                 nativeAd,
                                 adView,
                                 placement.metadata
                             )
-                            cardView.alpha = 0f
+                            adView.alpha = 0f
 
-                            cardView.animate()
+                            adView.animate()
                                 .alpha(1f)
                                 .setDuration(250)
                                 .start()
@@ -314,30 +349,30 @@ class NativeLoader(
                     ) {
 
                             activity.runOnUiThread {
+                            if (!isCurrentLoad(container, token) || !resolveRealLoad(container, token)) return@runOnUiThread
 
                             if (!isCurrentLoad(container, token)) {
                                 return@runOnUiThread
                             }
-                            if (!resolveRealLoad(container, token)) return@runOnUiThread
 
                             AdEventTracker.log(
                                 "ad_load_failed",
                                 placement,
                                 mapOf("message" to adError.message),
                             )
-                            AdPriorityTrace.event(placement, "REAL_LOAD_FAILED", "${adError.code}:${adError.message.take(120)}")
+                            AdPriorityTrace.blocked(activity, "native", placementName, "admob_${adError.code}")
                             AdLoadBackoff.recordFailure(placement, adError.message)
                             val fallback = config.customFallbackFor(placement)
                             if (fallback != null) {
-                                AdPriorityTrace.event(placement, "CUSTOM_FALLBACK_START", "real_load_failed")
-                                AdEventTracker.log("ad_custom_fallback", placement, mapOf("reason" to adError.message, "network" to "custom"))
-                                preloadCustomAd(activity, container, fallback, placement.withCustomFallback(fallback), resolvedNativeType, loadingView, token)
+                                AdEventTracker.log("ad_custom_fallback", placement, mapOf("reason" to adError.message))
+                                preloadCustomAd(activity, container, fallback, placement, resolvedNativeType, loadingView, token)
                                 return@runOnUiThread
                             }
                             stopShimmer(loadingView)
                             container.visibility = View.GONE
                             synchronized(activeLoadKeys) {
                                 activeLoadKeys.remove(container)
+                                inlineLoadStates.remove(container)
                             }
                         }
                     }
@@ -346,15 +381,7 @@ class NativeLoader(
 
         } catch (exception: Exception) {
 
-            if (!isCurrentLoad(container, token) || !resolveRealLoad(container, token)) return
-
-            val fallback = config.customFallbackFor(placement)
-            if (fallback != null && !activity.isFinishing && !activity.isDestroyed && container.isAttachedToWindow) {
-                AdPriorityTrace.event(placement, "CUSTOM_FALLBACK_START", "real_request_exception")
-                AdEventTracker.log("ad_custom_fallback", placement, mapOf("reason" to "admob_request_exception", "network" to "custom"))
-                preloadCustomAd(activity, container, fallback, placement.withCustomFallback(fallback), resolvedNativeType, loadingView, token)
-                return
-            }
+            if (!isCurrentLoad(container, token)) return
 
             stopShimmer(loadingView)
 
@@ -362,6 +389,10 @@ class NativeLoader(
                 View.GONE
             synchronized(activeLoadKeys) {
                 activeLoadKeys.remove(container)
+                inlineLoadStates.remove(container)
+            }
+            synchronized(terminalRealTokens) {
+                terminalRealTokens.remove(container)
             }
             val message = exception.message
                 ?.take(180)
@@ -386,18 +417,25 @@ class NativeLoader(
                 nativeAds.values.toList().also { nativeAds.clear() }
             }
             ads.forEach { ad -> runCatching { ad.destroy() } }
-            synchronized(terminalRealTokens) { terminalRealTokens.clear() }
+            synchronized(terminalRealTokens) {
+                terminalRealTokens.clear()
+            }
+            synchronized(activeLoadKeys) {
+                activeLoadKeys.clear()
+                inlineLoadStates.clear()
+            }
         } else {
             val ad = synchronized(nativeAds) { nativeAds.remove(container) }
             runCatching { ad?.destroy() }
             synchronized(loadTokens) {
                 loadTokens.remove(container)
             }
-            synchronized(terminalRealTokens) {
-                terminalRealTokens.remove(container)
-            }
             synchronized(activeLoadKeys) {
                 activeLoadKeys.remove(container)
+                inlineLoadStates.remove(container)
+            }
+            synchronized(terminalRealTokens) {
+                terminalRealTokens.remove(container)
             }
         }
 
@@ -475,10 +513,10 @@ class NativeLoader(
         val secondaryTextColor = sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
             ?: metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
             ?: nativeTextColor
-        (adView.headlineView as? TextView)?.setTextColor(parseColorSafe(sdkColor("native_headline_text_color", "headline_text_color") ?: metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.BLACK))
-        (adView.bodyView as? TextView)?.setTextColor(parseColorSafe(sdkColor("native_body_text_color", "body_text_color") ?: metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.BLACK))
+        (adView.headlineView as? TextView)?.setTextColor(parseColorSafe(sdkColor("native_headline_text_color", "headline_text_color") ?: metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(17, 24, 39)))
+        (adView.bodyView as? TextView)?.setTextColor(parseColorSafe(sdkColor("native_body_text_color", "body_text_color") ?: metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(71, 85, 105)))
         listOf(adView.priceView, adView.storeView, adView.advertiserView).forEach { view ->
-            (view as? TextView)?.setTextColor(parseColorSafe(sdkColor("native_meta_text_color", "meta_text_color") ?: metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.BLACK))
+            (view as? TextView)?.setTextColor(parseColorSafe(sdkColor("native_meta_text_color", "meta_text_color") ?: metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(100, 116, 139)))
         }
 
         nativeAd.body?.let { (adView.bodyView as? TextView)?.text = it
@@ -579,9 +617,7 @@ class NativeLoader(
         type: NativeType
     ) {
 
-        AdPriorityTrace.event(placement, "DISPLAY_SOURCE=CUSTOM")
-
-        destroy(container)
+        clearRenderedContent(container)
 
         @LayoutRes
         val layoutRes =
@@ -668,8 +704,7 @@ class NativeLoader(
         */
 
         val displayText = ad.displayText()
-        headlineView?.text = displayText.headline.orEmpty()
-        headlineView?.visibility = if (displayText.headline == null) View.GONE else View.VISIBLE
+        headlineView?.text = displayText.headline ?: ad.name.ifBlank { "Sponsored" }
 
         bodyView?.text =
             ad.body?.takeIf {
@@ -684,8 +719,7 @@ class NativeLoader(
                 ?: "Install"
         ctaView?.normalizeNativeCtaButton()
 
-        advertiserView?.text = displayText.advertiser.orEmpty()
-        advertiserView?.visibility = if (displayText.advertiser == null) View.GONE else View.VISIBLE
+        advertiserView?.text = displayText.advertiser ?: "Sponsored"
 
         storeView?.text = ""
 
@@ -762,6 +796,9 @@ class NativeLoader(
         ctaView?.visibility =
             View.VISIBLE
 
+        advertiserView?.visibility =
+            View.VISIBLE
+
         storeView?.visibility =
             View.VISIBLE
 
@@ -777,8 +814,8 @@ class NativeLoader(
         mediaView?.apply {
 
             render(
-                ad.mediaUrl(),
-                ad.isVideo()
+                ad.resolvedMediaUrl(),
+                ad.isVideoMedia()
             )
 
             play()
@@ -910,6 +947,7 @@ class NativeLoader(
 
         container.visibility =
             View.VISIBLE
+        markRendered(container)
 
         /*
         |--------------------------------------------------------------------------
@@ -924,6 +962,22 @@ class NativeLoader(
                 "native_type" to type.name.lowercase()
             )
         )
+    }
+
+    private fun clearRenderedContent(container: ViewGroup) {
+        synchronized(nativeAds) {
+            nativeAds.remove(container)?.let { ad -> runCatching { ad.destroy() } }
+        }
+        releaseMediaViews(container)
+        container.removeAllViews()
+    }
+
+    private fun markRendered(container: ViewGroup) {
+        synchronized(activeLoadKeys) {
+            inlineLoadStates[container]?.let { state ->
+                inlineLoadStates[container] = state.copy(phase = InlineLoadPhase.RENDERED)
+            }
+        }
     }
 
     private fun loadImage(url: String?, imageView: ImageView?, activity: Activity) {
@@ -945,8 +999,10 @@ class NativeLoader(
     }
 
     private fun View.applyTransparentNativeRoot() {
-        // The MaterialCardView owns the ad surface. Keep NativeAdView/content transparent
-        // so the legacy purchase-dialog gradient cannot paint over the configured card.
+        // The approved v1.49 MaterialCardView owns the visible ad surface.
+        // The Google NativeAdView and its content must stay transparent so the
+        // admin-controlled card surface is not covered by the legacy dialog
+        // gradient.
         setBackgroundColor(Color.TRANSPARENT)
         findViewById<View?>(R.id.ad_unit_content)?.setBackgroundColor(Color.TRANSPARENT)
         clearNativeChildBackgrounds()
@@ -976,9 +1032,9 @@ class NativeLoader(
         val secondaryTextColor = sdkColor("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
             ?: metadata.stringValue("native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color")
             ?: nativeTextColor
-        val headline = parseColorSafe(sdkColor("native_headline_text_color", "headline_text_color") ?: metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.BLACK)
-        val body = parseColorSafe(sdkColor("native_body_text_color", "body_text_color") ?: metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.BLACK)
-        val meta = parseColorSafe(sdkColor("native_meta_text_color", "meta_text_color") ?: metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.BLACK)
+        val headline = parseColorSafe(sdkColor("native_headline_text_color", "headline_text_color") ?: metadata.stringValue("native_headline_text_color", "headline_text_color") ?: nativeTextColor, Color.rgb(248, 250, 252))
+        val body = parseColorSafe(sdkColor("native_body_text_color", "body_text_color") ?: metadata.stringValue("native_body_text_color", "body_text_color") ?: secondaryTextColor, Color.rgb(203, 213, 225))
+        val meta = parseColorSafe(sdkColor("native_meta_text_color", "meta_text_color") ?: metadata.stringValue("native_meta_text_color", "meta_text_color") ?: secondaryTextColor, Color.rgb(203, 213, 225))
         listOf(R.id.ad_headline).forEach { findViewById<TextView?>(it)?.setTextColor(headline) }
         listOf(R.id.ad_body).forEach { findViewById<TextView?>(it)?.setTextColor(body) }
         listOf(R.id.ad_advertiser, R.id.ad_store, R.id.ad_price).forEach { findViewById<TextView?>(it)?.setTextColor(meta) }
@@ -1081,20 +1137,7 @@ class NativeLoader(
         config: ITWingConfig,
         placement: AdPlacementConfig
     ): CustomAdConfig? {
-
-        val source =
-            placement.metadata["source"]
-                ?.toString()
-                ?.lowercase()
-
-        if (
-            source != "custom" &&
-            source != "custom_ad" &&
-            placement.customAd == null
-        ) {
-
-            return null
-        }
+        if (!placement.allowsCustomFallback()) return null
 
         placement.customAd?.takeIf { !it.mediaUrl().isNullOrBlank() }?.let {
             return it
@@ -1146,8 +1189,12 @@ class NativeLoader(
 
         if (media.isNullOrBlank()) {
             activity.runOnUiThread {
-                if (!isCurrentLoad(container, token)) return@runOnUiThread
-                if (activity.isFinishing || activity.isDestroyed || !container.isAttachedToWindow) {
+                if (
+                    activity.isFinishing ||
+                    activity.isDestroyed ||
+                    !container.isAttachedToWindow ||
+                    !isCurrentLoad(container, token)
+                ) {
                     stopShimmer(loadingView)
                     return@runOnUiThread
                 }
@@ -1175,8 +1222,12 @@ class NativeLoader(
         container.postDelayed({
 
             activity.runOnUiThread {
-                if (!isCurrentLoad(container, token)) return@runOnUiThread
-                if (activity.isFinishing || activity.isDestroyed || !container.isAttachedToWindow) {
+                if (
+                    activity.isFinishing ||
+                    activity.isDestroyed ||
+                    !container.isAttachedToWindow ||
+                    !isCurrentLoad(container, token)
+                ) {
                     stopShimmer(loadingView)
                     return@runOnUiThread
                 }
@@ -1248,9 +1299,21 @@ class NativeLoader(
         }
     }
 
-    private fun CustomAdConfig.mediaUrl(): String? = resolvedMediaUrl()
+    private fun CustomAdConfig.mediaUrl(): String? =
+        mediaUrl?.takeIf {
+            it.isNotBlank()
+        }
+            ?: videoUrl?.takeIf {
+                it.isNotBlank()
+            }
+            ?: imageUrl?.takeIf {
+                it.isNotBlank()
+            }
 
-    private fun CustomAdConfig.isVideo(): Boolean = isVideoMedia()
+    private fun CustomAdConfig.isVideo(): Boolean = mediaType.equals(
+        "video",
+        ignoreCase = true
+    ) || (!videoUrl.isNullOrBlank() && mediaUrl == videoUrl)
 
     private fun CustomAdConfig.primaryColor(): String? =
         ITWingSDK.getColor("primary").takeIf { it.isNotBlank() }
@@ -1275,6 +1338,14 @@ class NativeLoader(
 
     private fun View.dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
+
+    private fun CustomAdConfig.brandName(): String? =
+        (
+                metadata["brand"]
+                        as? Map<*, *>
+                )?.get("name")
+                as? String
+            ?: campaignGroup
 
     private fun CustomAdConfig.brandRating(): Float {
         val value = metadata["brand_rating"] ?: (metadata["brand"] as? Map<*, *>)?.get("rating")

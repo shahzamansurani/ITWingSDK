@@ -85,6 +85,7 @@ data class AdPlacementConfig(
     val metadata: Map<String, Any?> = emptyMap(),
     val customAd: CustomAdConfig? = null,
     val units: List<AdUnitConfig> = emptyList(),
+    val sourceMode: String? = null,
 )
 
 data class AdUnitConfig(

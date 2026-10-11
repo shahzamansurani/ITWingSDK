@@ -6,16 +6,25 @@ import com.itwingtech.itwingsdk.core.ITWingConfig
 
 /** Resolves a campaign for an AdMob failure without changing the configured delivery mode. */
 internal fun ITWingConfig.customFallbackFor(placement: AdPlacementConfig): CustomAdConfig? {
+    if (!placement.allowsCustomFallback()) return null
+
     val requested = placement.format.lowercase()
-    placement.customAd?.takeIf { ad ->
-        !ad.mediaUrl.isNullOrBlank() || !ad.videoUrl.isNullOrBlank() ||
-            !ad.imageUrl.isNullOrBlank() || !ad.html.isNullOrBlank()
-    }?.let { return it }
+    val genericCreativeFormats = setOf("image", "video", "html")
+    fun CustomAdConfig.hasCreative(): Boolean = !resolvedMediaUrl().isNullOrBlank() || !html.isNullOrBlank()
+    fun CustomAdConfig.matchesFormat(): Boolean {
+        val format = this.format.lowercase()
+        return format == requested || when (requested) {
+            "native", "banner", "interstitial", "app_open", "rewarded", "rewarded_interstitial" ->
+                format in genericCreativeFormats || (requested == "rewarded_interstitial" && format == "interstitial")
+            else -> false
+        }
+    }
+    placement.customAd
+        ?.takeIf { it.hasCreative() && it.matchesFormat() }
+        ?.let { return it }
 
     val compatible = ads.customAds.filter { ad ->
-        val hasCreative = !ad.mediaUrl.isNullOrBlank() || !ad.videoUrl.isNullOrBlank() ||
-            !ad.imageUrl.isNullOrBlank() || !ad.html.isNullOrBlank()
-        hasCreative
+        ad.hasCreative() && ad.matchesFormat()
     }
     fun CustomAdConfig.targetsPlacement(): Boolean {
         val raw = metadata["placement_names"] ?: metadata["placements"] ?: return false
@@ -33,7 +42,4 @@ internal fun ITWingConfig.customFallbackFor(placement: AdPlacementConfig): Custo
 }
 
 internal fun ITWingConfig.placementWithCustomFallback(placement: AdPlacementConfig): AdPlacementConfig? =
-    customFallbackFor(placement)?.let { placement.withCustomFallback(it) }
-
-internal fun AdPlacementConfig.withCustomFallback(ad: CustomAdConfig): AdPlacementConfig =
-    copy(customAd = ad, units = emptyList())
+    customFallbackFor(placement)?.let { placement.copy(customAd = it) }

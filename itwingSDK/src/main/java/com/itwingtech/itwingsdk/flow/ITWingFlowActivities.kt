@@ -6,7 +6,9 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -25,7 +27,9 @@ import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -38,6 +42,7 @@ import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.ads.InlineAdSafetyGate
 import com.itwingtech.itwingsdk.ads.ITWingBannerView
 import com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import com.itwingtech.itwingsdk.core.ITWingAppFlowOptions
 import com.itwingtech.itwingsdk.core.ITWingAppFlowRegistry
 import com.itwingtech.itwingsdk.core.ITWingAppFlowSession
@@ -365,8 +370,10 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         enterFullscreen()
         setContentView(R.layout.activity_itwing_flow_onboarding)
-        window.statusBarColor = Color.WHITE
-        window.navigationBarColor = Color.WHITE
+        val onboardingBackground = semanticColor("onboarding_background_color", Color.WHITE)
+        findViewById<View>(R.id.itwing_flow_root).setBackgroundColor(onboardingBackground)
+        window.statusBarColor = onboardingBackground
+        window.navigationBarColor = onboardingBackground
 
         val current = session ?: return
         pages = resolvePages(current.flowOptions)
@@ -461,10 +468,10 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
         val current = session
         val primary = current?.flowOptions?.onboardingUi?.dots?.activeColor
             ?: current?.flowOptions?.onboardingDotsActiveColor
-            ?: primaryColor()
+            ?: semanticColor("onboarding_dot_active_color", primaryColor())
         val inactive = current?.flowOptions?.onboardingUi?.dots?.inactiveColor
             ?: current?.flowOptions?.onboardingDotsInactiveColor
-            ?: Color.rgb(220, 227, 234)
+            ?: semanticColor("onboarding_dot_inactive_color", Color.rgb(220, 227, 234))
         for (index in pages.indices) {
             val dot = View(this)
             val width = if (index == position) {
@@ -502,8 +509,10 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
             nextButton.setBackgroundResource(it)
             nextButton.backgroundTintList = null
         }
-        val buttonColor = options.onboardingButtonColor ?: primaryColor()
-        val buttonTextColor = options.onboardingButtonTextColor ?: onPrimary(buttonColor)
+        val buttonColor = options.onboardingButtonColor
+            ?: semanticColor("onboarding_button_color", primaryColor())
+        val buttonTextColor = options.onboardingButtonTextColor
+            ?: semanticColor("onboarding_button_text_color", onPrimary(buttonColor))
         if (options.onboardingUi.nextButton.backgroundDrawableRes == null) {
             val background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -512,7 +521,8 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
                 if (options.onboardingButtonStrokeWidthDp > 0) {
                     setStroke(
                         dp(options.onboardingButtonStrokeWidthDp),
-                        options.onboardingButtonStrokeColor ?: buttonColor,
+                        options.onboardingButtonStrokeColor
+                            ?: semanticColor("onboarding_button_stroke_color", buttonColor),
                     )
                 }
             }
@@ -527,8 +537,31 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
             heightDp = options.onboardingButtonHeightDp,
         )
         nextButton.applySdkTextSize(options.onboardingUi.nextButton.textSize, options.onboardingUi.nextButton.textSizeSp ?: options.onboardingButtonTextSizeSp)
-        options.onboardingUi.backButton.drawableRes?.let(backButton::setImageResource)
-        backButton.imageTintList = (options.onboardingUi.backButton.tintColor ?: options.onboardingBackTintColor)?.let(ColorStateList::valueOf)
+        val backTint = (
+            options.onboardingUi.backButton.tintColor
+                ?: options.onboardingBackTintColor
+                ?: semanticColor("onboarding_back_icon_color", primaryColor())
+            )
+        val customBackDrawable = options.onboardingUi.backButton.drawableRes
+        if (customBackDrawable != null) {
+            // Preserve the existing public custom-drawable behavior.
+            backButton.setImageResource(customBackDrawable)
+            backButton.imageTintList = ColorStateList.valueOf(backTint)
+        } else {
+            // The approved default icon is two-tone: the container follows the
+            // configured onboarding color while the arrow remains white. A
+            // single ImageView tint would recolor both vector paths.
+            val container = ContextCompat.getDrawable(this, R.drawable.itwing_flow_back_container)?.mutate()
+            val arrow = ContextCompat.getDrawable(this, R.drawable.itwing_flow_back_arrow)?.mutate()
+            if (container != null && arrow != null) {
+                DrawableCompat.setTint(container, backTint)
+                backButton.setImageDrawable(LayerDrawable(arrayOf<Drawable>(container, arrow)))
+                backButton.imageTintList = null
+            } else {
+                backButton.setImageResource(R.drawable.ic_back)
+                backButton.imageTintList = ColorStateList.valueOf(backTint)
+            }
+        }
         val backSizePx = dimensionPx(options.onboardingUi.backButton.size)
         val backSizeDp = options.onboardingUi.backButton.sizeDp ?: options.onboardingBackSizeDp
         backButton.applyViewSize(widthPx = backSizePx, heightPx = backSizePx, widthDp = backSizeDp, heightDp = backSizeDp)
@@ -766,8 +799,21 @@ private class OnboardingAdapter(
         private val pageAdContainer: FrameLayout? = view.findViewById(R.id.itwing_flow_page_ad_container)
 
         fun bind(page: ITWingOnboardingPage) {
+            itemView.setBackgroundColor(
+                semanticColor(
+                    itemView.context,
+                    "onboarding_background_color",
+                    Color.WHITE,
+                ),
+            )
             title?.text = page.title
             description?.text = page.description
+            title?.setTextColor(
+                semanticColor(itemView.context, "onboarding_title_color", Color.rgb(15, 23, 42)),
+            )
+            description?.setTextColor(
+                semanticColor(itemView.context, "onboarding_description_color", Color.rgb(71, 85, 105)),
+            )
             when {
                 image == null -> Unit
                 page.imageResId != 0 -> image.setImageResource(page.imageResId)
@@ -947,6 +993,20 @@ private fun Activity.primaryColor(): Int {
     return runCatching { Color.parseColor(configured) }.getOrNull() ?: Color.rgb(37, 99, 235)
 }
 
+private fun Activity.semanticColor(name: String, fallback: Int): Int =
+    semanticColor(this, name, fallback)
+
+private fun semanticColor(context: Context, name: String, fallback: Int): Int =
+    runCatching {
+        Color.parseColor(
+            ITWingSDK.getSemanticColor(
+                name = name,
+                defaultValue = "#%08X".format(fallback),
+                context = context,
+            ),
+        )
+    }.getOrDefault(fallback)
+
 private fun Activity.splashBackgroundColor(): Int {
     val configured = appString("splash_background_color")
     return runCatching { Color.parseColor(configured) }.getOrNull() ?: primaryColor()
@@ -1011,13 +1071,25 @@ private fun termsAdFormat(options: ITWingAppFlowOptions): String? {
     return configured.trim().lowercase().takeIf { it in setOf("native", "banner") }
 }
 
-private fun placementFormat(placement: String): String =
-    ITWingSDK.currentConfig().ads.placements
-        .firstOrNull { it.name == placement }
-        ?.format
-        ?.lowercase()
-        ?.takeIf { it in setOf("banner", "native") }
-        ?: "native"
+private fun placementFormat(placement: String): String {
+    if (placement.isBlank()) return "native"
+
+    val configuredFormat = runCatching {
+        ITWingSDK.currentConfig().ads.placements
+            .firstOrNull { it.name == placement }
+            ?.format
+    }.onFailure { error ->
+        SDKTelemetry.recordNonFatal(
+            error,
+            mapOf(
+                "operation" to "placement_format",
+                "placement" to placement.take(80),
+            ),
+        )
+    }.getOrNull()
+
+    return normalizePlacementFormat(configuredFormat)
+}
 
 private fun splashStyle(options: ITWingAppFlowOptions): String =
     (options.splashStyle

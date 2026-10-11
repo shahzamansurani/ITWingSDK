@@ -18,7 +18,6 @@ import androidx.lifecycle.LifecycleOwner
 import com.google.android.libraries.ads.mobile.sdk.MobileAds
 import com.google.android.libraries.ads.mobile.sdk.initialization.InitializationConfig
 import com.itwingtech.itwingsdk.ads.AdManager
-import com.itwingtech.itwingsdk.ads.AdConsentManager
 import com.itwingtech.itwingsdk.analytics.AnalyticsClient
 import com.itwingtech.itwingsdk.analytics.InstallReferrerReporter
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
@@ -58,6 +57,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingResult
 import com.itwingtech.itwingsdk.ads.FullscreenAdState
+import com.itwingtech.itwingsdk.ads.AdConsentManager
 import com.itwingtech.itwingsdk.data.EncryptedConfigStore
 import com.itwingtech.itwingsdk.utils.safeCallback
 import okhttp3.Interceptor
@@ -69,15 +69,13 @@ import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdAdapter
 import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 
 object ITWingSDK {
-    /** SDK release version reported to the backend and telemetry. */
-    const val VERSION: String = "1.49"
-
+    const val VERSION: String = "1.58"
+    private const val BILLING_STARTUP_TIMEOUT_MS = 8_000L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
     private var repository: ConfigRepository? = null
     /** App-scoped realtime JSON database; requests reuse the SDK's configured signer and transport. */
     val realtime: ITWingRealtime by lazy { ITWingRealtime({ repository }, { applicationContext }) }
-    @Volatile
     private var config = ITWingConfig()
     private val runtime = AppRuntimeManager(
         configProvider = { config },
@@ -801,6 +799,7 @@ object ITWingSDK {
         options: ITWingOptions = ITWingOptions(),
         listener: SDKInitListener? = null
     ) {
+        StartupTrace.begin(activity, "sdkVersion=$VERSION activity=${activity.javaClass.simpleName}")
         listener?.let { initListeners.add(it) }
         applicationContext = activity.applicationContext
         blockAdsWhenVpnActive = options.blockAdsWhenVpnActive
@@ -856,6 +855,7 @@ object ITWingSDK {
              * for instant startup.
              */
             config = repository?.loadCachedConfig() ?: ITWingConfig()
+            StartupTrace.event(activity, "CONFIG_CACHE_APPLIED", "present=${config.configVersion > 0}")
             syncRemoteVpnAdBlocking()
             if (config.configVersion > 0) {
                 if (autoApplyResponsiveLayout) {
@@ -889,21 +889,30 @@ object ITWingSDK {
                 NotificationRuntimeManager.configure(activity, config, repository)
                 notifyListeners { it.onNotificationsReady() }
                 updates.check(activity)
-                subscriptions.connect(activity) {
-                    notifyListeners { it.onBillingReady() }
-                    subscriptions.restorePurchases {
-                        initializeMobileAds(activity) {
-                            ads.startAutomaticAppOpen(activity)
-                        }
-                    }
+                restorePurchasesBeforeAds(activity) {
+                    ads.startAutomaticAppOpen(activity)
                 }
             }
 
             /*
              * Fetch fresh remote config
              */
+            StartupTrace.event(activity, "BOOTSTRAP_REQUEST")
             runCatching { repository!!.bootstrap() }.onSuccess { remote ->
+                StartupTrace.event(activity, "BOOTSTRAP_SUCCESS", "configVersion=${remote.configVersion}")
                 config = remote
+                StartupTrace.event(
+                    activity,
+                    "CONFIG_APPLIED",
+                    "configVersion=${remote.configVersion} " +
+                        "adsEnabled=${remote.ads.globalEnabled} " +
+                        "blockedReason=${remote.ads.blockedReason ?: "none"} " +
+                        "placements=${remote.ads.placements.size} " +
+                        "enabledPlacements=${remote.ads.placements.count { it.enabled }} " +
+                        "adMobUnits=${remote.ads.placements.sumOf { placement -> placement.units.count { it.network.equals("admob", true) && it.adUnitId.isNotBlank() } }} " +
+                        "customFallbacks=${remote.ads.placements.count { it.customAd != null } + remote.ads.customAds.size} " +
+                        "admobAppIdPresent=${!remote.ads.admobAppId.isNullOrBlank()}",
+                )
                 syncRemoteVpnAdBlocking()
                 if (autoApplyResponsiveLayout) {
                     getActiveActivity()?.let { active ->
@@ -943,15 +952,10 @@ object ITWingSDK {
                 NotificationRuntimeManager.configure(activity, config, repository)
                 notifyListeners { it.onNotificationsReady() }
                 updates.check(activity)
-                subscriptions.connect(activity) {
-                    notifyListeners { it.onBillingReady() }
-                    subscriptions.restorePurchases {
-                        initializeMobileAds(activity) {
-                            preloadAdsIfNeeded(activity)
-                            ads.startAutomaticAppOpen(activity)
-                            notifyListeners { it.onAdsReady() }
-                        }
-                    }
+                restorePurchasesBeforeAds(activity) {
+                    preloadAdsIfNeeded(activity)
+                    ads.startAutomaticAppOpen(activity)
+                    notifyListeners { it.onAdsReady() }
                 }
 
             }.onFailure {
@@ -968,6 +972,7 @@ object ITWingSDK {
                 bootstrapFinished = true
                 bootstrapInFlight = false
                 notifyReady(cachedConfigAvailable)
+                StartupTrace.event(activity, "BOOTSTRAP_FAILED", "networkFailure=$networkFailure")
                 SDKTelemetry.track(
                     "sdk_bootstrap_failed",
                     mapOf("message" to message, "network_failure" to networkFailure)
@@ -1172,22 +1177,10 @@ object ITWingSDK {
 
 
     private fun initializeMobileAds(activity: Activity, onInitialized: () -> Unit = {}) {
-        if (!AdConsentManager.isResolved()) {
-            AdConsentManager.requestConsent(activity) { allowed ->
-                if (allowed) {
-                    initializeMobileAds(activity, onInitialized)
-                } else {
-                    SDKTelemetry.track("mobile_ads_initialize_skipped", mapOf("reason" to "consent_not_granted_or_unavailable"))
-                    mobileAdsInitializationFinished = true
-                    notifyInlineAdsReady(false)
-                    onInitialized()
-                }
-            }
-            return
-        }
         if (mobileAdsInitialized) {
             mobileAdsInitializationFinished = true
             notifyInlineAdsReady(true)
+            StartupTrace.event(activity, "ADS_READY", "gmaInitialized=true")
             onInitialized()
             return
         }
@@ -1197,23 +1190,46 @@ object ITWingSDK {
                 mapOf("reason" to "missing_admob_app_id")
             )
             mobileAdsInitializationFinished = true
+            StartupTrace.event(activity, "ADS_BLOCKED", "reason=missing_admob_app_id")
             notifyInlineAdsReady(true)
             onInitialized()
             return
         }
-        CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
-            runCatching {
-                MobileAds.initialize(activity, InitializationConfig.Builder(appId).build()) {
-                    mobileAdsInitialized = true
+        StartupTrace.event(activity, "ADMOB_APP_ID_READY", "present=true source=backend")
+        StartupTrace.event(activity, "CONSENT_REQUEST_START")
+        AdConsentManager.requestConsent(activity, appId) { consent ->
+            StartupTrace.event(
+                activity,
+                "CONSENT_FINAL",
+                "state=${consent.state} canRequestAds=${consent.canRequestAds} reason=${consent.reason}",
+            )
+            if (!consent.canRequestAds) {
+                mobileAdsInitializationFinished = true
+                StartupTrace.event(activity, "ADS_BLOCKED", "reason=${consent.reason}")
+                // The initialization attempt is terminal for this startup. Notify
+                // inline views so they can use a configured custom fallback.
+                notifyInlineAdsReady(true)
+                onInitialized()
+                return@requestConsent
+            }
+            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
+                runCatching {
+                    StartupTrace.event(activity, "GMA_INIT_START")
+                    MobileAds.initialize(activity, InitializationConfig.Builder(appId).build()) {
+                        mobileAdsInitialized = true
+                        mobileAdsInitializationFinished = true
+                        StartupTrace.event(activity, "GMA_INIT_DONE")
+                        StartupTrace.event(activity, "ADS_READY", "gmaInitialized=true")
+                        notifyInlineAdsReady(true)
+                        onInitialized()
+                    }
+                }.onFailure {
+                    SDKTelemetry.recordNonFatal(it, mapOf("operation" to "mobile_ads_initialize"))
                     mobileAdsInitializationFinished = true
+                    StartupTrace.event(activity, "ADS_BLOCKED", "reason=gma_initialize_error")
                     notifyInlineAdsReady(true)
                     onInitialized()
                 }
-            }.onFailure {
-                SDKTelemetry.recordNonFatal(it, mapOf("operation" to "mobile_ads_initialize"))
-                mobileAdsInitializationFinished = true
-                notifyInlineAdsReady(false)
-                onInitialized()
             }
         }
     }
@@ -1309,6 +1325,34 @@ object ITWingSDK {
         }
     }
 
+
+    /**
+     * Billing is useful for entitlement reconciliation but it is not allowed to
+     * strand ad initialization when Play services or the network is unavailable.
+     * A timeout never grants an entitlement; cached/verified entitlement state
+     * remains authoritative and a later restore can still disable ads.
+     */
+    private fun restorePurchasesBeforeAds(activity: Activity, onAdsInitialized: () -> Unit) {
+        val completed = AtomicBoolean(false)
+        StartupTrace.event(activity, "PURCHASE_RESTORE_START")
+
+        fun finish(reason: String) {
+            if (!completed.compareAndSet(false, true)) return
+            StartupTrace.event(activity, "PURCHASE_RESTORE_DONE", "reason=$reason isAdFree=${isAdFree()}")
+            initializeMobileAds(activity, onAdsInitialized)
+        }
+
+        mainHandler.postDelayed({ finish("timeout") }, BILLING_STARTUP_TIMEOUT_MS)
+        subscriptions.connect(activity) {
+            notifyListeners { it.onBillingReady() }
+            subscriptions.restorePurchases {
+                finish("callback")
+            }
+        }
+    }
+
+    internal fun isGoogleAdsInitialized(): Boolean = mobileAdsInitialized
+
     @JvmStatic
     fun onReady(callback: (Boolean) -> Unit) {
         if (bootstrapFinished || config.configVersion > 0) {
@@ -1393,9 +1437,7 @@ object ITWingSDK {
 
     @JvmStatic
     fun getApiBaseUrl(key: String, defaultValue: String = ""): String {
-        return runCatching {
-            ApiBaseUrlResolver.resolve(config.apiKeys[key]?.baseUrl, defaultValue)
-        }.getOrElse { defaultValue }
+        return ApiBaseUrlResolver.resolve(config.apiKeys[key]?.baseUrl, defaultValue)
     }
 
     @JvmStatic
@@ -1554,49 +1596,53 @@ object ITWingSDK {
 
     @JvmStatic
     fun getColor(name: String, defaultValue: String = ""): String {
+        return resolveColor(name, defaultValue).value
+    }
+
+    /**
+     * Resolves an SDK semantic color and emits a debug-only source trace for
+     * SDK-managed surfaces. The public getColor API remains unchanged.
+     */
+    internal fun getSemanticColor(
+        name: String,
+        defaultValue: String = "",
+        context: Context? = null,
+    ): String {
+        val resolved = resolveColor(name, defaultValue)
+        StartupTrace.event(
+            context,
+            "SDK_SEMANTIC_COLOR",
+            "semanticRole=${name.trim()} resolvedValue=${resolved.value.ifBlank { "none" }} source=${resolved.source}",
+        )
+        return resolved.value
+    }
+
+    private data class ResolvedColor(
+        val value: String,
+        val source: String,
+    )
+
+    private fun resolveColor(name: String, defaultValue: String): ResolvedColor {
         val colorMaps = listOfNotNull(
             config.app["colors"] as? Map<*, *>,
             config.app["sdk_colors"] as? Map<*, *>,
             config.app["sdkColors"] as? Map<*, *>,
         )
-        if (colorMaps.isEmpty()) return defaultValue
-        for (key in colorLookupKeys(name)) {
+        if (colorMaps.isEmpty()) return ResolvedColor(defaultValue, "default")
+        for ((index, key) in colorLookupKeys(name).withIndex()) {
             for (colors in colorMaps) {
                 val value = colors[key].asNonBlankString()
-                if (value != null) return value
+                if (value != null) {
+                    return ResolvedColor(value, if (index == 0) "explicit" else "generic")
+                }
             }
         }
-        return defaultValue
+        return ResolvedColor(defaultValue, "default")
     }
 
-    /** True when the configured UMP message requires a privacy-options entry point. */
-    @JvmStatic
-    fun isPrivacyOptionsRequired(): Boolean = AdConsentManager.privacyOptionsRequired()
-
-    /** Presents the UMP privacy choices form from a user-initiated settings action. */
-    @JvmStatic
-    fun showPrivacyOptionsForm(activity: Activity?, onComplete: ((Boolean) -> Unit)? = null) {
-        val host = activity?.takeUnless { it.isFinishing || it.isDestroyed }
-        if (host == null) {
-            onComplete?.invoke(false)
-            return
-        }
-        AdConsentManager.showPrivacyOptions(host) { allowed -> onComplete?.invoke(allowed) }
-    }
-
-    /** Returns only the explicitly configured value for a key, without alias fallback. */
-    internal fun getConfiguredColor(name: String): String? {
-        val key = name.trim()
-        if (key.isEmpty()) return null
-        val colorMaps = listOfNotNull(
-            config.app["colors"] as? Map<*, *>,
-            config.app["sdk_colors"] as? Map<*, *>,
-            config.app["sdkColors"] as? Map<*, *>,
-        )
-        return colorMaps.firstNotNullOfOrNull { colors ->
-            colors[key].asNonBlankString()
-        }
-    }
+    /** Internal bridge used by the approved v1.49 ad-card renderer. */
+    internal fun getConfiguredColor(name: String): String? =
+        getColor(name).takeIf { it.isNotBlank() }
 
     private fun colorLookupKeys(name: String): List<String> {
         val key = name.trim()
@@ -1604,11 +1650,38 @@ object ITWingSDK {
         val aliases = when (key) {
             "primary" -> listOf("primary", "primary_color", "ad_primary_color")
             "primary_color" -> listOf("primary_color", "primary", "ad_primary_color")
-            "native_text_color" -> listOf("native_text_color", "native_headline_text_color", "headline_text_color", "banner_text_color", "text_color")
-            "native_headline_text_color", "headline_text_color" -> listOf(key, "native_text_color", "banner_text_color", "text_color")
-            "native_secondary_text_color" -> listOf("native_secondary_text_color", "native_body_text_color", "native_meta_text_color", "banner_secondary_text_color", "secondary_text_color")
-            "native_body_text_color", "body_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "native_text_color")
-            "native_meta_text_color", "meta_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "native_text_color")
+            "dialog_background_color", "dialog_glass_fallback_background" -> listOf(
+                key,
+                "dialog_background_color",
+                "surface_color",
+                "surface",
+                "background_color",
+                "background",
+            )
+            "dialog_title_color" -> listOf(key, "text_color", "text")
+            "dialog_description_color" -> listOf(key, "secondary_text_color", "secondary_text", "secondary", "text_color", "text")
+            "dialog_close_icon_color" -> listOf(key, "icon_tint_color", "secondary_text_color", "text_color", "text")
+            "dialog_positive_button_color", "dialog_negative_text_color" -> listOf(key, "primary", "primary_color", "accent")
+            "dialog_positive_text_color", "dialog_negative_button_color" -> listOf(key, "text_color", "text", "surface", "background")
+            "dialog_positive_stroke_color", "dialog_negative_stroke_color" -> listOf(key, "stroke_color", "outline", "divider_color")
+            "onboarding_background_color" -> listOf(key, "background_color", "background", "surface_color", "surface")
+            "onboarding_title_color" -> listOf(key, "text_color", "text")
+            "onboarding_description_color" -> listOf(key, "secondary_text_color", "secondary_text", "secondary", "text_color", "text")
+            "onboarding_button_color" -> listOf(key, "primary", "primary_color", "accent")
+            "onboarding_button_text_color" -> listOf(key, "white", "text_color", "text")
+            "onboarding_button_stroke_color" -> listOf(key, "stroke_color", "outline", "divider_color")
+            "onboarding_back_icon_color" -> listOf(key, "icon_tint_color", "primary", "primary_color")
+            "onboarding_dot_active_color" -> listOf(key, "primary", "primary_color", "accent")
+            "onboarding_dot_inactive_color" -> listOf(key, "stroke_color", "outline", "divider_color", "secondary_text_color")
+            "background_color" -> listOf("background_color", "background", "surface_color", "surface")
+            "surface_color" -> listOf("surface_color", "surface", "background_color", "background")
+            "text_color" -> listOf("text_color", "text")
+            "secondary_text_color" -> listOf("secondary_text_color", "secondary_text", "secondary", "text_color", "text")
+            "native_text_color" -> listOf("native_text_color", "native_headline_text_color", "headline_text_color", "banner_text_color", "text_color", "text")
+            "native_headline_text_color", "headline_text_color" -> listOf(key, "native_text_color", "banner_text_color", "text_color", "text")
+            "native_secondary_text_color" -> listOf("native_secondary_text_color", "native_body_text_color", "native_meta_text_color", "banner_secondary_text_color", "secondary_text_color", "secondary", "text")
+            "native_body_text_color", "body_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "secondary", "text", "native_text_color")
+            "native_meta_text_color", "meta_text_color" -> listOf(key, "native_secondary_text_color", "banner_secondary_text_color", "secondary_text_color", "secondary", "text", "native_text_color")
             "native_cta_text_color" -> listOf("native_cta_text_color", "banner_cta_text_color", "cta_text_color")
             "banner_cta_text_color" -> listOf("banner_cta_text_color", "native_cta_text_color", "cta_text_color")
             "native_cta_color", "native_cta_background_color" -> listOf(key, "banner_cta_color", "banner_cta_background_color", "ad_cta_color", "ad_cta_background_color", "primary", "primary_color")
@@ -1618,8 +1691,8 @@ object ITWingSDK {
             "ad_label_text_color", "ad_badge_text_color" -> listOf(key, "native_ad_label_text_color")
             "native_ad_label_color", "native_ad_label_background_color" -> listOf(key, "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color", "primary", "primary_color")
             "ad_label_color", "ad_label_background_color", "ad_badge_color", "ad_badge_background_color" -> listOf(key, "native_ad_label_color", "native_ad_label_background_color", "primary", "primary_color")
-            "native_background_color" -> listOf("native_background_color", "banner_background_color", "ad_background_color", "surface_color")
-            "banner_background_color" -> listOf("banner_background_color", "native_background_color", "ad_background_color", "surface_color")
+            "native_background_color" -> listOf("native_background_color", "banner_background_color", "ad_background_color", "surface_color", "surface", "background_color", "background")
+            "banner_background_color" -> listOf("banner_background_color", "native_background_color", "ad_background_color", "surface_color", "surface", "background_color", "background")
             "native_stroke_color" -> listOf("native_stroke_color", "banner_stroke_color", "ad_stroke_color", "stroke_color")
             "banner_stroke_color" -> listOf("banner_stroke_color", "native_stroke_color", "ad_stroke_color", "stroke_color")
             else -> listOf(key)
@@ -1664,18 +1737,18 @@ object ITWingSDK {
     fun isVpnAdBlockingEnabled(): Boolean = remoteBlockAdsWhenVpnActive ?: blockAdsWhenVpnActive
 
     @JvmStatic
-    fun showInterstitial(activity: Activity?, placement: String, onComplete: () -> Unit = {}) =
+    fun showInterstitial(activity: Activity, placement: String, onComplete: () -> Unit = {}) =
         runSdkCall("show_interstitial", mapOf("placement" to placement)) {
             ads.showInterstitial(activity, placement, onComplete)
         }
 
     @JvmStatic
-    fun showInterstitial(activity: Activity?, placement: String, onComplete: Runnable) =
+    fun showInterstitial(activity: Activity, placement: String, onComplete: Runnable) =
         showInterstitial(activity, placement) { onComplete.run() }
 
     @JvmStatic
     fun showRewarded(
-        activity: Activity?,
+        activity: Activity,
         placement: String,
         onReward: () -> Unit,
         onComplete: () -> Unit = {},
@@ -1687,7 +1760,7 @@ object ITWingSDK {
 
     @JvmStatic
     fun showRewardedDirect(
-        activity: Activity?,
+        activity: Activity,
         placement: String,
         onReward: () -> Unit,
         onComplete: () -> Unit = {},
@@ -1698,18 +1771,18 @@ object ITWingSDK {
         }
 
     @JvmStatic
-    fun showRewarded(activity: Activity?, placement: String, onComplete: () -> Unit = {}) =
+    fun showRewarded(activity: Activity, placement: String, onComplete: () -> Unit = {}) =
         runSdkCall("show_rewarded", mapOf("placement" to placement)) {
             ads.showRewarded(activity, placement, onComplete)
         }
 
     @JvmStatic
-    fun showRewarded(activity: Activity?, placement: String, onComplete: Runnable) =
+    fun showRewarded(activity: Activity, placement: String, onComplete: Runnable) =
         showRewarded(activity, placement) { onComplete.run() }
 
     @JvmStatic
     fun showRewardedInterstitial(
-        activity: Activity?,
+        activity: Activity,
         placement: String,
         onReward: () -> Unit = {},
         onComplete: () -> Unit = {}
@@ -1719,7 +1792,7 @@ object ITWingSDK {
         }
 
     @JvmStatic
-    fun showAppOpen(activity: Activity?, placement: String, onComplete: () -> Unit = {}) =
+    fun showAppOpen(activity: Activity, placement: String, onComplete: () -> Unit = {}) =
         runSdkCall("show_app_open", mapOf("placement" to placement)) {
             ads.showAppOpen(activity, placement, onComplete)
         }

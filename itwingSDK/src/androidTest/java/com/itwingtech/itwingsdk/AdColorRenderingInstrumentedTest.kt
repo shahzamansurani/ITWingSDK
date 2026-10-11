@@ -150,6 +150,26 @@ class AdColorRenderingInstrumentedTest {
     }
 
     @Test
+    fun transparentNativePlacementDoesNotOverrideAdminCardPaletteWithLegacyBlack() {
+        val style = AdTheme.cardStyle(
+            format = "native",
+            metadata = mapOf(
+                "native_transparent_background" to true,
+                "native_background_color" to "#000000",
+            ),
+            appColorProvider = { key ->
+                when (key) {
+                    "native_background_color" -> "#FFFFFF"
+                    else -> null
+                }
+            },
+        )
+
+        assertEquals(Color.WHITE, style.backgroundColor)
+        assertTrue(style.backgroundConfigured)
+    }
+
+    @Test
     fun sharedRendererInstallsARealMaterialCardForGenericAndSdkHosts() {
         val scenario = ActivityScenario.launch(AdColorTestActivity::class.java)
         try {

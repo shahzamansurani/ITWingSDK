@@ -11,6 +11,7 @@ import com.google.android.libraries.ads.mobile.sdk.common.PreloadConfiguration
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAd
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.core.AdPlacementConfig
+import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import java.util.concurrent.ConcurrentHashMap
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdEventCallback
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdPreloader
@@ -28,15 +29,32 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     private val minLoadIntervalMs = 20_000L
 
     fun preloadAll(activity: Activity) {
-        val config = configProvider()
-        config.ads.placements.filter {
-            config.ads.globalEnabled &&
-                    it.enabled &&
-                    it.format == "interstitial" &&
-                    it.metadata["preload_on_start"].isTruthy()
-        }
-            .forEach {
-                preload(activity, it.name)
+        if (!activity.isUsable()) return
+        val config = runCatching { configProvider() }
+            .onFailure { error ->
+                SDKTelemetry.recordNonFatal(error, mapOf("operation" to "interstitial_preload_config"))
+            }
+            .getOrNull()
+            ?: return
+
+        if (!config.ads.globalEnabled) return
+        config.ads.placements
+            .filter {
+                it.enabled &&
+                        it.format == "interstitial" &&
+                        it.metadata["preload_on_start"].isTruthy()
+            }
+            .forEach { placement ->
+                runCatching { preload(activity, placement.name) }
+                    .onFailure { error ->
+                        SDKTelemetry.recordNonFatal(
+                            error,
+                            mapOf(
+                                "operation" to "interstitial_preload",
+                                "placement" to placement.name.take(80),
+                            ),
+                        )
+                    }
             }
     }
 
@@ -45,17 +63,44 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     }
 
     fun load(activity: Activity, placementName: String, forceRequest: Boolean = false) {
-        val config = configProvider()
-        if (!config.ads.globalEnabled) return
-        if (!NetworkState.isOnline(activity)) return
+        if (!activity.isUsable()) return
+        val config = runCatching { configProvider() }
+            .onFailure { error ->
+                SDKTelemetry.recordNonFatal(
+                    error,
+                    mapOf(
+                        "operation" to "interstitial_load_config",
+                        "placement" to placementName.take(80),
+                    ),
+                )
+            }
+            .getOrNull()
+            ?: return
+        if (!config.ads.globalEnabled) {
+            AdPriorityTrace.blocked(activity, "interstitial", placementName, "global_ads_disabled")
+            return
+        }
+        if (!NetworkState.isOnline(activity)) {
+            AdPriorityTrace.blocked(activity, "interstitial", placementName, "offline")
+            return
+        }
         val placement = config.ads.placements.firstOrNull {
             it.name == placementName &&
                     it.enabled &&
                     it.format == "interstitial"
-        } ?: return
+        } ?: run {
+            AdPriorityTrace.blocked(activity, "interstitial", placementName, "missing_or_disabled_placement")
+            return
+        }
+
+        if (placement.shouldRenderCustomBeforeAdMob() && customRenderer.canRender(placement)) {
+            AdPriorityTrace.request(activity, "interstitial", placementName, "custom_fallback")
+            customRenderer.preload(activity, placement)
+            return
+        }
 
         val unit = placement.adMobUnitOrNull() ?: run {
-            if (customRenderer.canRender(placement)) customRenderer.preload(activity, placement)
+            AdPriorityTrace.blocked(activity, "interstitial", placementName, "missing_admob_unit_and_custom_fallback")
             return
         }
 
@@ -68,35 +113,40 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
 
         val request = AdRequest.Builder(unit.adUnitId).build()
         AdEventTracker.log("ad_load_requested", placement)
+        AdPriorityTrace.request(activity, "interstitial", placementName, "admob")
         startPreloader(placementName, unit.adUnitId, request)
     }
 
-    fun show(activity: Activity, placementName: String, onComplete: () -> Unit = {}) {
-        AdClassCastGuard.run(action = {
-            showInternal(activity, placementName, onComplete)
-        }, onMismatch = {
-            // Ad SDK type mismatches are recoverable; always release the in-flight slot.
-            runCatching {
-                configProvider().ads.placements.firstOrNull { it.name == placementName }?.let { placement ->
-                    AdEventTracker.log("ad_show_failed", placement, mapOf("reason" to "incompatible_ad_type"))
-                }
-            }
-            activeShowRequests.remove(placementName)
-            safeCallback(onComplete)
-        })
+    fun show(activity: Activity, placementName: String, onComplete: () -> Unit = {}, ) {
+        AdClassCastGuard.run(
+            action = { showInternal(activity, placementName, onComplete) },
+            onMismatch = { error ->
+                SDKTelemetry.recordNonFatal(
+                    error,
+                    mapOf(
+                        "operation" to "interstitial_show_type_mismatch",
+                        "placement" to placementName.take(80),
+                    ),
+                )
+                safeCallback(onComplete)
+            },
+        )
     }
 
-    private fun showInternal(activity: Activity, placementName: String, onComplete: () -> Unit) {
+    private fun showInternal(activity: Activity, placementName: String, onComplete: () -> Unit = {}, ) {
         if (!activity.isUsable()) {
+            AdPriorityTrace.blocked(activity, "interstitial", placementName, "activity_unusable")
             safeCallback(onComplete)
             return
         }
         val config = configProvider()
         if (!config.ads.globalEnabled) {
+            AdPriorityTrace.blocked(activity, "interstitial", placementName, "global_ads_disabled")
             safeCallback(onComplete)
             return
         }
         if (!NetworkState.isOnline(activity)) {
+            AdPriorityTrace.blocked(activity, "interstitial", placementName, "offline")
             safeCallback(onComplete)
             return
         }
@@ -108,17 +158,20 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         }
 
         if (placement == null) {
+            AdPriorityTrace.blocked(activity, "interstitial", placementName, "missing_or_disabled_placement")
             safeCallback(onComplete)
             return
         }
 
         if (!frequency.canShow(placement, countTrigger = true)) {
             AdEventTracker.log("ad_frequency_capped", placement)
+            AdPriorityTrace.blocked(activity, "interstitial", placementName, "frequency_cap")
             safeCallback(onComplete)
             return
         }
         if (activeShowRequests.putIfAbsent(placementName, true) != null) {
             AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "show_already_in_progress"))
+            AdPriorityTrace.blocked(activity, "interstitial", placementName, "show_already_in_progress")
             frequency.refundTrigger(placement)
             safeCallback(onComplete)
             return
@@ -129,7 +182,9 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         }
 
         AdEventTracker.log("ad_show_requested", placement)
-        if (placement.adMobUnitOrNull() == null && customRenderer.canRender(placement)) {
+        AdPriorityTrace.request(activity, "interstitial", placementName, "show")
+        if (placement.shouldRenderCustomBeforeAdMob() && customRenderer.canRender(placement)) {
+            AdPriorityTrace.request(activity, "interstitial", placementName, "custom_fallback")
             val shown = customRenderer.show(activity, placement, onComplete = {
                 AdEventTracker.log("ad_dismissed", placement)
                 armInlineSafetyIfNeeded(placement)
@@ -138,11 +193,14 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             })
             if (!shown) {
                 AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
+                AdPriorityTrace.blocked(activity, "interstitial", placementName, "fullscreen_ad_active")
                 frequency.refundTrigger(placement)
                 guardedComplete()
             } else {
                 AdEventTracker.log("ad_show_started", placement)
+                AdPriorityTrace.loaded(activity, "interstitial", placementName, "custom_fallback")
                 frequency.markShown(placement)
+                PostInterstitialInlineSuppression.markPresented(postInterstitialSuppressionEnabled())
                 AdEventTracker.log("ad_impression", placement)
             }
             return
@@ -170,14 +228,17 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         val fullscreenOwner = FullscreenAdState.tryBegin("interstitial", placement.name)
         if (fullscreenOwner == null) {
             AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active"))
+            AdPriorityTrace.blocked(activity, "interstitial", placementName, "fullscreen_ad_active")
             frequency.refundTrigger(placement)
             completion.complete()
             return
         }
         AdEventTracker.log("ad_show_started", placement)
+        AdPriorityTrace.loaded(activity, "interstitial", placementName, "admob")
         ad.adEventCallback = object : InterstitialAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
+                PostInterstitialInlineSuppression.markPresented(postInterstitialSuppressionEnabled())
             }
 
             override fun onAdDismissedFullScreenContent() {
@@ -194,6 +255,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             ) {
                 loadedAds.remove(placementName)
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to fullScreenContentError.message))
+                AdPriorityTrace.blocked(activity, "interstitial", placementName, "admob_show_failed")
                 frequency.refundTrigger(placement)
                 FullscreenAdState.end(fullscreenOwner)
                 if (!showCustomFallback(activity, placement, completion::complete)) completion.complete()
@@ -205,6 +267,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
 
             override fun onAdImpression() {
                 AdEventTracker.log("ad_impression", placement)
+                AdPriorityTrace.impression(activity, "interstitial", placementName)
             }
 
             override fun onAdPaid(value: AdValue) {
@@ -231,6 +294,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 ad.show(activity)
             }.onFailure {
                 AdEventTracker.log("ad_show_failed", placement, mapOf("message" to (it.message ?: "show_exception")))
+                AdPriorityTrace.blocked(activity, "interstitial", placementName, "show_exception")
                 frequency.refundTrigger(placement)
                 FullscreenAdState.end(fullscreenOwner)
                 completion.complete()
@@ -244,13 +308,23 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
 
     fun clear(placementName: String, ) {
         loadedAds.remove(placementName)
-        preloaderKeys[placementName]?.let { InterstitialAdPreloader.destroy(it) }
+        preloaderKeys[placementName]?.let { key ->
+            runCatching { InterstitialAdPreloader.destroy(key) }
+                .onFailure { error ->
+                    SDKTelemetry.recordNonFatal(error, mapOf("operation" to "interstitial_clear", "placement" to placementName.take(80)))
+                }
+        }
         preloaderKeys.remove(placementName)
     }
 
     fun clearAll() {
         loadedAds.clear()
-        preloaderKeys.values.forEach { InterstitialAdPreloader.destroy(it) }
+        preloaderKeys.values.forEach { key ->
+            runCatching { InterstitialAdPreloader.destroy(key) }
+                .onFailure { error ->
+                    SDKTelemetry.recordNonFatal(error, mapOf("operation" to "interstitial_clear_all"))
+                }
+        }
         preloaderKeys.clear()
     }
 
@@ -258,12 +332,24 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         if (preloaderKeys[placementName] == adUnitId) {
             return
         }
-        preloaderKeys[placementName]?.let { InterstitialAdPreloader.destroy(it) }
-        preloaderKeys[placementName] = adUnitId
+        preloaderKeys[placementName]?.let { key ->
+            runCatching { InterstitialAdPreloader.destroy(key) }
+        }
         runCatching {
             InterstitialAdPreloader.start(
                 adUnitId,
                 PreloadConfiguration(request, 1),
+            )
+        }.onSuccess {
+            preloaderKeys[placementName] = adUnitId
+        }.onFailure { error ->
+            preloaderKeys.remove(placementName, adUnitId)
+            SDKTelemetry.recordNonFatal(
+                error,
+                mapOf(
+                    "operation" to "interstitial_preloader_start",
+                    "placement" to placementName.take(80),
+                ),
             )
         }
     }
@@ -363,10 +449,22 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
 
     private fun showCustomFallback(activity: Activity, placement: AdPlacementConfig, onComplete: () -> Unit): Boolean {
         val fallback = configProvider().placementWithCustomFallback(placement) ?: return false
-        return customRenderer.show(activity, fallback, onComplete = {
+        val shown = customRenderer.show(activity, fallback, onComplete = {
             frequency.markShown(placement)
             safeCallback(onComplete)
         })
+        if (shown) PostInterstitialInlineSuppression.markPresented(postInterstitialSuppressionEnabled())
+        return shown
+    }
+
+    private fun postInterstitialSuppressionEnabled(): Boolean {
+        val value = configProvider().app["suppress_inline_ads_after_interstitial"] ?: return true
+        return when (value) {
+            is Boolean -> value
+            is Number -> value.toInt() != 0
+            is String -> value.trim().lowercase() !in setOf("0", "false", "off", "no", "disabled")
+            else -> true
+        }
     }
 
     private fun clearPreloader(placementName: String) {

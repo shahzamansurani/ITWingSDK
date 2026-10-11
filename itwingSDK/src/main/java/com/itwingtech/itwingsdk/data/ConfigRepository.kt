@@ -11,8 +11,9 @@ import com.itwingtech.itwingsdk.core.CustomAdConfig
 import com.itwingtech.itwingsdk.core.FirebaseConfig
 import com.itwingtech.itwingsdk.core.InAppUpdateConfig
 import com.itwingtech.itwingsdk.core.ITWingConfig
-import com.itwingtech.itwingsdk.core.ITWingOptions
 import com.itwingtech.itwingsdk.core.ITWingSDK
+import com.itwingtech.itwingsdk.core.ITWingOptions
+import com.itwingtech.itwingsdk.core.StartupTrace
 import com.itwingtech.itwingsdk.core.MediaLibraryConfig
 import com.itwingtech.itwingsdk.core.MediaPlacementConfig
 import com.itwingtech.itwingsdk.core.NotificationConfig
@@ -177,7 +178,7 @@ class ConfigRepository(
             .header("X-ITW-Signature", signature)
             .header("X-ITW-Platform", "android")
             .header("X-ITW-App-Identifier", context.packageName)
-            .header("X-ITW-SDK-Version", ITWingSDK.VERSION)
+            .header(SDK_VERSION_HEADER, sdkVersionHeaderValue())
             .build()
 
         chain.proceed(signed)
@@ -565,6 +566,7 @@ class ConfigRepository(
         return (0 until placements.length()).mapNotNull { index ->
             val item = placements.optJSONObject(index) ?: return@mapNotNull null
             val units = item.optJSONArray("units")
+            val metadata = item.optJSONObject("metadata")?.toMap() ?: emptyMap()
             AdPlacementConfig(
                 name = item.optString("name"),
                 format = item.optString("format"),
@@ -576,7 +578,7 @@ class ConfigRepository(
                 cooldownSeconds = item.optNullableInt("cooldown_seconds"),
                 sessionCap = item.optNullableInt("session_cap"),
                 dailyCap = item.optNullableInt("daily_cap"),
-                metadata = item.optJSONObject("metadata")?.toMap() ?: emptyMap(),
+                metadata = metadata,
                 customAd = parseCustomAd(item.optJSONObject("custom_ad")),
                 units = if (units == null) emptyList() else (0 until units.length()).mapNotNull { unitIndex ->
                     val unit = units.optJSONObject(unitIndex) ?: return@mapNotNull null
@@ -586,6 +588,7 @@ class ConfigRepository(
                         waterfallOrder = unit.optInt("waterfall_order", 1),
                     )
                 },
+                sourceMode = item.optCleanString("source_mode") ?: metadata["source_mode"]?.toString(),
             )
         }
     }
@@ -827,6 +830,7 @@ class ConfigRepository(
 
     private suspend fun signedPost(path: String, payload: JSONObject): JSONObject = withContext(Dispatchers.IO) {
         signedRequest(path, "POST", payload).use { response ->
+            StartupTrace.event(context, "BOOTSTRAP_HTTP_STATUS", "path=$path code=${response.code}")
             val responseBody = response.body.string().orEmpty()
             if (!response.isSuccessful) error("SDK request failed: ${response.code} ${responseBody.take(300)}")
             JSONObject(responseBody)
@@ -861,7 +865,7 @@ class ConfigRepository(
             .header("X-ITW-Signature", signature)
             .header("X-ITW-Platform", "android")
             .header("X-ITW-App-Identifier", context.packageName)
-            .header("X-ITW-SDK-Version", ITWingSDK.VERSION)
+            .header(SDK_VERSION_HEADER, sdkVersionHeaderValue())
         extraHeaders.forEach { (name, value) -> builder.header(name, value) }
 
         val request = if (normalizedMethod == "GET") {
@@ -928,5 +932,9 @@ class ConfigRepository(
         return this
     }
 }
+
+internal const val SDK_VERSION_HEADER = "X-ITW-SDK-Version"
+
+internal fun sdkVersionHeaderValue(): String = ITWingSDK.VERSION
 
 internal class RealtimeRequestException(val statusCode: Int, message: String) : IllegalStateException(message)

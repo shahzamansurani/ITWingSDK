@@ -1,103 +1,142 @@
 package com.itwingtech.itwingsdk.ads
 
 import android.app.Activity
+import android.os.Handler
 import android.os.Looper
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
 import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
+import java.util.concurrent.CopyOnWriteArrayList
 
-/** One process-wide UMP flow shared by SDK initialization and every Google ad format. */
+/**
+ * Small, explicit UMP state machine. A UMP transport/form error is retryable;
+ * it is not silently converted into a permanent SDK-wide ad disablement.
+ */
 internal object AdConsentManager {
+    enum class State {
+        UNKNOWN,
+        REQUESTING,
+        CAN_REQUEST_ADS,
+        CANNOT_REQUEST_ADS,
+        ERROR_RETRYABLE,
+    }
+
+    data class Result(
+        val canRequestAds: Boolean,
+        val state: State,
+        val reason: String,
+    )
+
+    private const val FORM_WAIT_ATTEMPTS = 20
+    private const val FORM_WAIT_DELAY_MS = 250L
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val callbacks = CopyOnWriteArrayList<(Result) -> Unit>()
     @Volatile private var consentInformation: ConsentInformation? = null
-    @Volatile private var resolved = false
-    @Volatile private var requestsAllowed = false
-    private var requestInFlight = false
-    private val callbacks = mutableListOf<(Boolean) -> Unit>()
+    @Volatile private var state = State.UNKNOWN
+    @Volatile private var requestInFlight = false
+
+    fun state(): State = state
 
     fun canRequestAds(): Boolean =
-        resolved && requestsAllowed && runCatching { consentInformation?.canRequestAds() == true }.getOrDefault(false)
+        state == State.CAN_REQUEST_ADS && consentInformation?.canRequestAds() == true
 
-    fun isResolved(): Boolean = resolved
-
-    fun requestConsent(activity: Activity, onComplete: (Boolean) -> Unit) {
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            activity.runOnUiThread { requestConsent(activity, onComplete) }
+    fun requestConsent(activity: Activity, appId: String, onComplete: (Result) -> Unit) {
+        if (state == State.CAN_REQUEST_ADS || state == State.CANNOT_REQUEST_ADS) {
+            onComplete(finalResult(if (state == State.CAN_REQUEST_ADS) "cached_state" else "cached_denial"))
             return
         }
-        if (resolved) {
-            onComplete(canRequestAds())
-            return
-        }
+
         callbacks += onComplete
         if (requestInFlight) return
         requestInFlight = true
+        state = State.REQUESTING
 
-        runCatching {
+        fun finish(reason: String, retryable: Boolean = false) {
+            val info = consentInformation
+            val allowed = runCatching { info?.canRequestAds() == true }.getOrDefault(false)
+            state = when {
+                allowed -> State.CAN_REQUEST_ADS
+                retryable -> State.ERROR_RETRYABLE
+                else -> State.CANNOT_REQUEST_ADS
+            }
+            requestInFlight = false
+            val result = Result(allowed, state, reason)
+            val waiting = callbacks.toList()
+            callbacks.clear()
+            waiting.forEach { callback -> callback(result) }
+        }
+
+        fun finishFromForm(formErrorReason: String?) {
+            finish(formErrorReason ?: "consent_form_done", retryable = formErrorReason != null)
+        }
+
+        mainHandler.post {
+            if (activity.isFinishing || activity.isDestroyed) {
+                finish("activity_unavailable", retryable = true)
+                return@post
+            }
+
             val info = UserMessagingPlatform.getConsentInformation(activity.applicationContext)
             consentInformation = info
-            val parameters = ConsentRequestParameters.Builder().build()
+            val params = ConsentRequestParameters.Builder()
+                .setAdMobAppId(appId)
+                .build()
             info.requestConsentInfoUpdate(
                 activity,
-                parameters,
+                params,
                 {
-                    // A consent form is UI. Never attempt to present one from a
-                    // stale/destroyed Activity or while its lifecycle is paused.
-                    if (!activity.isFinishing && !activity.isDestroyed && activity.isResumedForConsent()) {
-                        runCatching {
-                            UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) {
-                                finish(info, info.canRequestAds())
-                            }
-                        }.onFailure { finish(info, info.canRequestAds()) }
-                    } else {
-                        finish(info, info.canRequestAds())
+                    val status = runCatching { info.consentStatus }.getOrDefault(-1)
+                    val canRequest = runCatching { info.canRequestAds() }.getOrDefault(false)
+                    ConsentTrace.emit(activity, "CONSENT_INFO_SUCCESS", "status=$status canRequestAds=$canRequest")
+                    if (!info.isConsentFormAvailable) {
+                        finish(if (canRequest) "consent_not_required" else "consent_unavailable")
+                        return@requestConsentInfoUpdate
                     }
+
+                    ConsentTrace.emit(activity, "CONSENT_FORM_REQUIRED")
+                    fun showWhenResumed(attempt: Int) {
+                        if (activity.isFinishing || activity.isDestroyed) {
+                            finish("activity_unavailable", retryable = true)
+                        } else if (attempt >= FORM_WAIT_ATTEMPTS) {
+                            finish("consent_form_not_presented", retryable = true)
+                        } else if (!activity.window.decorView.isShown) {
+                            mainHandler.postDelayed({ showWhenResumed(attempt + 1) }, FORM_WAIT_DELAY_MS)
+                        } else {
+                            UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) { formError ->
+                                ConsentTrace.emit(activity, "CONSENT_FORM_DONE", "error=${formError?.errorCode ?: 0}")
+                                finishFromForm(formError?.message?.take(120)?.replace("\n", " "))
+                            }
+                        }
+                    }
+                    showWhenResumed(0)
                 },
-                {
-                    // UMP retains valid prior consent; permit ads only if its
-                    // authoritative persisted state says they may be requested.
-                    finish(info, info.canRequestAds())
+                { error ->
+                    val canRequestAfterError = runCatching { info.canRequestAds() }.getOrDefault(false)
+                    ConsentTrace.emit(
+                        activity,
+                        "CONSENT_INFO_ERROR",
+                        "code=${error.errorCode} message=${error.message.take(120).replace("\n", " ")}",
+                    )
+                    // UMP retains the previous session state on update failure. Honor it
+                    // when it allows requests; otherwise leave the result retryable.
+                    finish(
+                        reason = if (canRequestAfterError) "consent_update_error_previous_state_allowed" else "consent_update_error_retryable",
+                        retryable = !canRequestAfterError,
+                    )
                 },
             )
-        }.onFailure {
-            finish(consentInformation, runCatching { consentInformation?.canRequestAds() == true }.getOrDefault(false))
         }
     }
 
-    fun privacyOptionsRequired(): Boolean = runCatching {
-        consentInformation?.privacyOptionsRequirementStatus == ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED
-    }.getOrDefault(false)
-
-    fun showPrivacyOptions(activity: Activity, onComplete: (Boolean) -> Unit = {}) {
-        if (!privacyOptionsRequired() || activity.isFinishing || activity.isDestroyed) {
-            onComplete(false)
-            return
-        }
-        runCatching {
-            UserMessagingPlatform.showPrivacyOptionsForm(activity) {
-                requestsAllowed = runCatching { consentInformation?.canRequestAds() == true }.getOrDefault(false)
-                onComplete(requestsAllowed)
-            }
-        }.onFailure { onComplete(false) }
+    private fun finalResult(reason: String): Result {
+        val allowed = canRequestAds()
+        return Result(allowed, state, reason)
     }
+}
 
-    private fun finish(info: ConsentInformation?, allowed: Boolean) {
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            android.os.Handler(Looper.getMainLooper()).post { finish(info, allowed) }
-            return
-        }
-        if (resolved) return
-        consentInformation = info
-        requestsAllowed = allowed
-        resolved = true
-        requestInFlight = false
-        val result = canRequestAds()
-        callbacks.toList().also { callbacks.clear() }.forEach { callback ->
-            runCatching { callback(result) }
-        }
+private object ConsentTrace {
+    fun emit(activity: Activity, stage: String, details: String = "") {
+        com.itwingtech.itwingsdk.core.StartupTrace.event(activity, stage, details)
     }
-
-    private fun Activity.isResumedForConsent(): Boolean =
-        if (this is LifecycleOwner) lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) else hasWindowFocus()
 }

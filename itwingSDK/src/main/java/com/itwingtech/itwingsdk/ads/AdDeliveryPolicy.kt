@@ -3,17 +3,33 @@ package com.itwingtech.itwingsdk.ads
 import com.itwingtech.itwingsdk.core.AdPlacementConfig
 import com.itwingtech.itwingsdk.core.AdUnitConfig
 
-/** A configured AdMob unit always gets first opportunity; custom is used only without one or after failure. */
 internal fun AdPlacementConfig.adMobUnitOrNull(): AdUnitConfig? =
     units.firstOrNull {
         it.network.trim().equals("admob", ignoreCase = true) && it.adUnitId.isNotBlank()
-    }?.let { unit -> unit.copy(adUnitId = unit.adUnitId.trim()) }
+    }?.let { it.copy(adUnitId = it.adUnitId.trim()) }
 
-internal fun AdPlacementConfig.shouldRenderCustomBeforeAdMob(): Boolean = adMobUnitOrNull() == null
+internal fun AdPlacementConfig.deliveryMode(): String {
+    val raw = (sourceMode
+        ?: metadata["source_mode"]?.toString()
+        ?: metadata["delivery_mode"]?.toString()
+        ?: metadata["source"]?.toString())
+        ?.trim()
+        ?.lowercase()
+        .orEmpty()
 
-internal fun AdPlacementConfig.deliveryMode(hasCustomFallback: Boolean): String = when {
-    adMobUnitOrNull() != null && hasCustomFallback -> "REAL_WITH_CUSTOM_FALLBACK"
-    adMobUnitOrNull() != null -> "REAL_ONLY"
-    hasCustomFallback -> "CUSTOM_ONLY"
-    else -> "DISABLED"
+    return when (raw) {
+        "custom", "custom_ad", "custom_only" -> "custom_only"
+        "admob", "admob_only", "google", "google_only" -> "admob_only"
+        "disabled", "off", "none" -> "disabled"
+        else -> "admob_first_custom_fallback"
+    }
+}
+
+internal fun AdPlacementConfig.allowsCustomFallback(): Boolean =
+    deliveryMode() != "admob_only" && deliveryMode() != "disabled"
+
+internal fun AdPlacementConfig.shouldRenderCustomBeforeAdMob(): Boolean = when (deliveryMode()) {
+    "custom_only" -> true
+    "admob_only", "disabled" -> false
+    else -> adMobUnitOrNull() == null
 }

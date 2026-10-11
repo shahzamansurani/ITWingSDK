@@ -56,10 +56,12 @@ class RewardedInterstitialManager(
             it.name == placementName && it.enabled && it.format == "rewarded_interstitial"
         } ?: return
 
-        val unit = placement.adMobUnitOrNull() ?: run {
-            if (customRenderer.canRender(placement)) customRenderer.preload(activity, placement)
+        if (customRenderer.canRender(placement)) {
+            customRenderer.preload(activity, placement)
             return
         }
+
+        val unit = placement.units.firstOrNull { it.network == "admob" } ?: return
         if (!canStartLoad(placementName, placement, forceRequest)) return
         val request = AdRequest.Builder(unit.adUnitId).build()
         AdEventTracker.log("ad_load_requested", placement)
@@ -105,7 +107,7 @@ class RewardedInterstitialManager(
             return
         }
 
-        if (placement.adMobUnitOrNull() == null && !customRenderer.canRender(placement)) {
+        if (!customRenderer.canRender(placement) && placement.units.none { it.network.equals("admob", true) && it.adUnitId.isNotBlank() }) {
             AdFailureDialog.show(activity, config.adPrimaryColor(), "No valid AdMob unit is configured for this rewarded interstitial placement.")
             return
         }
@@ -122,7 +124,7 @@ class RewardedInterstitialManager(
             activeShowRequests.remove(placementName)
         }
 
-        if (placement.adMobUnitOrNull() == null && customRenderer.canRender(placement)) {
+        if (customRenderer.canRender(placement)) {
             RewardedIntroDialog.show(activity, placement, config.adPrimaryColor(), onSkip = {
                 AdEventTracker.log("ad_opt_out", placement)
                 guardedCancel()
@@ -197,9 +199,6 @@ class RewardedInterstitialManager(
         ad.adEventCallback = object : RewardedInterstitialAdEventCallback {
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
-            }
-
-            override fun onAdImpression() {
                 AdEventTracker.log("ad_impression", placement)
             }
 

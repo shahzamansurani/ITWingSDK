@@ -175,6 +175,7 @@ class ITWingNativeAdView @JvmOverloads constructor(
         heightMeasureSpec: Int
     ) {
         runCatching {
+            setPadding(0, 0, 0, 0)
             super.onMeasure(widthMeasureSpec, heightMeasureSpec)
             return
         }
