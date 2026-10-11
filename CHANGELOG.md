@@ -1,5 +1,13 @@
 # Changelog
 
+## ITWingSDK v1.59.1
+
+- Armed post-interstitial inline suppression when a fullscreen ad is actually
+  shown, preventing destination Native/Banner loads from racing ahead of the
+  first-touch release boundary.
+- Preserved the admin suppression switch and the normal shimmer, AdMob-first,
+  and Custom-fallback loading path.
+
 ## ITWingSDK v1.59
 
 - Restored the approved v1.57 runtime baseline and layouts.

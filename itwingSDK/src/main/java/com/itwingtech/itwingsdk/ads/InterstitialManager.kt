@@ -155,6 +155,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
                 AdPriorityTrace.loaded(activity, "interstitial", placementName, "custom_fallback")
                 frequency.markShown(placement)
                 PostInterstitialInlineSuppression.markPresented(postInterstitialSuppressionEnabled())
+                armInlineSafetyIfNeeded(placement)
                 AdEventTracker.log("ad_impression", placement)
             }
             return
@@ -193,6 +194,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             override fun onAdShowedFullScreenContent() {
                 frequency.markShown(placement)
                 PostInterstitialInlineSuppression.markPresented(postInterstitialSuppressionEnabled())
+                armInlineSafetyIfNeeded(placement)
             }
 
             override fun onAdDismissedFullScreenContent() {
@@ -386,7 +388,10 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             armInlineSafetyIfNeeded(placement)
             safeCallback(onComplete)
         })
-        if (shown) PostInterstitialInlineSuppression.markPresented(postInterstitialSuppressionEnabled())
+        if (shown) {
+            PostInterstitialInlineSuppression.markPresented(postInterstitialSuppressionEnabled())
+            armInlineSafetyIfNeeded(placement)
+        }
         return shown
     }
 
@@ -407,7 +412,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     }
 
     private fun armInlineSafetyIfNeeded(placement: com.itwingtech.itwingsdk.core.AdPlacementConfig) {
-        if (placement.isSplashPlacement()) return
+        if (placement.isSplashPlacement() || !postInterstitialSuppressionEnabled()) return
         InlineAdSafetyGate.arm("interstitial", placement.name)
     }
 
