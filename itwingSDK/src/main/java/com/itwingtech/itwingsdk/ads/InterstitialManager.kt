@@ -91,7 +91,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         }
 
         val request = AdRequest.Builder(unit.adUnitId).build()
-        AdEventTracker.log("ad_load_requested", placement)
+        AdEventTracker.log("ad_load_requested", placement, mapOf("provider" to "admob", "request_reason" to "preload"))
         AdPriorityTrace.request(activity, "interstitial", placementName, "admob")
         startPreloader(placementName, unit.adUnitId, request)
     }

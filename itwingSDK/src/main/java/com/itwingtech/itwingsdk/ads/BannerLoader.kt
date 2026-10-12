@@ -33,6 +33,7 @@ import com.itwingtech.itwingsdk.core.AdPlacementConfig
 import com.itwingtech.itwingsdk.core.CustomAdConfig
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.core.ITWingSDK
+import com.itwingtech.itwingsdk.core.StartupTrace
 import com.itwingtech.itwingsdk.utils.NetworkState
 import com.itwingtech.itwingsdk.utils.SDKMediaView
 import java.util.WeakHashMap
@@ -123,7 +124,7 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
 
         if (customAd != null) {
             AdPriorityTrace.request(activity, "banner", placementName, "custom_fallback")
-            AdEventTracker.log("ad_load_requested", placement)
+            AdEventTracker.log("ad_load_requested", placement, mapOf("provider" to "custom", "request_reason" to "fallback"))
             preloadCustomBanner(
                 activity = activity,
                 container = container,
@@ -149,6 +150,11 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
         }
 
         val resolvedBannerType = resolveBannerType(placement, bannerType)
+        StartupTrace.event(
+            activity,
+            "BANNER_TYPE_RESOLVED",
+            "placement=$placementName type=${resolvedBannerType.name} metadataType=${placement.metadata["banner_type"]} metadataPosition=${placement.metadata["collapsible_position"]}",
+        )
 
         try {
             AdPriorityTrace.request(activity, "banner", placementName, "admob")
@@ -160,9 +166,10 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                 adViews[container] = adView
             }
 
+            val resolvedAdSize = getAdaptiveAdSize(activity, container)
             val requestBuilder = BannerAdRequest.Builder(
                 adUnitId = unit.adUnitId,
-                adSize = getAdaptiveAdSize(activity, container)
+                adSize = resolvedAdSize
             )
 
             val collapsibleDirection = when (resolvedBannerType) {
@@ -178,7 +185,35 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
 
             val request = requestBuilder.build()
 
-            AdEventTracker.log("ad_load_requested", placement)
+            if (collapsibleDirection != null) {
+                StartupTrace.event(
+                    activity,
+                    "BANNER_COLLAPSIBLE_REQUEST",
+                    "placement=$placementName direction=$collapsibleDirection size=${resolvedAdSize.width}x${resolvedAdSize.height} api=BannerAdRequest.Builder.setGoogleExtrasBundle",
+                )
+                AdEventTracker.log(
+                    "banner_collapsible_requested",
+                    placement,
+                    mapOf(
+                        "requested_collapsible" to true,
+                        "requested_direction" to collapsibleDirection,
+                        "request_method" to "BannerAdRequest.Builder.setGoogleExtrasBundle",
+                        "resolved_size" to "${resolvedAdSize.width}x${resolvedAdSize.height}:${resolvedAdSize.formatString}",
+                        "ad_unit_id" to unit.adUnitId,
+                    ),
+                )
+            }
+
+            AdEventTracker.log(
+                "ad_load_requested",
+                placement,
+                mapOf(
+                    "provider" to "admob",
+                    "request_reason" to "initial_or_refresh",
+                    "requested_collapsible" to (collapsibleDirection != null),
+                    "requested_direction" to (collapsibleDirection ?: "none"),
+                ),
+            )
 
             adView.loadAd(
                 request,
@@ -218,6 +253,13 @@ class BannerLoader(private val configProvider: () -> ITWingConfig) {
                                     "direction" to (collapsibleDirection ?: "none"),
                                 ),
                             )
+                            if (collapsibleDirection != null) {
+                                StartupTrace.event(
+                                    activity,
+                                    "BANNER_COLLAPSIBLE_RESULT",
+                                    "placement=$placementName direction=$collapsibleDirection served=${runCatching { ad.isCollapsible() }.getOrDefault(false)}",
+                                )
+                            }
 
                             adView.registerBannerAd(ad, activity)
 

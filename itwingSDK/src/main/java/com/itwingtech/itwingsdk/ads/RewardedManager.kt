@@ -64,7 +64,7 @@ class RewardedManager(
         val unit = placement.units.firstOrNull { it.network == "admob" } ?: return
         if (!canStartLoad(placementName, placement, forceRequest)) return
         val request = AdRequest.Builder(unit.adUnitId).build()
-        AdEventTracker.log("ad_load_requested", placement)
+        AdEventTracker.log("ad_load_requested", placement, mapOf("provider" to "admob", "request_reason" to "preload"))
         startPreloader(placementName, unit.adUnitId, request)
     }
 

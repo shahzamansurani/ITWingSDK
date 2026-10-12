@@ -186,7 +186,7 @@ class AppOpenManager(
         val unit = placement.adMobUnitOrNull() ?: return
         if (!canStartLoad(placementName, placement, forceRequest)) return
         loading.set(true)
-        AdEventTracker.log("ad_load_requested", placement)
+        AdEventTracker.log("ad_load_requested", placement, mapOf("provider" to "admob", "request_reason" to "preload"))
         AppOpenAd.load(
             AdRequest.Builder(unit.adUnitId).build(),
             object : AdLoadCallback<AppOpenAd> {

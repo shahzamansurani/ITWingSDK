@@ -241,6 +241,7 @@ class AdManager(
         placement: String,
         nativeType: NativeType?,
         respectInlineSafetyGate: Boolean,
+        deferProviderRequestUntilNextFrame: Boolean = false,
     ) {
         rememberContainer(nativeContainers, container)
         nativeRecords[container] = NativeRecord(activity, placement, nativeType)
@@ -276,6 +277,7 @@ class AdManager(
                             placement,
                             nativeType,
                             respectInlineSafetyGate = true,
+                            deferProviderRequestUntilNextFrame = true,
                         )
                     }
                 },
@@ -290,6 +292,7 @@ class AdManager(
                 container = container,
                 placementName = placement,
                 nativeTypeOverride = nativeType,
+                deferProviderRequestUntilNextFrame = deferProviderRequestUntilNextFrame,
             )
         }.onFailure { throwable ->
             SDKTelemetry.track(

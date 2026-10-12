@@ -1,5 +1,17 @@
 # Changelog
 
+## ITWingSDK v1.61
+
+- Added explicit AdMob/custom provider attribution and per-request IDs to ad
+  load telemetry so request, load, and impression reporting can be correlated
+  without changing ad selection behavior.
+- Preserved exact collapsible top/bottom request metadata and added bounded
+  debug tracing for resolved type, request direction, and served collapsible
+  result.
+- Ensured Native post-interstitial recovery commits the approved shimmer for a
+  render frame before starting the normal provider request; no arbitrary delay
+  or fallback-preemption was added.
+
 ## ITWingSDK v1.60
 
 - Added the public XML `ITWingAdView` that resolves a host-supplied placement

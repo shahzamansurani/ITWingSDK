@@ -6,11 +6,13 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.SystemClock
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.RatingBar
@@ -33,6 +35,7 @@ import com.itwingtech.itwingsdk.core.AdPlacementConfig
 import com.itwingtech.itwingsdk.core.CustomAdConfig
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.core.ITWingSDK
+import com.itwingtech.itwingsdk.core.StartupTrace
 import com.itwingtech.itwingsdk.utils.NetworkState
 import com.itwingtech.itwingsdk.utils.SDKMediaView
 import androidx.core.graphics.toColorInt
@@ -61,6 +64,8 @@ class NativeLoader(
         placementName: String,
         nativeTypeOverride: NativeType? = null,
         shimmerView: View? = null,
+        deferProviderRequestUntilNextFrame: Boolean = false,
+        forceReload: Boolean = false,
     ) {
         if (!container.isAttachedToWindow) {
             destroy(container)
@@ -113,7 +118,7 @@ class NativeLoader(
                 hasVisibleContent = container.visibility == View.VISIBLE && container.childCount > 0,
             )
         }
-        if (canReuse) {
+        if (canReuse && !forceReload) {
             container.visibility = View.VISIBLE
             return
         }
@@ -151,6 +156,60 @@ class NativeLoader(
             (it as? ShimmerFrameLayout)?.startShimmer()
         }
 
+        // Recovery after the first post-interstitial touch must give the
+        // approved loading state one render turn before a provider callback
+        // can replace it. This is a frame boundary, not an arbitrary delay,
+        // and only applies to the recovery path.
+        if (deferProviderRequestUntilNextFrame) {
+            val attachedAt = SystemClock.elapsedRealtime()
+            StartupTrace.event(
+                activity,
+                "NATIVE_RECOVERY_SHIMMER_ATTACHED",
+                "placement=$placementName elapsed_ms=0",
+            )
+            val observer = container.viewTreeObserver
+            val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
+                override fun onPreDraw(): Boolean {
+                    if (observer.isAlive) {
+                        observer.removeOnPreDrawListener(this)
+                    }
+                    StartupTrace.event(
+                        activity,
+                        "NATIVE_RECOVERY_SHIMMER_PRE_DRAW",
+                        "placement=$placementName elapsed_ms=${SystemClock.elapsedRealtime() - attachedAt}",
+                    )
+                    // Posting from pre-draw lets this traversal commit the
+                    // shimmer before the provider request is entered.
+                    container.post {
+                        if (
+                            container.isAttachedToWindow &&
+                            isCurrentLoad(container, token) &&
+                            !activity.isFinishing &&
+                            !activity.isDestroyed
+                        ) {
+                            StartupTrace.event(
+                                activity,
+                                "NATIVE_RECOVERY_PROVIDER_REQUEST",
+                                "placement=$placementName elapsed_ms=${SystemClock.elapsedRealtime() - attachedAt}",
+                            )
+                            load(
+                                activity = activity,
+                                container = container,
+                                placementName = placementName,
+                                nativeTypeOverride = nativeTypeOverride,
+                                shimmerView = loadingView,
+                                deferProviderRequestUntilNextFrame = false,
+                                forceReload = true,
+                            )
+                        }
+                    }
+                    return true
+                }
+            }
+            observer.addOnPreDrawListener(preDrawListener)
+            return
+        }
+
         /*
         |--------------------------------------------------------------------------
         | Custom Native
@@ -164,7 +223,7 @@ class NativeLoader(
 
         if (customAd != null) {
             AdPriorityTrace.request(activity, "native", placementName, "custom_fallback")
-            AdEventTracker.log("ad_load_requested", placement)
+            AdEventTracker.log("ad_load_requested", placement, mapOf("provider" to "custom", "request_reason" to "fallback"))
             preloadCustomAd(
                 activity = activity,
                 container = container,
@@ -214,6 +273,7 @@ class NativeLoader(
         try {
 
             AdPriorityTrace.request(activity, "native", placementName, "admob")
+            StartupTrace.event(activity, "NATIVE_PROVIDER_REQUEST_STARTED", "placement=$placementName")
 
             val request =
                 NativeAdRequest.Builder(
@@ -223,7 +283,11 @@ class NativeLoader(
                     )
                 ).build()
 
-            AdEventTracker.log("ad_load_requested", placement)
+            AdEventTracker.log(
+                "ad_load_requested",
+                placement,
+                mapOf("provider" to "admob", "request_reason" to "initial_or_refresh"),
+            )
 
             NativeAdLoader.load(
                 request,
@@ -254,6 +318,7 @@ class NativeLoader(
                             }
                             AdEventTracker.log("ad_loaded", placement)
                             AdPriorityTrace.loaded(activity, "native", placementName, "admob")
+                            StartupTrace.event(activity, "NATIVE_PROVIDER_RESPONSE", "placement=$placementName")
                             AdLoadBackoff.recordSuccess(placement)
 
                             nativeAd.adEventCallback = object : NativeAdEventCallback {
@@ -324,6 +389,7 @@ class NativeLoader(
                             container.visibility =
                                 View.VISIBLE
                             markRendered(container)
+                            StartupTrace.event(activity, "NATIVE_VISIBLE", "placement=$placementName")
 
                             populateNativeAdView(
                                 nativeAd,

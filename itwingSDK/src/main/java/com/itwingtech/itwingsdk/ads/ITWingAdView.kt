@@ -64,7 +64,9 @@ class ITWingAdView @JvmOverloads constructor(
         }
         val format = PlacementFormatResolver.inlineFormat(placement?.format)
         val key = placement?.let {
-            "${ITWingSDK.currentConfig().configVersion}|${it.name}|$format|${it.metadata}"
+            // A config version change alone does not change this slot. Keep
+            // the renderer stable until an actual placement property changes.
+            "$format|$it"
         }
         if (placement == null || !ITWingSDK.currentConfig().ads.globalEnabled) {
             if (activeRenderer != null) {

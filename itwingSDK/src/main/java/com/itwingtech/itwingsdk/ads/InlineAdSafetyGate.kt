@@ -15,6 +15,7 @@ import android.view.Window
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import com.itwingtech.itwingsdk.analytics.SDKTelemetry
+import com.itwingtech.itwingsdk.core.StartupTrace
 import java.lang.ref.WeakReference
 import java.util.LinkedHashMap
 
@@ -161,7 +162,9 @@ internal object InlineAdSafetyGate {
                 // The callback is running inside Android's input dispatch. Restore
                 // the window and reload only after dispatch has returned so the
                 // original event remains untouched and the host receives it.
+                StartupTrace.event(activity, "INLINE_RECOVERY_TOUCH_DOWN")
                 mainHandler.post {
+                    StartupTrace.event(activity, "INLINE_RECOVERY_RELEASE_POSTED")
                     clear(activity, "user_interaction", reload = true)
                 }
             },
@@ -206,6 +209,9 @@ internal object InlineAdSafetyGate {
                     "reload_count" to callbacks.size,
                 ),
             )
+            targetActivity?.let {
+                StartupTrace.event(it, "INLINE_RECOVERY_RELEASED", "reason=$reason reload=${callbacks.isNotEmpty()}")
+            }
 
             callbacks.forEach { callback -> runCatching { callback() } }
         }
@@ -231,10 +237,8 @@ internal object InlineAdSafetyGate {
             }
         }
 
-        override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-            if (event.action == KeyEvent.ACTION_DOWN) notifyInteraction()
-            return original.dispatchKeyEvent(event)
-        }
+        override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+            original.dispatchKeyEvent(event)
 
         override fun dispatchKeyShortcutEvent(event: KeyEvent): Boolean =
             original.dispatchKeyShortcutEvent(event)
