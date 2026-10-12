@@ -36,8 +36,7 @@ import com.airbnb.lottie.LottieAnimationView
 import com.bumptech.glide.Glide
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.ads.InlineAdSafetyGate
-import com.itwingtech.itwingsdk.ads.ITWingBannerView
-import com.itwingtech.itwingsdk.ads.ITWingNativeAdView
+import com.itwingtech.itwingsdk.ads.ITWingAdView
 import com.itwingtech.itwingsdk.core.ITWingAppFlowOptions
 import com.itwingtech.itwingsdk.core.ITWingAppFlowRegistry
 import com.itwingtech.itwingsdk.core.ITWingAppFlowSession
@@ -440,22 +439,18 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
             return
         }
         bottomAdContainer.visibility = View.VISIBLE
-        if (bottomAdContainer.childCount > 0 && bottomAdContainer.getTag(R.id.itwing_flow_onboarding_ad_container) == placement) return
-        bottomAdContainer.removeAllViews()
-        bottomAdContainer.setTag(R.id.itwing_flow_onboarding_ad_container, placement)
-        if (onboardingAdFormat(current.flowOptions, placement) == "banner") {
-            val banner = ITWingBannerView(this)
-            banner.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
-            banner.placementName = placement
-            bottomAdContainer.addView(banner)
-            banner.loadBanner()
-        } else {
-            val nativeAd = ITWingNativeAdView(this)
-            nativeAd.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
-            nativeAd.placementName = placement
-            bottomAdContainer.addView(nativeAd)
-            nativeAd.loadAd()
-        }
+        val adView = bottomAdContainer.findViewById<ITWingAdView>(R.id.itwing_flow_onboarding_ad)
+            ?: ITWingAdView(this).also { view ->
+                view.id = R.id.itwing_flow_onboarding_ad
+                view.layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                )
+                bottomAdContainer.removeAllViews()
+                bottomAdContainer.addView(view)
+            }
+        adView.placementName = placement
+        adView.refresh()
     }
 
     private fun renderDots(position: Int) {
@@ -638,10 +633,10 @@ class ITWingFlowTermsActivity : ComponentActivity() {
                 }
             }
         }
-        attachBottomAd(
-            placement = flowPlacement("terms_banner_placement", current.flowOptions.termsBannerPlacement),
-            preferredFormat = termsAdFormat(current.flowOptions),
-        )
+        findViewById<ITWingAdView>(R.id.itwing_flow_ad_view)?.apply {
+            placementName = flowPlacement("terms_banner_placement", current.flowOptions.termsBannerPlacement).orEmpty()
+            refresh()
+        }
     }
 
     private fun openMain() {
@@ -804,49 +799,20 @@ private class OnboardingAdapter(
             if (pageAdsEnabled && pageAdContainer != null && !page.nativePlacement.isNullOrBlank()) {
                 pageAdContainer.visibility = View.VISIBLE
                 pageAdContainer.removeAllViews()
-                if (placementFormat(page.nativePlacement) == "banner") {
-                    val banner = ITWingBannerView(pageAdContainer.context)
-                    banner.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
-                    banner.placementName = page.nativePlacement
-                    pageAdContainer.addView(banner)
-                    banner.loadBanner()
-                } else {
-                    val nativeAd = ITWingNativeAdView(pageAdContainer.context)
-                    nativeAd.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
-                    nativeAd.placementName = page.nativePlacement
-                    pageAdContainer.addView(nativeAd)
-                    nativeAd.loadAd()
+                val adView = ITWingAdView(pageAdContainer.context).apply {
+                    placementName = page.nativePlacement
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                    )
                 }
+                pageAdContainer.addView(adView)
+                adView.refresh()
             } else {
                 pageAdContainer?.visibility = View.GONE
                 pageAdContainer?.removeAllViews()
             }
         }
-    }
-}
-
-private fun Activity.attachBottomAd(placement: String?, preferredFormat: String? = null) {
-    if (placement.isNullOrBlank()) return
-    val container = findViewById<FrameLayout?>(R.id.itwing_flow_banner_container) ?: return
-    container.removeAllViews()
-    if (preferredFormat == "native" || placementFormat(placement) == "native") {
-        val native = ITWingNativeAdView(this)
-        native.layoutParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-        )
-        container.addView(native)
-        native.placementName = placement
-        native.loadAd()
-    } else {
-        val banner = ITWingBannerView(this)
-        banner.layoutParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-        )
-        container.addView(banner)
-        banner.placementName = placement
-        banner.loadBanner()
     }
 }
 
@@ -1029,31 +995,6 @@ private fun onboardingActivityAdPlacement(options: ITWingAppFlowOptions, page: I
         ?: flowPlacement("onboarding_banner_placement", options.onboardingBannerPlacement)
     return configured?.takeIf(String::isNotBlank) ?: page?.nativePlacement
 }
-
-private fun onboardingAdFormat(options: ITWingAppFlowOptions, placement: String): String {
-    val configured = flowPlacement("onboarding_activity_ad_format", options.onboardingActivityAdFormat)
-        ?: appString("onboarding_ad_format")
-    if (!configured.isNullOrBlank()) return configured.trim().lowercase()
-    return placementFormat(placement)
-}
-
-private fun termsAdFormat(options: ITWingAppFlowOptions): String? {
-    val app = ITWingSDK.currentConfig().app
-    val flow = app["start_flow"].safeMap()
-        .ifEmpty { app["app_flow"].safeMap() }
-    val configured = flow.safeString("terms_ad_format")
-        ?: appString("terms_ad_format")
-        ?: placementFormat(options.termsBannerPlacement.orEmpty())
-    return configured.trim().lowercase().takeIf { it in setOf("native", "banner") }
-}
-
-private fun placementFormat(placement: String): String =
-    ITWingSDK.currentConfig().ads.placements
-        .firstOrNull { it.name == placement }
-        ?.format
-        ?.lowercase()
-        ?.takeIf { it in setOf("banner", "native") }
-        ?: "native"
 
 private fun splashStyle(options: ITWingAppFlowOptions): String =
     (options.splashStyle

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <item name="itwing_flow_onboarding_ad" type="id" />
     <item name="itwing_media_art" type="id" />
     <item name="itwing_media_image" type="id" />
     <item name="itwing_media_icon" type="id" />

@@ -1,5 +1,15 @@
 # Changelog
 
+## ITWingSDK v1.60
+
+- Added the public XML `ITWingAdView` that resolves a host-supplied placement
+  name to the configured Native or Banner renderer without changing the host
+  layout contract.
+- Hardened malformed placement-format/config boundaries so invalid values fall
+  back safely instead of crashing Terms or startup preload.
+- Preserved collapsible top/bottom requests and post-interstitial first-touch
+  inline recovery on the approved v1.57 runtime behavior.
+
 ## ITWingSDK v1.59.1
 
 - Armed post-interstitial inline suppression when a fullscreen ad is actually

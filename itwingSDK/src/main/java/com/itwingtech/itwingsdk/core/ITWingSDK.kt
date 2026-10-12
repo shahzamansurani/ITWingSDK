@@ -67,9 +67,10 @@ import androidx.core.graphics.toColorInt
 import androidx.recyclerview.widget.RecyclerView
 import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdAdapter
 import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
+import com.itwingtech.itwingsdk.ads.ITWingAdView
 
 object ITWingSDK {
-    const val VERSION: String = "1.59.1"
+    const val VERSION: String = "1.60"
     private const val BILLING_STARTUP_TIMEOUT_MS = 8_000L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -855,6 +856,7 @@ object ITWingSDK {
              * for instant startup.
              */
             config = repository?.loadCachedConfig() ?: ITWingConfig()
+            ITWingAdView.notifyConfigChanged()
             StartupTrace.event(activity, "CONFIG_CACHE_APPLIED", "present=${config.configVersion > 0}")
             syncRemoteVpnAdBlocking()
             if (config.configVersion > 0) {
@@ -901,6 +903,7 @@ object ITWingSDK {
             runCatching { repository!!.bootstrap() }.onSuccess { remote ->
                 StartupTrace.event(activity, "BOOTSTRAP_SUCCESS", "configVersion=${remote.configVersion}")
                 config = remote
+                ITWingAdView.notifyConfigChanged()
                 StartupTrace.event(
                     activity,
                     "CONFIG_APPLIED",
@@ -1091,6 +1094,7 @@ object ITWingSDK {
 
         if (cached.configVersion > 0) {
             config = cached
+            ITWingAdView.notifyConfigChanged()
             syncRemoteVpnAdBlocking()
         }
     }
@@ -1241,6 +1245,7 @@ object ITWingSDK {
             val updated = runCatching {
                 repository?.syncConfig(config.configVersion)?.let {
                     config = it
+                    ITWingAdView.notifyConfigChanged()
                     syncRemoteVpnAdBlocking()
                     if (autoApplyResponsiveLayout) {
                         getActiveActivity()?.let { active ->

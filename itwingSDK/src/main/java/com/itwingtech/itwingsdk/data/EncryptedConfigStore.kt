@@ -8,6 +8,8 @@ import androidx.security.crypto.MasterKey
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import androidx.core.content.edit
 import com.google.gson.Gson
+import com.google.gson.JsonParser
+import com.google.gson.JsonObject
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -31,7 +33,28 @@ class EncryptedConfigStore(context: Context) {
 
     fun load(): ITWingConfig? {
         val json = prefs.getString("config_json", null) ?: return null
-        return runCatching { gson.fromJson(json, ITWingConfig::class.java) }.getOrNull()
+        return runCatching {
+            val root = JsonParser.parseString(json).takeIf { it.isJsonObject }?.asJsonObject
+                ?: return@runCatching null
+            sanitizePlacementFormats(root)
+            gson.fromJson(root, ITWingConfig::class.java)
+        }.getOrNull()
+    }
+
+    /** Keeps malformed remote/cache values from reaching typed flow code. */
+    private fun sanitizePlacementFormats(root: JsonObject) {
+        val ads = root.getAsJsonObject("ads") ?: return
+        val placements = ads.getAsJsonArray("placements") ?: return
+        placements.forEach { element ->
+            if (!element.isJsonObject) return@forEach
+            val placement = element.asJsonObject
+            val format = placement.get("format")
+            if (format == null || format.isJsonNull || !format.isJsonPrimitive) {
+                placement.addProperty("format", "native")
+            } else if (!format.asJsonPrimitive.isString) {
+                placement.addProperty("format", format.asString)
+            }
+        }
     }
 
     fun saveEntitlement(active: Boolean, removesAds: Boolean, expiresAtIso: String?) {

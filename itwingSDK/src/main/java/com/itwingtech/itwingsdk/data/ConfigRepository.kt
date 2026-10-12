@@ -568,8 +568,8 @@ class ConfigRepository(
             val units = item.optJSONArray("units")
             val metadata = item.optJSONObject("metadata")?.toMap() ?: emptyMap()
             AdPlacementConfig(
-                name = item.optString("name"),
-                format = item.optString("format"),
+                name = item.opt("name").asSafeString(),
+                format = item.opt("format").asSafeString(),
                 enabled = item.optBoolean("enabled", false),
                 testMode = item.optBoolean("test_mode", false),
                 priority = item.optInt("priority", 100),
@@ -592,6 +592,8 @@ class ConfigRepository(
             )
         }
     }
+
+    private fun Any?.asSafeString(): String = (this as? String)?.trim().orEmpty()
 
     private fun parseCustomAds(ads: JSONObject?): List<CustomAdConfig> {
         val customAds = ads?.optJSONArray("custom_ads") ?: return emptyList()

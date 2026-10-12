@@ -408,7 +408,8 @@ class AdManager(
     }
 
     fun preloadAll(activity: Activity){
-        preloadStartup(activity)
+        runCatching { preloadStartup(activity) }
+            .onFailure { SDKTelemetry.recordNonFatal(it, mapOf("operation" to "preload_all")) }
     }
 
     fun preloadStartup(activity: Activity) {

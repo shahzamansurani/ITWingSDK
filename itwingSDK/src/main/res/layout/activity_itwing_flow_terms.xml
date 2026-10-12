@@ -60,6 +60,14 @@
         android:id="@+id/itwing_flow_banner_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true" />
+        android:layout_alignParentBottom="true">
+
+        <com.itwingtech.itwingsdk.ads.ITWingAdView
+            android:id="@+id/itwing_flow_ad_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:ITWingAdViewPlacement="@string/itwing_flow_empty_placement" />
+
+    </FrameLayout>
 
 </RelativeLayout>

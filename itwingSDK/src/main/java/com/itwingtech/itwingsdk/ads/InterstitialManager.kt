@@ -11,6 +11,7 @@ import com.google.android.libraries.ads.mobile.sdk.common.PreloadConfiguration
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAd
 import com.itwingtech.itwingsdk.core.ITWingConfig
 import com.itwingtech.itwingsdk.core.AdPlacementConfig
+import com.itwingtech.itwingsdk.analytics.SDKTelemetry
 import java.util.concurrent.ConcurrentHashMap
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdEventCallback
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdPreloader
@@ -28,16 +29,24 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
     private val minLoadIntervalMs = 20_000L
 
     fun preloadAll(activity: Activity) {
-        val config = configProvider()
-        config.ads.placements.filter {
-            config.ads.globalEnabled &&
-                    it.enabled &&
-                    it.format == "interstitial" &&
-                    it.metadata["preload_on_start"].isTruthy()
-        }
-            .forEach {
-                preload(activity, it.name)
+        val config = runCatching { configProvider() }.getOrNull() ?: return
+        if (!config.ads.globalEnabled || !activity.isUsable()) return
+        config.ads.placements.forEach { placement ->
+            runCatching {
+                if (
+                    placement.enabled &&
+                    placement.format.trim().equals("interstitial", ignoreCase = true) &&
+                    PlacementFormatResolver.safeTruthy(placement.metadata["preload_on_start"])
+                ) {
+                    preload(activity, placement.name)
+                }
+            }.onFailure { throwable ->
+                SDKTelemetry.recordNonFatal(
+                    throwable,
+                    mapOf("operation" to "interstitial_preload", "placement" to placement.name.take(80)),
+                )
             }
+        }
     }
 
     fun preload(activity: Activity, placementName: String) {
@@ -293,7 +302,7 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
         placementName: String,
         placement: com.itwingtech.itwingsdk.core.AdPlacementConfig,
     ) {
-        if (placement.metadata["preload_after_show"].isTruthy()) {
+        if (PlacementFormatResolver.safeTruthy(placement.metadata["preload_after_show"])) {
             preload(activity, placementName)
         }
     }
@@ -424,15 +433,6 @@ class InterstitialManager(private val configProvider: () -> ITWingConfig, privat
             splash == true ||
             splash?.toString()?.equals("true", ignoreCase = true) == true ||
             splash?.toString() == "1"
-    }
-
-    private fun Any?.isTruthy(): Boolean {
-        return when (this) {
-            is Boolean -> this
-            is String -> equals("true", ignoreCase = true) || this == "1"
-            is Number -> toInt() != 0
-            else -> false
-        }
     }
 
     private fun Activity.isUsable(): Boolean = !isFinishing && !isDestroyed
