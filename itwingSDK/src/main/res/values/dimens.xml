@@ -1,4 +1,8 @@
 <resources>
+    <!-- Shared SDK primary CTA geometry; sourced from the approved Native CTA. -->
+    <dimen name="itwing_primary_cta_corner_radius">@dimen/_20sdp</dimen>
+    <dimen name="itwing_primary_cta_horizontal_padding">@dimen/_8sdp</dimen>
+
     <dimen name="itwing_native_small_icon_size">40dp</dimen>
     <dimen name="itwing_native_small_cta_height">40dp</dimen>
     <dimen name="itwing_native_small_media_height">130dp</dimen>

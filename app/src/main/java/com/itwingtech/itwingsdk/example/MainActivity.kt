@@ -18,20 +18,19 @@ class MainActivity : AppCompatActivity() {
         bindSdkExamples()
         renderSdkState()
 
-
-
-        renderSdkState()
-
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 ITWingSDK.showActionDialog(
                     activity = this@MainActivity,
-                    onNegative = { finishAffinity() }
+                    title = getString(R.string.example_exit_dialog_title),
+                    description = getString(R.string.example_exit_dialog_description),
+                    positiveText = getString(R.string.example_exit_dialog_positive),
+                    negativeText = getString(R.string.example_cancel),
+                    onPositive = { finishAffinity() },
                 )
             }
         })
     }
-
 
     private fun bindSdkExamples() {
         binding.refreshConfig.setOnClickListener {
@@ -75,6 +74,14 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, MediaLibraryActivity::class.java))
         }
 
+        binding.openTopCollapsibleDemo.setOnClickListener {
+            openEdgeDemo(EdgeBannerActivity.EDGE_TOP)
+        }
+
+        binding.openBottomCollapsibleDemo.setOnClickListener {
+            openEdgeDemo(EdgeBannerActivity.EDGE_BOTTOM)
+        }
+
         binding.preloadAds.setOnClickListener {
             ITWingSDK.ads.preloadAll(this)
             toast("Fullscreen ads preload requested")
@@ -82,6 +89,51 @@ class MainActivity : AppCompatActivity() {
 
         binding.realInterstitial.setOnClickListener {
             showInterstitialAndNavigate("interstitial")
+        }
+
+        binding.nativeRecovery.setOnClickListener {
+            showInterstitialAndNavigate("interstitial", "Interstitial → Native recovery", ResultActivity.RECOVERY_NATIVE)
+        }
+
+        binding.bannerRecovery.setOnClickListener {
+            showInterstitialAndNavigate("interstitial", "Interstitial → Banner recovery", ResultActivity.RECOVERY_BANNER)
+        }
+
+        binding.showExitDialog.setOnClickListener {
+            ITWingSDK.showActionDialog(
+                activity = this,
+                title = getString(R.string.example_exit_dialog_title),
+                description = getString(R.string.example_exit_dialog_description),
+                positiveText = getString(R.string.example_exit_dialog_positive),
+                negativeText = getString(R.string.example_cancel),
+                onPositive = { finishAffinity() },
+            )
+        }
+
+        binding.showFeedbackDialog.setOnClickListener {
+            ITWingSDK.showActionDialog(
+                activity = this,
+                title = getString(R.string.example_feedback_dialog_title),
+                description = getString(R.string.example_feedback_dialog_description),
+                positiveText = getString(R.string.example_feedback_dialog_positive),
+                negativeText = getString(R.string.example_cancel),
+                onPositive = { toast(getString(R.string.example_feedback_selected)) },
+            )
+        }
+
+        binding.showLoadingDialog.setOnClickListener {
+            val loadingDialog = ITWingSDK.showLoadingDialog(this)
+            binding.root.postDelayed({ loadingDialog.dismiss() }, 1500L)
+        }
+
+        // Example-only reset so the persistent first-time rating flow can be
+        // exercised repeatedly without exposing a production SDK reset API.
+        binding.resetExitRatingState.setOnClickListener {
+            getSharedPreferences("itwing_action_dialog", MODE_PRIVATE)
+                .edit()
+                .remove("review_feedback_submitted_${packageName}")
+                .apply()
+            toast(getString(R.string.example_exit_rating_state_reset))
         }
 
         binding.splashInterstitial.setOnClickListener {
@@ -125,7 +177,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.customAppOpen.setOnClickListener {
-            showInterstitialAndNavigate("custom_interstitial")
+            showAppOpenAndNavigate("app_open_auto")
         }
 
         binding.syncNotification.setOnClickListener {
@@ -171,9 +223,13 @@ class MainActivity : AppCompatActivity() {
             "Billing: ${ITWingSDK.billingDiagnostics()} | Ad free: ${ITWingSDK.isAdFree()}"
     }
 
-    private fun showInterstitialAndNavigate(placement: String) {
+    private fun showInterstitialAndNavigate(
+        placement: String,
+        title: String = "Interstitial: $placement",
+        recovery: String? = null,
+    ) {
         ITWingSDK.showInterstitial(this, placement) {
-            openResult("Interstitial: $placement")
+            openResult(title, recovery = recovery)
         }
     }
 
@@ -213,9 +269,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun openResult(source: String, rewarded: Boolean = false) {
+    private fun openResult(source: String, rewarded: Boolean = false, recovery: String? = null) {
         if (isFinishing || isDestroyed) return
-        startActivity(Intent(this, ResultActivity::class.java))
+        startActivity(Intent(this, ResultActivity::class.java).apply {
+            putExtra(ResultActivity.EXTRA_TITLE, source)
+            putExtra(ResultActivity.EXTRA_REWARD_EARNED, rewarded)
+            recovery?.let { putExtra(ResultActivity.EXTRA_RECOVERY, it) }
+        })
+    }
+
+    private fun openEdgeDemo(edge: String) {
+        startActivity(Intent(this, EdgeBannerActivity::class.java).apply {
+            putExtra(EdgeBannerActivity.EXTRA_EDGE, edge)
+        })
     }
 
     private fun toast(message: String) {

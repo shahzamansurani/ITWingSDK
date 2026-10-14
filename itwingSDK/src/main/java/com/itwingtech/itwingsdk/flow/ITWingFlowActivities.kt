@@ -506,7 +506,7 @@ class ITWingFlowOnboardingActivity : ComponentActivity() {
         if (options.onboardingUi.nextButton.backgroundDrawableRes == null) {
             val background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(options.onboardingButtonCornerRadiusDp ?: 8).toFloat()
+                cornerRadius = resources.getDimension(R.dimen.itwing_primary_cta_corner_radius)
                 setColor(buttonColor)
                 if (options.onboardingButtonStrokeWidthDp > 0) {
                     setStroke(
@@ -661,7 +661,7 @@ class ITWingFlowTermsActivity : ComponentActivity() {
         if (options.termsUi.acceptButton.backgroundDrawableRes == null) {
             val background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(options.termsAcceptButtonCornerRadiusDp ?: 20).toFloat()
+                cornerRadius = resources.getDimension(R.dimen.itwing_primary_cta_corner_radius)
                 setColor(buttonColor)
                 if (options.termsAcceptButtonStrokeWidthDp > 0) {
                     setStroke(

@@ -1,5 +1,17 @@
 # Changelog
 
+## ITWingSDK v1.62
+
+- Unified `ITWingAdView` integration for current placement-driven Native and
+  Banner rendering.
+- Stabilized screen-edge collapsible Top/Bottom banners and post-interstitial
+  Native/Banner recovery.
+- Hardened malformed-config handling, daily placement caps, Banner refresh
+  intervals, lifecycle safety, and release/R8 behavior.
+- Updated Premium, dialog, loading, Exit rating/feedback/review, and Admin
+  theming consistency, including shared SDK CTA geometry.
+- Modernized the example app and current public integration documentation.
+
 ## ITWingSDK v1.61
 
 - Added explicit AdMob/custom provider attribution and per-request IDs to ad

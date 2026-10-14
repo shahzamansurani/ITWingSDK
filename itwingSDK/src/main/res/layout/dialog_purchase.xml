@@ -87,7 +87,7 @@
             android:textSize="@dimen/_10ssp"
             android:textAllCaps="false"
             android:textColor="#F8FAFC"
-            app:cornerRadius="14dp"
+            app:cornerRadius="@dimen/itwing_primary_cta_corner_radius"
             app:strokeWidth="1dp" />
 
         <com.google.android.material.button.MaterialButton
@@ -100,7 +100,7 @@
             android:textAllCaps="false"
             android:textColor="#CBD5E1"
             android:visibility="gone"
-            app:cornerRadius="14dp" />
+            app:cornerRadius="@dimen/itwing_primary_cta_corner_radius" />
 
     </LinearLayout>
 </ScrollView>

@@ -97,14 +97,5 @@ class SplashActivity : AppCompatActivity() {
             ),
         )
 
-        /*
-         * Smallest valid integration:
-         *
-         * ITWingSDK.startAppFlow(
-         *     activity = this,
-         *     apiKey = getString(R.string.itwing_sdk_app_id),
-         *     mainActivity = MainActivity::class.java,
-         * )
-         */
     }
 }

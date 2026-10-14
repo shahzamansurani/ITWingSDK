@@ -5,14 +5,15 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="@dimen/_7sdp">
+    android:layout_margin="@dimen/_5sdp">
 
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:padding="@dimen/_3sdp">
 
             <ImageView
                 android:id="@+id/itwing_premium_icon"
@@ -35,7 +36,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="@string/premium_title"
-                    android:textColor="#F8FAFC"
+                    android:textColor="@color/black"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
@@ -45,7 +46,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
                     android:text="@string/premium_description"
-                    android:textColor="#CBD5E1"
+                    android:textColor="@color/black"
                     android:textSize="13sp" />
             </LinearLayout>
 
@@ -72,7 +73,7 @@
             android:layout_marginTop="16dp"
             android:background="@drawable/itwing_purchase_card_bg"
             android:orientation="vertical"
-            android:padding="14dp"
+            android:padding="@dimen/_3sdp"
             android:visibility="gone">
 
             <TextView
@@ -113,7 +114,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:textColor="#CBD5E1"
+            android:textColor="@color/red"
             android:textSize="12sp"
             android:visibility="gone" />
 
@@ -128,6 +129,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/itwing_premium_purchase"
+            style="@style/ITWingPrimaryMaterialCTA"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="16dp"
@@ -136,7 +138,7 @@
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:textStyle="bold"
-            app:cornerRadius="12dp" />
+            app:cornerRadius="@dimen/itwing_primary_cta_corner_radius" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/itwing_premium_restore"
@@ -147,7 +149,7 @@
             android:text="@string/premium_restore"
             android:textAllCaps="false"
             android:textSize="14dp"
-            app:cornerRadius="12dp"
+            app:cornerRadius="@dimen/itwing_primary_cta_corner_radius"
             app:strokeWidth="1dp" />
 
 </LinearLayout>

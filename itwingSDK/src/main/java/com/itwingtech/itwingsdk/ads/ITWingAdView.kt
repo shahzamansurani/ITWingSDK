@@ -33,6 +33,11 @@ class ITWingAdView @JvmOverloads constructor(
 
     init {
         LayoutInflater.from(context).inflate(R.layout.view_itwing_ad, this, true)
+        // A collapsible banner may grow beyond its compact request height.
+        // Keep this scoped to the universal SDK host; it does not alter the
+        // approved card surface or the selected renderer's own sizing.
+        clipChildren = false
+        clipToPadding = false
         bannerRenderer = findViewById(R.id.itwing_universal_banner)
         nativeRenderer = findViewById(R.id.itwing_universal_native)
         context.withStyledAttributes(attrs, R.styleable.ITWingAdView, defStyleAttr, 0) {
@@ -101,8 +106,12 @@ class ITWingAdView @JvmOverloads constructor(
     }
 
     private fun removeRenderers() {
-        if (bannerRenderer.parent === this) removeView(bannerRenderer)
-        if (nativeRenderer.parent === this) removeView(nativeRenderer)
+        if (bannerRenderer.parent === this) {
+            removeView(bannerRenderer)
+        }
+        if (nativeRenderer.parent === this) {
+            removeView(nativeRenderer)
+        }
     }
 
     companion object {

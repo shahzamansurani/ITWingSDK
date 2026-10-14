@@ -41,6 +41,7 @@ import com.itwingtech.itwingsdk.utils.SDKMediaView
 import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
 import java.util.WeakHashMap
+import java.util.UUID
 
 class NativeLoader(
     private val configProvider: () -> ITWingConfig
@@ -66,6 +67,9 @@ class NativeLoader(
         shimmerView: View? = null,
         deferProviderRequestUntilNextFrame: Boolean = false,
         forceReload: Boolean = false,
+        preserveLoadingState: Boolean = false,
+        recoveryGenerationId: String? = null,
+        onPresented: () -> Unit = {},
     ) {
         if (!container.isAttachedToWindow) {
             destroy(container)
@@ -124,7 +128,8 @@ class NativeLoader(
         }
 
         val hasStaleState = synchronized(activeLoadKeys) { inlineLoadStates.containsKey(container) }
-        if (container.childCount > 0 || hasStaleState) {
+        if (!preserveLoadingState && (container.childCount > 0 || hasStaleState)) {
+            StartupTrace.event(activity, "NATIVE_CONTAINER_CLEARED", "placement=$placementName recovery=${recoveryGenerationId ?: "none"}")
             destroy(container)
         }
 
@@ -134,6 +139,9 @@ class NativeLoader(
         }
 
         val token = nextToken(container)
+        val recoveryId = recoveryGenerationId
+            ?: if (deferProviderRequestUntilNextFrame) UUID.randomUUID().toString().take(8) else null
+        StartupTrace.event(activity, "NATIVE_LOAD_ENTRY", "placement=$placementName recovery=${recoveryId ?: "none"} defer=$deferProviderRequestUntilNextFrame")
 
         /*
         |--------------------------------------------------------------------------
@@ -149,11 +157,22 @@ class NativeLoader(
             )
 
         loadingView?.let {
-            container.removeAllViews()
+            container.visibility = View.VISIBLE
+            container.alpha = 1f
+            if (!preserveLoadingState) {
+                container.removeAllViews()
+                StartupTrace.event(activity, "NATIVE_CONTAINER_CLEARED", "placement=$placementName recovery=${recoveryId ?: "none"}")
+            }
             it.visibility = View.VISIBLE
             AdTheme.styleShimmer(it)
+            if (it.parent !== container) {
+                (it.parent as? ViewGroup)?.removeView(it)
+                container.addView(it)
+            }
             AdTheme.attachCardSurface(container, it, "native", placement.metadata, clipContent = false)
             (it as? ShimmerFrameLayout)?.startShimmer()
+            StartupTrace.event(activity, "NATIVE_SHIMMER_ATTACHED", "placement=$placementName recovery=${recoveryId ?: "none"}")
+            StartupTrace.event(activity, "NATIVE_SHIMMER_VISIBLE", "placement=$placementName recovery=${recoveryId ?: "none"}")
         }
 
         // Recovery after the first post-interstitial touch must give the
@@ -165,7 +184,7 @@ class NativeLoader(
             StartupTrace.event(
                 activity,
                 "NATIVE_RECOVERY_SHIMMER_ATTACHED",
-                "placement=$placementName elapsed_ms=0",
+                "placement=$placementName recovery=$recoveryId elapsed_ms=0",
             )
             val observer = container.viewTreeObserver
             val preDrawListener = object : ViewTreeObserver.OnPreDrawListener {
@@ -176,11 +195,12 @@ class NativeLoader(
                     StartupTrace.event(
                         activity,
                         "NATIVE_RECOVERY_SHIMMER_PRE_DRAW",
-                        "placement=$placementName elapsed_ms=${SystemClock.elapsedRealtime() - attachedAt}",
+                        "placement=$placementName recovery=$recoveryId elapsed_ms=${SystemClock.elapsedRealtime() - attachedAt}",
                     )
-                    // Posting from pre-draw lets this traversal commit the
-                    // shimmer before the provider request is entered.
-                    container.post {
+                    // A post-on-animation callback runs after this traversal
+                    // has produced a real frame, while keeping the shimmer
+                    // attached for the provider request.
+                    container.postOnAnimation {
                         if (
                             container.isAttachedToWindow &&
                             isCurrentLoad(container, token) &&
@@ -190,7 +210,12 @@ class NativeLoader(
                             StartupTrace.event(
                                 activity,
                                 "NATIVE_RECOVERY_PROVIDER_REQUEST",
-                                "placement=$placementName elapsed_ms=${SystemClock.elapsedRealtime() - attachedAt}",
+                                "placement=$placementName recovery=$recoveryId elapsed_ms=${SystemClock.elapsedRealtime() - attachedAt}",
+                            )
+                            StartupTrace.event(
+                                activity,
+                                "NATIVE_FRAME_COMMITTED",
+                                "placement=$placementName recovery=$recoveryId elapsed_ms=${SystemClock.elapsedRealtime() - attachedAt}",
                             )
                             load(
                                 activity = activity,
@@ -200,6 +225,8 @@ class NativeLoader(
                                 shimmerView = loadingView,
                                 deferProviderRequestUntilNextFrame = false,
                                 forceReload = true,
+                                preserveLoadingState = true,
+                                recoveryGenerationId = recoveryId,
                             )
                         }
                     }
@@ -231,7 +258,8 @@ class NativeLoader(
                 placement = placement,
                 type = resolvedNativeType,
                 loadingView = loadingView,
-                token = token
+                token = token,
+                onPresented = onPresented
             )
 
             return
@@ -273,7 +301,7 @@ class NativeLoader(
         try {
 
             AdPriorityTrace.request(activity, "native", placementName, "admob")
-            StartupTrace.event(activity, "NATIVE_PROVIDER_REQUEST_STARTED", "placement=$placementName")
+            StartupTrace.event(activity, "NATIVE_PROVIDER_REQUEST_STARTED", "placement=$placementName recovery=${recoveryId ?: "none"}")
 
             val request =
                 NativeAdRequest.Builder(
@@ -318,7 +346,7 @@ class NativeLoader(
                             }
                             AdEventTracker.log("ad_loaded", placement)
                             AdPriorityTrace.loaded(activity, "native", placementName, "admob")
-                            StartupTrace.event(activity, "NATIVE_PROVIDER_RESPONSE", "placement=$placementName")
+                            StartupTrace.event(activity, "NATIVE_PROVIDER_RESPONSE", "placement=$placementName recovery=${recoveryId ?: "none"}")
                             AdLoadBackoff.recordSuccess(placement)
 
                             nativeAd.adEventCallback = object : NativeAdEventCallback {
@@ -379,6 +407,7 @@ class NativeLoader(
                             adView.applyTransparentNativeRoot()
                             adView.applyNativePlacementStyle(placement.metadata)
 
+                            StartupTrace.event(activity, "NATIVE_BIND_STARTED", "placement=$placementName recovery=${recoveryId ?: "none"}")
                             stopShimmer(
                                 loadingView
                             )
@@ -396,6 +425,7 @@ class NativeLoader(
                                 adView,
                                 placement.metadata
                             )
+                            onPresented()
                             adView.alpha = 0f
 
                             adView.animate()
@@ -426,7 +456,7 @@ class NativeLoader(
                             val fallback = config.customFallbackFor(placement)
                             if (fallback != null) {
                                 AdEventTracker.log("ad_custom_fallback", placement, mapOf("reason" to adError.message))
-                                preloadCustomAd(activity, container, fallback, placement, resolvedNativeType, loadingView, token)
+                                preloadCustomAd(activity, container, fallback, placement, resolvedNativeType, loadingView, token, onPresented)
                                 return@runOnUiThread
                             }
                             stopShimmer(loadingView)
@@ -1237,7 +1267,8 @@ class NativeLoader(
         placement: AdPlacementConfig,
         type: NativeType,
         loadingView: View?,
-        token: Int
+        token: Int,
+        onPresented: () -> Unit
     ) {
 
         val media = ad.mediaUrl()
@@ -1261,6 +1292,7 @@ class NativeLoader(
                 }
                 stopShimmer(loadingView)
                 renderCustomNative(activity = activity, container = container, ad = ad, placement = placement, type = type)
+                onPresented()
             }
 
             return
@@ -1300,6 +1332,7 @@ class NativeLoader(
                     placement = placement,
                     type = type
                 )
+                onPresented()
 
                 stopShimmer(
                     loadingView

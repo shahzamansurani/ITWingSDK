@@ -6,8 +6,10 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.net.Uri
+import android.text.TextUtils
 import android.view.LayoutInflater
 import android.view.View
+import android.view.Gravity
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -130,7 +132,21 @@ internal object ITWingInAppNotificationDialog {
                     }
                     text = action.label
                     isAllCaps = false
-                    cornerRadius = activity.dp(14)
+                    cornerRadius = activity.resources.getDimensionPixelSize(R.dimen.itwing_primary_cta_corner_radius)
+                    minHeight = 0
+                    minimumHeight = 0
+                    minWidth = 0
+                    minimumWidth = 0
+                    gravity = Gravity.CENTER
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                    setIncludeFontPadding(false)
+                    setPadding(
+                        activity.resources.getDimensionPixelSize(R.dimen.itwing_primary_cta_horizontal_padding),
+                        0,
+                        activity.resources.getDimensionPixelSize(R.dimen.itwing_primary_cta_horizontal_padding),
+                        0,
+                    )
                     textSize = 14f
                     setTextColor(if (index == 0) onPrimary else Color.WHITE)
                     backgroundTintList = ColorStateList.valueOf(if (index == 0) accentColor else ColorUtils.setAlphaComponent(Color.WHITE, 34))

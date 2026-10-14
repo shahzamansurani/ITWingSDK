@@ -77,11 +77,12 @@
                 android:text="@string/skip"
                 android:textAllCaps="false"
                 android:textStyle="bold"
-                app:cornerRadius="12dp"
+                app:cornerRadius="@dimen/itwing_primary_cta_corner_radius"
                 app:strokeWidth="1dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_watch"
+                style="@style/ITWingPrimaryMaterialCTA"
                 android:layout_width="0dp"
                 android:layout_height="46dp"
                 android:layout_marginStart="8dp"
@@ -90,7 +91,7 @@
                 android:textAllCaps="false"
                 android:textColor="@android:color/white"
                 android:textStyle="bold"
-                app:cornerRadius="12dp" />
+            app:cornerRadius="@dimen/itwing_primary_cta_corner_radius" />
         </LinearLayout>
 
     </LinearLayout>

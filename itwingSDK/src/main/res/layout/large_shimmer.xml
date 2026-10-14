@@ -126,32 +126,6 @@
 
             </RelativeLayout>
 
-            <!--            <RelativeLayout-->
-            <!--                android:layout_width="match_parent"-->
-            <!--                android:layout_height="@dimen/_110sdp"-->
-            <!--                android:layout_marginTop="@dimen/_8sdp">-->
-
-            <!--                <TextView-->
-            <!--                    android:layout_width="wrap_content"-->
-            <!--                    android:layout_height="wrap_content"-->
-            <!--                    android:layout_centerInParent="true"-->
-            <!--                    android:text="@string/native_small_text"-->
-            <!--                    android:textColor="@color/black"-->
-            <!--                    android:textSize="@dimen/_8sdp" />-->
-
-            <!--                <ProgressBar-->
-            <!--                    android:layout_width="match_parent"-->
-            <!--                    android:layout_height="match_parent"-->
-            <!--                    android:layout_centerInParent="true"-->
-            <!--                    android:indeterminateTint="@color/black" />-->
-            <!--            </RelativeLayout>-->
-
-            <!--            <View-->
-            <!--                android:layout_width="match_parent"-->
-            <!--                android:layout_height="@dimen/_110sdp"-->
-            <!--                android:layout_marginTop="@dimen/_8sdp"-->
-            <!--                android:background="@color/shimmer_placeholder_color" />-->
-
             <!-- Placeholder for ad_call_to_action -->
             <View
                 android:layout_width="match_parent"
@@ -169,16 +143,5 @@
             android:background="@color/shimmer_placeholder_color"
             android:paddingLeft="@dimen/_5sdp"
             android:paddingRight="@dimen/_5sdp" />
-
-
-        <!--        <TextView-->
-        <!--            android:layout_width="wrap_content"-->
-        <!--            android:layout_height="wrap_content"-->
-        <!--            android:layout_centerInParent="true"-->
-        <!--            android:text="@string/native_small_text"-->
-        <!--            android:textColor="@color/black"-->
-        <!--            android:textSize="@dimen/_20sdp"-->
-        <!--            android:translationZ="@dimen/_5sdp" />-->
-
     </RelativeLayout>
 </com.facebook.shimmer.ShimmerFrameLayout>

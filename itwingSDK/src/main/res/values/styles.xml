@@ -3,6 +3,19 @@
     <!-- Scoped only to SDK MaterialCardView ad roots; host application theme is untouched. -->
     <style name="ITWingAdCardTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
 
+    <!-- The Premium host uses the same existing white SDK surface as the
+         approved ad-card presentation. -->
+    <style name="ITWingPremiumCard">
+        <item name="android:theme">@style/ITWingAdCardTheme</item>
+        <item name="cardBackgroundColor">@color/itwing_sdk_surface</item>
+        <item name="cardCornerRadius">0dp</item>
+        <item name="cardElevation">5dp</item>
+        <item name="cardPreventCornerOverlap">false</item>
+        <item name="useCompatPadding">false</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="contentPadding">0dp</item>
+    </style>
+
     <style name="RatingBar" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="colorControlNormal">@color/grey</item>
         <item name="colorControlActivated">@color/orange</item>
@@ -44,6 +57,23 @@
         <item name="android:textColor">@color/white</item>
         <item name="android:textSize">@dimen/_10ssp</item>
         <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- MaterialButton equivalent of the approved Native CTA geometry. Colors
+         remain runtime/Admin controlled through backgroundTintList. -->
+    <style name="ITWingPrimaryMaterialCTA" parent="Widget.MaterialComponents.Button">
+        <item name="cornerRadius">@dimen/itwing_primary_cta_corner_radius</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:gravity">center</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:paddingStart">@dimen/itwing_primary_cta_horizontal_padding</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:paddingEnd">@dimen/itwing_primary_cta_horizontal_padding</item>
+        <item name="android:paddingBottom">0dp</item>
+        <item name="android:textColor">@color/white</item>
     </style>
 
     <style name="CustomCardShape" parent="ShapeAppearance.MaterialComponents.SmallComponent">

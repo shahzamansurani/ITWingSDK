@@ -32,6 +32,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.concurrent.atomic.AtomicBoolean
+import androidx.core.net.toUri
+import androidx.core.graphics.toColorInt
 
 class ITWingPremiumView @JvmOverloads constructor(
     context: Context,
@@ -90,16 +92,6 @@ class ITWingPremiumView @JvmOverloads constructor(
             customDescription = values.getString(R.styleable.ITWingPremiumView_ITWingPremiumDescription)
             showRestore = values.getBoolean(R.styleable.ITWingPremiumView_ITWingPremiumShowRestore, true)
         }
-
-        radius = 0f
-        cardElevation = 0f
-        maxCardElevation = 0f
-        useCompatPadding = false
-        preventCornerOverlap = false
-        setCardBackgroundColor(Color.TRANSPARENT)
-        strokeWidth = 0
-        setStrokeColor(Color.TRANSPARENT)
-        setContentPadding(0, 0, 0, 0)
 
         purchaseButton.setOnClickListener { launchPurchase() }
         restoreButton.setOnClickListener { openSubscriptionManagement() }
@@ -297,7 +289,7 @@ class ITWingPremiumView @JvmOverloads constructor(
         }
 
         runCatching {
-            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            activity.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
         }.onFailure { error ->
             showMessage(error.message ?: context.getString(R.string.premium_manage_subscription_failed))
         }
@@ -306,7 +298,7 @@ class ITWingPremiumView @JvmOverloads constructor(
     private fun applyPrimaryColor() {
         val primary = listOf("primary", "primary_color")
             .firstNotNullOfOrNull { key -> ITWingSDK.getColor(key).takeIf(String::isNotBlank) }
-            ?.let { runCatching { Color.parseColor(it) }.getOrNull() }
+            ?.let { runCatching { it.toColorInt() }.getOrNull() }
             ?: Color.rgb(37, 99, 235)
         val buttonColor = sdkColor("premium_button_color", fallback = primary)
         val buttonTextColor = sdkColor(

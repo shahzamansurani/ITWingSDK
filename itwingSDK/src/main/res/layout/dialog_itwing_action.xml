@@ -3,17 +3,20 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    app:cardBackgroundColor="#D0111827"
-    app:cardCornerRadius="28dp"
-    app:cardElevation="0dp"
-    app:strokeColor="#55FFFFFF"
+    android:theme="@style/ITWingAdCardTheme"
+    app:cardBackgroundColor="@color/itwing_sdk_surface"
+    app:cardCornerRadius="@dimen/_10sdp"
+    app:cardElevation="5dp"
+    app:cardPreventCornerOverlap="false"
+    app:useCompatPadding="true"
+    app:strokeColor="@color/itwing_sdk_stroke"
     app:strokeWidth="1dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="18dp">
+        android:padding="@dimen/_8sdp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -31,7 +34,7 @@
                     android:id="@+id/itwing_action_title"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textColor="#F8FAFC"
+                    android:textColor="@color/itwing_sdk_text_primary"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
@@ -40,19 +43,19 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="5dp"
-                    android:textColor="#CBD5E1"
+                    android:textColor="@color/itwing_sdk_text_muted"
                     android:textSize="13sp" />
             </LinearLayout>
 
             <TextView
                 android:id="@+id/itwing_action_close"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="@dimen/_30sdp"
+                android:layout_height="@dimen/_30sdp"
                 android:layout_marginStart="10dp"
-                android:background="@drawable/itwing_purchase_card_bg"
+                android:background="@drawable/itwing_dialog_close_bg"
                 android:gravity="center"
                 android:text="X"
-                android:textColor="#F8FAFC"
+                android:textColor="@color/itwing_sdk_text_primary"
                 android:textSize="14sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -68,7 +71,6 @@
             android:id="@+id/itwing_action_review_section"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/_20sdp"
             android:orientation="vertical"
             android:visibility="gone">
 
@@ -84,7 +86,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:layout_marginTop="@dimen/_10sdp"
+                android:layout_marginTop="@dimen/_5sdp"
                 android:numStars="5"
                 android:stepSize="1" />
 
@@ -96,42 +98,40 @@
                 android:gravity="center_horizontal"
                 android:padding="@dimen/_5sdp"
                 android:text="@string/itwing_action_review_message"
-                android:textColor="#F8FAFC"
+                android:textColor="@color/itwing_sdk_text_primary"
                 android:textSize="@dimen/_13sdp" />
 
             <EditText
                 android:id="@+id/itwing_action_review_feedback"
                 android:layout_width="match_parent"
                 android:layout_height="92dp"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/itwing_purchase_dialog_bg"
+                android:background="@drawable/itwing_dialog_input_bg"
                 android:gravity="top|start"
                 android:hint="@string/itwing_action_review_low_hint"
                 android:inputType="textMultiLine|textCapSentences"
                 android:maxLines="4"
                 android:padding="12dp"
-                android:textColor="#F8FAFC"
-                android:textColorHint="#94A3B8"
+                android:textColor="@color/itwing_sdk_text_primary"
+                android:textColorHint="@color/itwing_sdk_text_muted"
                 android:textSize="13sp"
                 android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/itwing_action_review_send"
+                style="@style/ITWingPrimaryMaterialCTA"
                 android:layout_width="match_parent"
                 android:layout_height="44dp"
-                android:layout_marginTop="10dp"
                 android:text="@string/itwing_action_review_send_feedback"
                 android:textAllCaps="false"
                 android:textStyle="bold"
-                android:visibility="gone"
-                app:cornerRadius="12dp" />
+                android:visibility="gone"/>
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/itwing_action_buttons"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/_5sdp"
             android:gravity="center"
             android:orientation="horizontal">
 
@@ -144,19 +144,36 @@
                 android:layout_weight="1"
                 android:textAllCaps="false"
                 android:textStyle="bold"
-                app:cornerRadius="12dp"
+                app:cornerRadius="@dimen/itwing_primary_cta_corner_radius"
                 app:strokeWidth="1dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/itwing_action_positive"
+            <FrameLayout
+                android:id="@+id/itwing_action_positive_container"
                 android:layout_width="0dp"
                 android:layout_height="46dp"
                 android:layout_marginStart="8dp"
-                android:layout_weight="1"
-                android:textAllCaps="false"
-                android:textColor="@android:color/white"
-                android:textStyle="bold"
-                app:cornerRadius="12dp" />
+                android:layout_weight="1">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/itwing_action_positive"
+                    style="@style/ITWingPrimaryMaterialCTA"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:textAllCaps="false"
+                    android:textColor="@color/white"
+                    android:textStyle="bold"
+                    app:cornerRadius="@dimen/itwing_primary_cta_corner_radius" />
+
+                <ProgressBar
+                    android:id="@+id/itwing_action_positive_progress"
+                    style="?android:attr/progressBarStyleSmall"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:clickable="false"
+                    android:focusable="false"
+                    android:visibility="gone" />
+            </FrameLayout>
         </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

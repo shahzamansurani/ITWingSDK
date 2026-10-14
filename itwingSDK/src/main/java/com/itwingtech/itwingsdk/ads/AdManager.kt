@@ -16,8 +16,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 class AdManager(
     private val configProvider: () -> ITWingConfig,
     private val suppressAdsReasonProvider: () -> String? = { null },
+    contextProvider: () -> android.content.Context? = { null },
 ) {
-    private val frequencyController = FrequencyController()
+    private val frequencyController = FrequencyController(contextProvider)
     private val bannerLoader by lazy { BannerLoader(configProvider) }
     private val interstitialManager by lazy { InterstitialManager(configProvider = configProvider, frequency = frequencyController) }
     private val rewardedManager by lazy { RewardedManager(configProvider, frequencyController) }
@@ -183,6 +184,18 @@ class AdManager(
             destroyBanner(container)
             return
         }
+        val placementConfig = configProvider().ads.placements.firstOrNull {
+            it.name == placement && it.enabled && it.format == "banner"
+        }
+        if (placementConfig != null && !frequencyController.canShow(placementConfig)) {
+            AdPriorityTrace.blocked(activity, "banner", placement, "frequency_gate")
+            SDKTelemetry.track(
+                "ad_suppressed",
+                mapOf("format" to "banner", "placement" to placement, "reason" to "frequency_gate"),
+            )
+            destroyBanner(container)
+            return
+        }
         val activityRef = WeakReference(activity)
         val containerRef = WeakReference(container)
         if (InlineAdSafetyGate.suppressInlineAd(
@@ -212,11 +225,29 @@ class AdManager(
             container.visibility = android.view.View.GONE
             return
         }
-        bannerLoader.load(activity = activity, container = container, placementName = placement, bannerType = bannerType)
+        bannerLoader.load(
+            activity = activity,
+            container = container,
+            placementName = placement,
+            bannerType = bannerType,
+            onPresented = { placementConfig?.let(frequencyController::markShown) },
+        )
     }
 
     fun destroyBanner(container: ViewGroup) {
         bannerLoader.destroy(container)
+    }
+
+    internal fun configuredBannerRefreshSeconds(
+        placementName: String,
+        override: BannerType?,
+    ): Long? {
+        val placement = configProvider().ads.placements.firstOrNull {
+            it.name == placementName && it.enabled && it.format == "banner"
+        } ?: return null
+        val resolvedType = override ?: BannerType.fromMetadata(placement.metadata)
+        if (resolvedType != BannerType.ADAPTIVE) return null
+        return placement.refreshSeconds?.takeIf { it > 0 }?.toLong()
     }
 
     /**
@@ -247,6 +278,18 @@ class AdManager(
         nativeRecords[container] = NativeRecord(activity, placement, nativeType)
         if (adsSuppressed()) {
             trackSuppressed("native", placement)
+            destroyNative(container)
+            return
+        }
+        val placementConfig = configProvider().ads.placements.firstOrNull {
+            it.name == placement && it.enabled && it.format == "native"
+        }
+        if (placementConfig != null && !frequencyController.canShow(placementConfig)) {
+            AdPriorityTrace.blocked(activity, "native", placement, "frequency_gate")
+            SDKTelemetry.track(
+                "ad_suppressed",
+                mapOf("format" to "native", "placement" to placement, "reason" to "frequency_gate"),
+            )
             destroyNative(container)
             return
         }
@@ -293,6 +336,7 @@ class AdManager(
                 placementName = placement,
                 nativeTypeOverride = nativeType,
                 deferProviderRequestUntilNextFrame = deferProviderRequestUntilNextFrame,
+                onPresented = { placementConfig?.let(frequencyController::markShown) },
             )
         }.onFailure { throwable ->
             SDKTelemetry.track(

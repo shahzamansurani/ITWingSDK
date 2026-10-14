@@ -21,4 +21,5 @@
     <color name="itwing_sdk_shimmer_highlight">#F1F5F9</color>
     <color name="itwing_sdk_premium">#7C3AED</color>
     <color name="itwing_sdk_wallpaper_premium">#FFB020</color>
+    <color name="red">#FF1100</color>
 </resources>

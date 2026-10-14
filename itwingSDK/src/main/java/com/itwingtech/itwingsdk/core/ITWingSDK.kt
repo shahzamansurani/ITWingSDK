@@ -70,7 +70,7 @@ import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 import com.itwingtech.itwingsdk.ads.ITWingAdView
 
 object ITWingSDK {
-    const val VERSION: String = "1.61"
+    const val VERSION: String = "1.62"
     private const val BILLING_STARTUP_TIMEOUT_MS = 8_000L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -147,6 +147,7 @@ object ITWingSDK {
                 else -> null
             }
         },
+        contextProvider = { applicationContext },
     )
     lateinit var analytics: AnalyticsClient private set
     lateinit var updates: InAppUpdateManager private set
@@ -2290,7 +2291,22 @@ object ITWingSDK {
         onNegative: Runnable? = null,
         onCancel: Runnable? = null,
     ): ITWingActionDialog {
-        return createActionDialog(activity).setReviewEnabled(true).also {
+        val dialogMode = resolveHostDialogMode(positiveText, negativeText)
+        val isExit = dialogMode.let { mode ->
+            when (mode) {
+                "exit" -> true
+                "feedback" -> false
+                else -> null
+            }
+        }
+        val isFeedback = dialogMode == "feedback" ||
+                positiveText.equals("send feedback", ignoreCase = true) ||
+                title.equals("send feedback", ignoreCase = true)
+        return createActionDialog(activity)
+            .setExitFlow(isExit)
+            .setReviewEnabled(isExit != true)
+            .setFeedbackMode(isFeedback)
+            .also {
             it.show(
                 title = title,
                 description = description,
@@ -2303,6 +2319,24 @@ object ITWingSDK {
                 onCancel = onCancel,
             )
         }
+    }
+
+    /** Resolve dialog behavior independently from localized presentation labels. */
+    private fun resolveHostDialogMode(positiveText: String?, negativeText: String?): String {
+        val defaults = hostDialogDefaults()
+        val configured = defaults["mode"]?.toString()?.trim()?.lowercase()
+        if (configured in setOf("exit", "feedback", "generic")) return configured!!
+
+        val positive = positiveText?.trim()?.lowercase()
+            ?: defaults["positive_text"]?.toString()?.trim()?.lowercase()
+            ?: defaults["positive_button"]?.toString()?.trim()?.lowercase()
+        val negative = negativeText?.trim()?.lowercase()
+            ?: defaults["negative_text"]?.toString()?.trim()?.lowercase()
+            ?: defaults["negative_button"]?.toString()?.trim()?.lowercase()
+        return if (
+            (positive == "exit" && negative == "cancel") ||
+            (positive == "cancel" && negative == "exit")
+        ) "exit" else "generic"
     }
 
     @JvmStatic
@@ -2676,6 +2710,11 @@ object ITWingSDK {
         candidates.firstNotNullOfOrNull { it as? Map<*, *> }?.let { return it }
 
         val flat = linkedMapOf<String, Any?>(
+            "mode" to (
+                    config.app["host_dialog_mode"]
+                        ?: config.remoteConfig["host_dialog_mode"]
+                        ?: config.features["host_dialog_mode"]
+                ),
             "enabled" to (
                     config.app["host_dialog_enabled"]
                         ?: config.remoteConfig["host_dialog_enabled"]

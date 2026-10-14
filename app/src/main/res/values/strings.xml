@@ -3,4 +3,28 @@
     <string name="itwing_sdk_app_id">itw_live_94kbqo2nFjs3nNhLpOOm3jHWv80k0JQIkHEzHLBD94Banchm</string>
     <string name="top_trend">Top Trends</string>
     <string name="wallpapers">Wallpapers</string>
+    <!-- Semantic host-side placement names mapped to the current demo config keys. -->
+    <string name="home_top">banner_top</string>
+    <string name="home_bottom">banner_bottom</string>
+    <string name="native_small_demo">native_small</string>
+    <string name="native_large_demo">native_large</string>
+    <string name="normal_banner_demo">banner_adaptive</string>
+    <string name="custom_banner_demo">custom_adaptive_banner</string>
+    <string name="custom_native_small_demo">custom_native_small</string>
+    <string name="custom_native_large_demo">custom_native_large</string>
+    <string name="recovery_native">native_small</string>
+    <string name="recovery_banner">banner_adaptive</string>
+    <string name="example_exit_dialog_title">Exit App</string>
+    <string name="example_exit_dialog_description">Are you sure you want to exit?</string>
+    <string name="example_exit_dialog_positive">Exit</string>
+    <string name="example_cancel">Cancel</string>
+    <string name="example_feedback_dialog_title">Send Feedback</string>
+    <string name="example_feedback_dialog_description">Tell us what should be improved.</string>
+    <string name="example_feedback_dialog_positive">Send Feedback</string>
+    <string name="example_feedback_selected">Feedback action selected</string>
+    <string name="example_show_exit_dialog">Show Exit Dialog</string>
+    <string name="example_show_feedback_dialog">Show Feedback Dialog</string>
+    <string name="example_show_loading_dialog">Show Loading Dialog</string>
+    <string name="example_reset_exit_rating_state">Reset Exit Rating State</string>
+    <string name="example_exit_rating_state_reset">Exit rating state reset</string>
 </resources>

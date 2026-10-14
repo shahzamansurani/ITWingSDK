@@ -56,12 +56,12 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/itwing_purchase_product_button"
+        style="@style/ITWingPrimaryMaterialCTA"
         android:layout_width="match_parent"
         android:layout_height="48dp"
         android:gravity="center"
-        android:minHeight="48dp"
         android:text="Continue"
         android:textAllCaps="false"
         android:textColor="#FFFFFF"
-        app:cornerRadius="14dp" />
+        app:cornerRadius="@dimen/itwing_primary_cta_corner_radius" />
 </LinearLayout>

@@ -39,6 +39,9 @@
         <activity
             android:name=".ResultActivity"
             android:exported="false" />
+        <activity
+            android:name=".EdgeBannerActivity"
+            android:exported="false" />
 
     </application>
 

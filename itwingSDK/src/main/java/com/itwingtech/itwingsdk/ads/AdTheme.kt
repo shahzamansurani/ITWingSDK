@@ -10,7 +10,6 @@ import com.facebook.shimmer.Shimmer
 import com.facebook.shimmer.ShimmerFrameLayout
 import com.google.android.material.card.MaterialCardView
 import com.itwingtech.itwingsdk.core.ITWingSDK
-import com.itwingtech.itwingsdk.core.StartupTrace
 
 /** Normalizes the admin app.colors contract for every SDK-rendered ad surface. */
 internal object AdTheme {
@@ -150,20 +149,6 @@ internal object AdTheme {
         val backgroundColor = if (style.enabled) {
             if (!style.backgroundConfigured) themeSurfaceColor(view) else style.backgroundColor
         } else Color.TRANSPARENT
-        StartupTrace.event(
-            view.context,
-            "AD_THEME",
-            "format=${format.take(16)} view=${view.javaClass.simpleName.take(32)} " +
-                "bgConfigured=${style.backgroundConfigured} bg=${colorHex(backgroundColor)} " +
-                "appNativeBg=${debugColor(ITWingSDK.getConfiguredColor("native_background_color"))} " +
-                "appBannerBg=${debugColor(ITWingSDK.getConfiguredColor("banner_background_color"))} " +
-                "appPrimary=${debugColor(ITWingSDK.getConfiguredColor("primary"))} " +
-                "appText=${debugColor(ITWingSDK.getConfiguredColor("${format.lowercase()}_text_color"))} " +
-                "metaCardBg=${debugColor(metadata?.get(if (format.equals("native", true)) "native_card_background_color" else "banner_card_background_color") as? String)} " +
-                "metaBg=${debugColor(metadata?.get(if (format.equals("native", true)) "native_background_color" else "banner_background_color") as? String)} " +
-                "radiusDp=${style.cornerRadiusDp} elevationDp=${style.elevationDp} " +
-                "paddingDp=${style.innerPaddingDp} cardSettings=${style.cardSettingsConfigured}",
-        )
         val material = view as? MaterialCardView
         val cardView = view as? CardView
         val originalPadding = view.getTag(com.itwingtech.itwingsdk.R.id.ad_card_original_padding) as? IntArray
@@ -172,13 +157,21 @@ internal object AdTheme {
             } ?: intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)).also {
                 view.setTag(com.itwingtech.itwingsdk.R.id.ad_card_original_padding, it)
             }
-        val padding = (style.innerPaddingDp * density).toInt()
+        // Google BannerAd owns its measured content bounds.  Keep the approved
+        // outer card surface, but never spend card content padding inside the
+        // Banner host; that padding reduces the real AdView width and can
+        // constrain a collapsible presentation.
+        val padding = if (format.equals("banner", ignoreCase = true)) {
+            0
+        } else {
+            (style.innerPaddingDp * density).toInt()
+        }
         if (material != null) {
             material.setCardBackgroundColor(backgroundColor)
             material.radius = radius
             material.cardElevation = style.elevationDp * density
             material.maxCardElevation = style.elevationDp * density
-            material.useCompatPadding = style.enabled && style.elevationDp > 0f
+            material.useCompatPadding = !format.equals("banner", ignoreCase = true) && style.enabled && style.elevationDp > 0f
             material.preventCornerOverlap = false
             material.setStrokeWidth((strokeWidth * density).toInt())
             material.setStrokeColor(stroke ?: android.graphics.Color.TRANSPARENT)
@@ -188,7 +181,7 @@ internal object AdTheme {
             cardView.radius = radius
             cardView.cardElevation = style.elevationDp * density
             cardView.maxCardElevation = style.elevationDp * density
-            cardView.useCompatPadding = style.enabled && style.elevationDp > 0f
+            cardView.useCompatPadding = !format.equals("banner", ignoreCase = true) && style.enabled && style.elevationDp > 0f
             cardView.preventCornerOverlap = false
             cardView.foreground = if (stroke != null && strokeWidth > 0f) {
                 GradientDrawable().apply {
@@ -208,7 +201,13 @@ internal object AdTheme {
             view.setPadding(originalPadding[0] + padding, originalPadding[1] + padding, originalPadding[2] + padding, originalPadding[3] + padding)
         }
         view.clipToOutline = style.enabled && clipContent
-        ensureShadowRoom(view, style.elevationDp, density)
+        // A banner is an edge-anchored Google host. Synthetic shadow margins
+        // shrink that host and create an intermediate boundary around the
+        // Google-owned collapsible overlay. Keep the configured card elevation,
+        // but do not add layout margins to the banner host itself.
+        if (!format.equals("banner", ignoreCase = true)) {
+            ensureShadowRoom(view, style.elevationDp, density)
+        }
     }
 
     /** Installs the one real Material card host shared by real and custom ad renderers. */
@@ -236,26 +235,42 @@ internal object AdTheme {
         if (cardHost != null) {
             applyCard(cardHost, format, metadata, legacyStroke, clipContent)
             if (content.parent !== container) (content.parent as? ViewGroup)?.removeView(content)
-            container.removeAllViews()
-            // The inflated ad template already carries its v1.47 wrap/content
-            // dimensions. Re-adding it as MATCH_PARENT made opt-in cards fill
-            // the entire host (and, on full-size hosts, the screen).
-            container.addView(content)
+            if (format.equals("banner", ignoreCase = true) && content.parent === container) {
+                // A collapsible Google BannerAd is registered into this exact
+                // AdView instance. Removing and re-adding it after
+                // registerBannerAd() detaches Google's overlay lifecycle and
+                // leaves only the compact slot visible. Keep the registered
+                // AdView attached and remove only the old loading/sibling
+                // views.
+                for (index in container.childCount - 1 downTo 0) {
+                    if (container.getChildAt(index) !== content) {
+                        container.removeViewAt(index)
+                    }
+                }
+            } else {
+                container.removeAllViews()
+                // The inflated ad template already carries its v1.47 wrap/content
+                // dimensions. Re-adding it as MATCH_PARENT made opt-in cards fill
+                // the entire host (and, on full-size hosts, the screen).
+                container.addView(content)
+            }
             return
         }
 
-        // MaterialCardView is a genuine elevated presentation surface; its
-        // neutral defaults preserve the original layout unless configured.
-        val card = MaterialCardView(
-            ContextThemeWrapper(container.context, com.itwingtech.itwingsdk.R.style.ITWingAdCardTheme)
-        ).apply {
+        // Banner uses a plain CardView so Google controls the complete ad
+        // rendering area. Other ad formats retain their existing Material
+        // surface behavior.
+        val card: CardView = if (format.equals("banner", ignoreCase = true)) {
+            CardView(ContextThemeWrapper(container.context, com.itwingtech.itwingsdk.R.style.ITWingAdCardTheme))
+        } else {
+            MaterialCardView(ContextThemeWrapper(container.context, com.itwingtech.itwingsdk.R.style.ITWingAdCardTheme))
+        }.apply {
             useCompatPadding = false
             preventCornerOverlap = false
             setCardBackgroundColor(Color.TRANSPARENT)
             radius = 0f
             cardElevation = 0f
             maxCardElevation = 0f
-            strokeWidth = 0
             isClickable = false
             isFocusable = false
         }
@@ -595,13 +610,6 @@ internal object AdTheme {
                 .build()
         )
     }
-
-    private fun debugColor(value: String?): String = value
-        ?.trim()
-        ?.takeIf { it.matches(Regex("(?i)(#[0-9a-f]{3,8}|transparent|none)")) }
-        ?: "none"
-
-    private fun colorHex(value: Int): String = "#%08X".format(value)
 
     fun shimmerBaseColor(appColorProvider: (String) -> String? = ITWingSDK::getConfiguredColor): Int = color(
         fallback = 0xFF404040.toInt(),
