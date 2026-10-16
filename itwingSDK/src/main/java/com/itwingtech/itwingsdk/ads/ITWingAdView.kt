@@ -3,6 +3,7 @@ package com.itwingtech.itwingsdk.ads
 import android.content.Context
 import android.util.AttributeSet
 import android.view.LayoutInflater
+import android.view.View
 import android.widget.FrameLayout
 import androidx.core.content.withStyledAttributes
 import com.itwingtech.itwingsdk.R
@@ -19,16 +20,17 @@ class ITWingAdView @JvmOverloads constructor(
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0,
 ) : FrameLayout(context, attrs, defStyleAttr) {
-    private val bannerRenderer: ITWingBannerView
-    private val nativeRenderer: ITWingNativeAdView
+    private val bannerRenderer: ITWingBannerView?
+    private val nativeRenderer: ITWingNativeAdView?
     private var initialized = false
-    private var activeRenderer: android.view.View? = null
+    private var activeRenderer: View? = null
     private var activeKey: String? = null
+    private var refreshPosted = false
 
     var placementName: String = ""
         set(value) {
             field = value.trim()
-            if (initialized && isAttachedToWindow) post { refresh() }
+            scheduleRefresh()
         }
 
     init {
@@ -38,8 +40,8 @@ class ITWingAdView @JvmOverloads constructor(
         // approved card surface or the selected renderer's own sizing.
         clipChildren = false
         clipToPadding = false
-        bannerRenderer = findViewById(R.id.itwing_universal_banner)
-        nativeRenderer = findViewById(R.id.itwing_universal_native)
+        bannerRenderer = findViewById<View>(R.id.itwing_universal_banner) as? ITWingBannerView
+        nativeRenderer = findViewById<View>(R.id.itwing_universal_native) as? ITWingNativeAdView
         context.withStyledAttributes(attrs, R.styleable.ITWingAdView, defStyleAttr, 0) {
             placementName = getString(R.styleable.ITWingAdView_ITWingAdViewPlacement).orEmpty()
         }
@@ -53,47 +55,49 @@ class ITWingAdView @JvmOverloads constructor(
     }
 
     override fun onDetachedFromWindow() {
+        refreshPosted = false
         activeRenderer = null
         activeKey = null
         // The XML contains both renderer children initially. Detach both
         // before re-adding the selected renderer, including the first bind.
-        removeRenderers()
+        runCatching { removeRenderers() }
         super.onDetachedFromWindow()
     }
 
     /** Refreshes the renderer after an app/config change. */
     fun refresh() {
         if (!initialized || !isAttachedToWindow) return
-        val placement = ITWingSDK.currentConfig().ads.placements.firstOrNull {
-            it.name == placementName && it.enabled
-        }
+        runCatching { refreshInternal() }
+            .onFailure { failClosed() }
+    }
+
+    private fun refreshInternal() {
+        val config = ITWingSDK.currentConfig()
+        val placement = ITWingAdPlacementSelector.select(config.ads.placements, placementName)
         val format = PlacementFormatResolver.inlineFormat(placement?.format)
         val key = placement?.let {
             // A config version change alone does not change this slot. Keep
             // the renderer stable until an actual placement property changes.
             "$format|$it"
         }
-        if (placement == null || !ITWingSDK.currentConfig().ads.globalEnabled) {
-            if (activeRenderer != null) {
-                removeRenderers()
-                activeRenderer = null
-            }
+        if (placement == null || !config.ads.globalEnabled) {
+            failClosed()
             activeKey = key
             return
         }
         if (key == activeKey && activeRenderer != null) return
 
         removeRenderers()
-        val renderer = if (format == "banner") {
-            bannerRenderer.apply {
-                placementName = placement.name
-                bannerType = BannerType.fromMetadata(placement.metadata)
-            }
+        val renderer: View = if (format == "banner") {
+            val banner = bannerRenderer ?: return failClosed()
+            banner.placementName = placement.name
+            banner.bannerType = BannerType.fromMetadata(placement.metadata)
+            banner
         } else {
-            nativeRenderer.apply {
-                placementName = placement.name
-                nativeType = null
-            }
+            val native = nativeRenderer ?: return failClosed()
+            native.placementName = placement.name
+            native.nativeType = null
+            native
         }
         renderer.layoutParams = renderer.layoutParams ?: LayoutParams(
             LayoutParams.MATCH_PARENT,
@@ -105,11 +109,31 @@ class ITWingAdView @JvmOverloads constructor(
         activeKey = key
     }
 
+    private fun failClosed() {
+        activeRenderer = null
+        activeKey = null
+        runCatching { removeRenderers() }
+    }
+
+    private fun scheduleRefresh() {
+        if (!initialized || !isAttachedToWindow || refreshPosted) return
+        refreshPosted = true
+        runCatching {
+            post {
+                refreshPosted = false
+                if (initialized && isAttachedToWindow) refresh()
+            }
+        }.onFailure {
+            refreshPosted = false
+            failClosed()
+        }
+    }
+
     private fun removeRenderers() {
-        if (bannerRenderer.parent === this) {
+        if (bannerRenderer?.parent === this) {
             removeView(bannerRenderer)
         }
-        if (nativeRenderer.parent === this) {
+        if (nativeRenderer?.parent === this) {
             removeView(nativeRenderer)
         }
     }
@@ -121,7 +145,7 @@ class ITWingAdView @JvmOverloads constructor(
             instances.removeAll { reference ->
                 val view = reference.get()
                 if (view == null) true else {
-                    view.post { view.refresh() }
+                    view.scheduleRefresh()
                     false
                 }
             }

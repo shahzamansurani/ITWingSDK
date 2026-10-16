@@ -1,5 +1,11 @@
 # Changelog
 
+## ITWingSDK v1.63
+
+- Fixed a production `ClassCastException` in `ITWingAdView` during attachment and asynchronous refresh.
+- Hardened universal inline placement and renderer resolution against malformed runtime configuration and unsafe casts.
+- Improved attach/detach/config-refresh safety without changing placement, rendering, or provider behavior.
+
 ## ITWingSDK v1.62
 
 - Unified `ITWingAdView` integration for current placement-driven Native and
