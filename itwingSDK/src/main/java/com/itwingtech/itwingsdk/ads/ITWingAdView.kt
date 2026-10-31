@@ -26,6 +26,7 @@ class ITWingAdView @JvmOverloads constructor(
     private var activeRenderer: View? = null
     private var activeKey: String? = null
     private var refreshPosted = false
+    private var refreshRunnable: Runnable? = null
 
     var placementName: String = ""
         set(value) {
@@ -51,10 +52,14 @@ class ITWingAdView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        refresh()
+        // Keep renderer binding outside the host's view-attachment traversal.
+        // The posted operation remains lifecycle-gated and deduplicated.
+        scheduleRefresh()
     }
 
     override fun onDetachedFromWindow() {
+        refreshRunnable?.let { removeCallbacks(it) }
+        refreshRunnable = null
         refreshPosted = false
         activeRenderer = null
         activeKey = null
@@ -118,12 +123,20 @@ class ITWingAdView @JvmOverloads constructor(
     private fun scheduleRefresh() {
         if (!initialized || !isAttachedToWindow || refreshPosted) return
         refreshPosted = true
+        val runnable = Runnable {
+            refreshRunnable = null
+            refreshPosted = false
+            if (initialized && isAttachedToWindow) refresh()
+        }
+        refreshRunnable = runnable
         runCatching {
-            post {
+            if (!post(runnable)) {
+                refreshRunnable = null
                 refreshPosted = false
-                if (initialized && isAttachedToWindow) refresh()
+                failClosed()
             }
         }.onFailure {
+            refreshRunnable = null
             refreshPosted = false
             failClosed()
         }

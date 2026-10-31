@@ -1,5 +1,13 @@
 # Changelog
 
+## ITWingSDK v1.64
+
+- Hardened the universal inline view so renderer binding is deferred outside
+  attachment traversal and cancelled safely on detach.
+- Preserved existing placement, provider, fullscreen, shimmer, and recovery
+  behavior while reducing lifecycle-time work that can contribute to input
+  dispatch stalls.
+
 ## ITWingSDK v1.63
 
 - Fixed a production `ClassCastException` in `ITWingAdView` during attachment and asynchronous refresh.
