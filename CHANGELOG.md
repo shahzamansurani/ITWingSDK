@@ -1,5 +1,10 @@
 # Changelog
 
+## ITWingSDK v1.65.1
+
+- Correct the runtime SDK version reported by `ITWingSDK.VERSION`.
+- Persist the verified subscription credit identity for active products.
+
 ## ITWingSDK v1.65
 
 - Exposes the verified, non-secret subscription credit identity returned by

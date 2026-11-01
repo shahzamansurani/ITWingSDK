@@ -453,6 +453,7 @@ class ConfigRepository(
             if (!formattedPrice.isNullOrBlank()) {
                 store.saveActivePlanPrice(formattedPrice)
             }
+            store.saveSubscriptionIdentity(creditIdentity)
         } else if (!active) {
             store.saveActivePlan(null, null, null)
             store.saveActivePlanPrice(null)
