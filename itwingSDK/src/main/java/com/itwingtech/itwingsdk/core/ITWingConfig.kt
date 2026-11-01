@@ -232,6 +232,7 @@ data class SubscriptionPlanInfo(
     val active: Boolean,
     val removesAds: Boolean,
     val expiresAt: String?,
+    val creditIdentity: String? = null,
 )
 
 data class FirebaseConfig(

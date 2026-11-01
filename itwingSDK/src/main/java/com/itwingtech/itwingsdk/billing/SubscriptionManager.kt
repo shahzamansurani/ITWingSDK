@@ -406,6 +406,7 @@ class SubscriptionManager(
                 active = repository.isEntitlementActive(),
                 removesAds = repository.entitlementRemovesAds(),
                 expiresAt = repository.entitlementExpiresAt(),
+                creditIdentity = repository.subscriptionIdentity(),
             )
         }.onFailure { error ->
             lastBillingMessage = error.message

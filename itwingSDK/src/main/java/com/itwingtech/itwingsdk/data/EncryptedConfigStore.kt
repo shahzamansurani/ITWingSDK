@@ -91,6 +91,13 @@ class EncryptedConfigStore(context: Context) {
         prefs.edit { putString("active_formatted_price", formattedPrice) }
     }
 
+    fun saveSubscriptionIdentity(identity: String?) {
+        prefs.edit { putString("subscription_credit_identity", identity) }
+    }
+
+    fun subscriptionIdentity(): String? =
+        prefs.getString("subscription_credit_identity", null)?.takeIf(String::isNotBlank)
+
     fun activeProductId(): String? = prefs.getString("active_product_id", null)?.takeIf(String::isNotBlank)
 
     fun activeBasePlanId(): String? = prefs.getString("active_base_plan_id", null)?.takeIf(String::isNotBlank)

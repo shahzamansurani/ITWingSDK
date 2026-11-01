@@ -436,6 +436,8 @@ class ConfigRepository(
             (0 until purchases.length()).mapNotNull { purchases.optJSONObject(it) }
                 .firstOrNull { it.optBoolean("active", false) }
         }
+        val creditIdentity = data.optCleanString("credit_identity")
+            ?: activePurchase?.optCleanString("credit_identity")
         val productId = data.optCleanString("product_id") ?: activePurchase?.optCleanString("product_id")
         val incomingBasePlanId = data.optCleanString("base_plan_id") ?: activePurchase?.optCleanString("base_plan_id")
         val incomingOfferId = data.optCleanString("offer_id") ?: activePurchase?.optCleanString("offer_id")
@@ -455,6 +457,9 @@ class ConfigRepository(
             store.saveActivePlan(null, null, null)
             store.saveActivePlanPrice(null)
             store.savePendingPlan(null, null, null)
+            store.saveSubscriptionIdentity(null)
+        } else {
+            store.saveSubscriptionIdentity(creditIdentity)
         }
         store.saveEntitlement(active, removesAds, expiresAt)
     }
@@ -592,6 +597,8 @@ class ConfigRepository(
             )
         }
     }
+
+    fun subscriptionIdentity(): String? = store.subscriptionIdentity()
 
     private fun Any?.asSafeString(): String = (this as? String)?.trim().orEmpty()
 

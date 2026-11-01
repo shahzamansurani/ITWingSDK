@@ -1,5 +1,13 @@
 # Changelog
 
+## ITWingSDK v1.65
+
+- Exposes the verified, non-secret subscription credit identity returned by
+  the backend so app-owned realtime ledgers survive reinstall and token
+  rotation correlation.
+- Preserves the identity through entitlement restore and clears it when the
+  verified entitlement becomes inactive.
+
 ## ITWingSDK v1.64
 
 - Hardened the universal inline view so renderer binding is deferred outside
