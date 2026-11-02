@@ -1,5 +1,11 @@
 # Changelog
 
+## ITWingSDK v1.66
+
+- Correctly carries the v1.65.1 stable subscription identity persistence fix
+  under the required `v1.<minor>` release convention.
+- Adds release-time validation that rejects patch-style SDK versions.
+
 ## ITWingSDK v1.65.1
 
 - Correct the runtime SDK version reported by `ITWingSDK.VERSION`.
