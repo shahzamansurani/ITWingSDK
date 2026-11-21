@@ -17,13 +17,21 @@ class AdManager(
     private val configProvider: () -> ITWingConfig,
     private val suppressAdsReasonProvider: () -> String? = { null },
     contextProvider: () -> android.content.Context? = { null },
+    private val adMobReadyProvider: () -> Boolean = { true },
 ) {
     private val frequencyController = FrequencyController(contextProvider)
     private val bannerLoader by lazy { BannerLoader(configProvider) }
     private val interstitialManager by lazy { InterstitialManager(configProvider = configProvider, frequency = frequencyController) }
     private val rewardedManager by lazy { RewardedManager(configProvider, frequencyController) }
     private val rewardedInterstitialManager by lazy { RewardedInterstitialManager(configProvider, frequencyController) }
-    private val appOpenManager by lazy { AppOpenManager(configProvider, frequencyController, suppressAdsReasonProvider) }
+    private val appOpenManager by lazy {
+        AppOpenManager(
+            configProvider = configProvider,
+            frequency = frequencyController,
+            suppressAdsReasonProvider = suppressAdsReasonProvider,
+            adMobReadyProvider = adMobReadyProvider,
+        )
+    }
     private val nativeLoader by lazy { NativeLoader(configProvider) }
     private val bannerContainers = CopyOnWriteArrayList<WeakReference<ViewGroup>>()
     private val nativeContainers = CopyOnWriteArrayList<WeakReference<ViewGroup>>()

@@ -27,6 +27,7 @@ class AppOpenManager(
     private val configProvider: () -> ITWingConfig,
     private val frequency: FrequencyController,
     private val suppressAdsReasonProvider: () -> String? = { null },
+    private val adMobReadyProvider: () -> Boolean = { true },
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val loading = AtomicBoolean(false)
@@ -41,8 +42,10 @@ class AppOpenManager(
     private var firstUseSession = true
     private val lastLoadAttemptAt = ConcurrentHashMap<String, Long>()
     private val activeShowRequests = ConcurrentHashMap<String, Boolean>()
+    private val pendingAdMobShowRequests = ConcurrentHashMap<String, Boolean>()
     private val customRenderer = CustomFullscreenAdRenderer()
     private val minLoadIntervalMs = 30_000L
+    private val adMobInitializationWaitMs = 15_000L
     @Volatile
     private var automaticSuppressedUntilMs: Long = 0L
 
@@ -183,6 +186,10 @@ class AppOpenManager(
             return
         }
 
+        // AppOpenAd.load must not race Mobile Ads initialization. Config bootstrap
+        // can finish before consent, billing restore, and GMA initialization.
+        if (!adMobReadyProvider()) return
+
         val unit = placement.adMobUnitOrNull() ?: return
         if (!canStartLoad(placementName, placement, forceRequest)) return
         loading.set(true)
@@ -200,8 +207,16 @@ class AppOpenManager(
                 override fun onAdFailedToLoad(
                     adError: LoadAdError,
                 ) {
-
                     loading.set(false)
+                    AdEventTracker.log(
+                        "ad_load_failed",
+                        placement,
+                        mapOf(
+                            "provider" to "admob",
+                            "code" to adError.code,
+                            "message" to adError.message,
+                        ),
+                    )
                 }
             },
         )
@@ -275,6 +290,26 @@ class AppOpenManager(
             } else {
                 AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "fullscreen_ad_active_or_show_failed"))
                 guardedComplete()
+            }
+            return
+        }
+
+        if (!adMobReadyProvider()) {
+            activeShowRequests.remove(placementName)
+            if (pendingAdMobShowRequests.putIfAbsent(placementName, true) != null) {
+                AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "gma_initialization_in_progress"))
+                safeCallback(onComplete)
+                return
+            }
+            AdEventTracker.log("ad_show_deferred", placement, mapOf("reason" to "gma_initialization_in_progress"))
+            waitForAdMobReady(activity) { ready ->
+                pendingAdMobShowRequests.remove(placementName)
+                if (ready) {
+                    show(activity, placementName, onComplete, waitForLoad)
+                } else {
+                    AdEventTracker.log("ad_suppressed", placement, mapOf("reason" to "gma_initialization_timeout"))
+                    safeCallback(onComplete)
+                }
             }
             return
         }
@@ -472,6 +507,28 @@ class AppOpenManager(
         }
 
         mainHandler.postDelayed({ poll() }, 150L)
+    }
+
+    private fun waitForAdMobReady(activity: Activity, onReady: (Boolean) -> Unit) {
+        val startedAt = SystemClock.elapsedRealtime()
+
+        fun poll() {
+            if (!activity.isUsable()) {
+                onReady(false)
+                return
+            }
+            if (runCatching { adMobReadyProvider() }.getOrDefault(false)) {
+                onReady(true)
+                return
+            }
+            if (SystemClock.elapsedRealtime() - startedAt >= adMobInitializationWaitMs) {
+                onReady(false)
+                return
+            }
+            mainHandler.postDelayed({ poll() }, 100L)
+        }
+
+        mainHandler.post { poll() }
     }
 
     private fun showCustomFallback(activity: Activity, placement: com.itwingtech.itwingsdk.core.AdPlacementConfig, onComplete: () -> Unit): Boolean {

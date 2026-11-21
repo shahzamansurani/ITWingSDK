@@ -70,7 +70,7 @@ import com.itwingtech.itwingsdk.ads.ITWingRecyclerAdOptions
 import com.itwingtech.itwingsdk.ads.ITWingAdView
 
 object ITWingSDK {
-    const val VERSION: String = "1.66"
+    const val VERSION: String = "1.67"
     private const val BILLING_STARTUP_TIMEOUT_MS = 8_000L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -146,6 +146,9 @@ object ITWingSDK {
                 ::subscriptions.isInitialized && subscriptions.isAdFree() -> "subscription"
                 else -> null
             }
+        },
+        adMobReadyProvider = {
+            mobileAdsInitializationFinished || config.ads.admobAppId.isNullOrBlank()
         },
         contextProvider = { applicationContext },
     )

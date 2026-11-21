@@ -1,5 +1,10 @@
 # Changelog
 
+## ITWingSDK v1.67
+
+- Fixed splash and manual App Open requests racing Google Mobile Ads initialization.
+- Added a bounded readiness wait and explicit App Open load-failure telemetry.
+
 ## ITWingSDK v1.66
 
 - Correctly carries the v1.65.1 stable subscription identity persistence fix

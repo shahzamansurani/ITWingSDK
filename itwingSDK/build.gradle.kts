@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 val sdkPublicationGroup = providers.gradleProperty("group")
     .orElse("com.github.shahzamansurani")
 val sdkPublicationVersion = providers.gradleProperty("version")
-    .orElse("v1.66")
+    .orElse("v1.67")
 
 val normalizedSdkVersion = sdkPublicationVersion.get().removePrefix("v")
 require(Regex("1\\.\\d+").matches(normalizedSdkVersion)) {
