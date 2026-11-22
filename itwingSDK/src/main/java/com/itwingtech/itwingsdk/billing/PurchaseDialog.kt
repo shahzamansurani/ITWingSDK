@@ -17,6 +17,7 @@ import com.google.android.material.button.MaterialButton
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.SubscriptionProductConfig
 import com.itwingtech.itwingsdk.core.SubscriptionPlanInfo
+import com.itwingtech.itwingsdk.ui.SdkDialogTheme
 import com.itwingtech.itwingsdk.ui.SdkDialogWindow
 import java.time.Instant
 import java.time.ZoneId
@@ -55,6 +56,13 @@ internal object PurchaseDialog {
         val cancelButton = content.findViewById<MaterialButton>(R.id.itwing_purchase_cancel)
         val closeButton = content.findViewById<ImageButton>(R.id.itwing_purchase_close)
         val resultDelivered = AtomicBoolean(false)
+        SdkDialogTheme.apply(content, activity)
+        val titleColor = SdkDialogTheme.color(activity, "dialog_title_color", Color.rgb(17, 24, 39))
+        val descriptionColor = SdkDialogTheme.color(activity, "dialog_description_color", Color.rgb(102, 112, 133))
+        val closeColor = SdkDialogTheme.color(activity, "dialog_close_icon_color", descriptionColor)
+        title.setTextColor(titleColor)
+        subtitle.setTextColor(descriptionColor)
+        closeButton.imageTintList = ColorStateList.valueOf(closeColor)
 
         fun deliverResult(result: BillingResult) {
             if (resultDelivered.compareAndSet(false, true)) {
@@ -82,7 +90,7 @@ internal object PurchaseDialog {
             status.visibility = View.VISIBLE
             status.text = currentSubscription?.activeDescription()
                 ?: "Premium is active. Ads are disabled for products configured to remove ads."
-            status.setTextColor(primaryColor)
+            status.setTextColor(descriptionColor)
         }
 
         var dialog: AlertDialog? = null
@@ -97,8 +105,10 @@ internal object PurchaseDialog {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             )
 
-            row.findViewById<TextView>(R.id.itwing_purchase_product_name).text =
-                product.displayName(details)
+            row.findViewById<TextView>(R.id.itwing_purchase_product_name).apply {
+                text = product.displayName(details)
+                setTextColor(titleColor)
+            }
             row.findViewById<TextView>(R.id.itwing_purchase_product_price).apply {
                 text = product.displayPrice(details)
                 setTextColor(primaryColor)
@@ -108,18 +118,23 @@ internal object PurchaseDialog {
                 visibility = if (offerText.isNullOrBlank()) View.GONE else View.VISIBLE
                 text = offerText.orEmpty()
             }
-            row.findViewById<TextView>(R.id.itwing_purchase_product_period).text =
-                if (productType == BillingClient.ProductType.INAPP) {
+            row.findViewById<TextView>(R.id.itwing_purchase_product_period).apply {
+                text = if (productType == BillingClient.ProductType.INAPP) {
                     "One-time purchase"
                 } else {
                     details?.subscriptionPeriodLabel(product) ?: product.billingPeriod.replaceFirstChar { it.titlecase() }
                 }
+                setTextColor(descriptionColor)
+            }
 
             val description = details?.description?.takeIf { it.isNotBlank() }
                 ?: product.metadata["description"]?.toString()?.takeIf { it.isNotBlank() }
                 ?: product.entitlements.entries.joinToString(", ") { it.key.replace('_', ' ') }.takeIf { it.isNotBlank() }
                 ?: "Secure Google Play checkout. Active purchases are restored automatically."
-            row.findViewById<TextView>(R.id.itwing_purchase_product_description).text = description
+            row.findViewById<TextView>(R.id.itwing_purchase_product_description).apply {
+                text = description
+                setTextColor(descriptionColor)
+            }
 
             val sameProductAdminPlans = products.count { it.productId.trim() == product.productId.trim() }
             val isOwned = currentSubscription?.active == true &&

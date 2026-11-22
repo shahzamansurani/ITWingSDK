@@ -1,5 +1,12 @@
 # Changelog
 
+## ITWingSDK v1.70
+
+- Matched the subscription purchase dialog’s card surface, colors, and window
+  treatment to the approved SDK action dialog presentation.
+- Preserved Google Play billing, restore, product selection, entitlement, and
+  ad behavior.
+
 ## ITWingSDK v1.69
 
 - Made the SDK subscription purchase dialog use the same opaque SDK-card window
