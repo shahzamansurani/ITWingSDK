@@ -40,6 +40,8 @@ class AppOpenManager(
     private var backgroundedAtMs = 0L
     private var sawForegroundBefore = false
     private var firstUseSession = true
+    private var processInForeground = false
+    private var pendingAutomaticSessionId: Long? = null
     private val lastLoadAttemptAt = ConcurrentHashMap<String, Long>()
     private val activeShowRequests = ConcurrentHashMap<String, Boolean>()
     private val pendingAdMobShowRequests = ConcurrentHashMap<String, Boolean>()
@@ -64,11 +66,9 @@ class AppOpenManager(
                     object : DefaultLifecycleObserver {
                         override fun onStart(owner: LifecycleOwner) {
                             runCatching {
+                                processInForeground = true
                                 foregroundSessionId += 1L
                                 val sessionId = foregroundSessionId
-                                val currentActivity = foregroundActivity?.get()?.takeUnless {
-                                    it.isFinishing || it.isDestroyed
-                                } ?: return
                                 val backgroundDuration = if (backgroundedAtMs > 0L) {
                                     SystemClock.elapsedRealtime() - backgroundedAtMs
                                 } else 0L
@@ -115,19 +115,14 @@ class AppOpenManager(
                                     )
                                     return
                                 }
-                                val placement = automaticPlacementName() ?: return
-                                mainHandler.postDelayed({
-                                    if (sessionId != foregroundSessionId || currentActivity.isFinishing || currentActivity.isDestroyed || !currentActivity.window.decorView.isShown) return@postDelayed
-                if (validAppOpenAd() != null || (placementConfig(placement)?.shouldRenderCustomBeforeAdMob() == true && hasLoadedCustomAd(placement))) {
-                                        show(currentActivity, placement, waitForLoad = false)
-                                    } else {
-                                        show(currentActivity, placement, waitForLoad = true)
-                                    }
-                                }, 0L)
+                                pendingAutomaticSessionId = sessionId
+                                scheduleAutomaticResume(sessionId)
                             }
                         }
 
                         override fun onStop(owner: LifecycleOwner) {
+                            processInForeground = false
+                            pendingAutomaticSessionId = null
                             backgroundedAtMs = SystemClock.elapsedRealtime()
                         }
                     },
@@ -137,10 +132,37 @@ class AppOpenManager(
 
     fun updateForegroundActivity(activity: Activity) {
         foregroundActivity = WeakReference(activity)
+        val pendingSessionId = pendingAutomaticSessionId
+        if (automaticStarted.get() && processInForeground && pendingSessionId == foregroundSessionId) {
+            scheduleAutomaticResume(pendingSessionId)
+        }
     }
 
     fun onActivityPaused(activity: Activity) {
         if (foregroundActivity?.get() === activity) foregroundActivity = null
+    }
+
+    private fun scheduleAutomaticResume(sessionId: Long) {
+        val currentActivity = foregroundActivity?.get()?.takeUnless {
+            it.isFinishing || it.isDestroyed
+        } ?: return
+        val placement = automaticPlacementName() ?: return
+        pendingAutomaticSessionId = null
+        mainHandler.postDelayed({
+            if (
+                !processInForeground ||
+                sessionId != foregroundSessionId ||
+                foregroundActivity?.get() !== currentActivity ||
+                currentActivity.isFinishing ||
+                currentActivity.isDestroyed ||
+                !currentActivity.window.decorView.isShown
+            ) return@postDelayed
+            if (validAppOpenAd() != null || (placementConfig(placement)?.shouldRenderCustomBeforeAdMob() == true && hasLoadedCustomAd(placement))) {
+                show(currentActivity, placement, waitForLoad = false)
+            } else {
+                show(currentActivity, placement, waitForLoad = true)
+            }
+        }, 0L)
     }
 
     fun suppressAutomaticFor(durationMs: Long) {

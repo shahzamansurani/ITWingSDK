@@ -10,7 +10,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.shahzamansurani:ITWingSDK:v1.67")
+    implementation("com.github.shahzamansurani:ITWingSDK:v1.68")
 }
 ```
 

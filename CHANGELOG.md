@@ -1,5 +1,12 @@
 # Changelog
 
+## ITWingSDK v1.68
+
+- Fixed automatic App Open ads on process resume when Android delivers the
+  process foreground callback before the resumed Activity callback.
+- Preserved the existing splash, manual App Open, interstitial, banner, native,
+  frequency, and request throttling behavior.
+
 ## ITWingSDK v1.67
 
 - Fixed splash and manual App Open requests racing Google Mobile Ads initialization.
