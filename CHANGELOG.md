@@ -1,5 +1,12 @@
 # Changelog
 
+## ITWingSDK v1.71
+
+- Hardened SDK-managed action and purchase dialog theming against legacy or
+  malformed admin colors that could make light cards transparent or hide text.
+- Preserved the v1.70 dialog layout, billing behavior, ad loading, request
+  throttling, and impression behavior.
+
 ## ITWingSDK v1.70
 
 - Matched the subscription purchase dialog’s card surface, colors, and window
