@@ -1,5 +1,13 @@
 # Changelog
 
+## ITWingSDK v1.69
+
+- Made the SDK subscription purchase dialog use the same opaque SDK-card window
+  treatment as the action dialog instead of the previous glass/transparent
+  window treatment.
+- Preserved Google Play billing, restore, product selection, and entitlement
+  behavior.
+
 ## ITWingSDK v1.68
 
 - Fixed automatic App Open ads on process resume when Android delivers the

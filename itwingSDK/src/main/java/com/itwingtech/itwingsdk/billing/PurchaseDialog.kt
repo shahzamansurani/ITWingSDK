@@ -17,7 +17,7 @@ import com.google.android.material.button.MaterialButton
 import com.itwingtech.itwingsdk.R
 import com.itwingtech.itwingsdk.core.SubscriptionProductConfig
 import com.itwingtech.itwingsdk.core.SubscriptionPlanInfo
-import com.itwingtech.itwingsdk.ui.GlassDialogWindow
+import com.itwingtech.itwingsdk.ui.SdkDialogWindow
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -210,7 +210,7 @@ internal object PurchaseDialog {
             deliverCancellation()
         }
         dialog.setOnShowListener {
-            GlassDialogWindow.apply(dialog.window, activity.dialogWidth())
+            SdkDialogWindow.apply(dialog.window, activity.dialogWidth())
             cancelButton.setOnClickListener {
                 deliverCancellation()
                 dialog.dismiss()

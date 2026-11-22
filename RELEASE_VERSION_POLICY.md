@@ -6,8 +6,9 @@ ITWingSDK Android releases use exactly one numeric minor component after `1`:
 - `v1.66`
 - `v1.67`
 - `v1.68`
+- `v1.69`
 
-Patch-style tags such as `v1.65.1`, `v1.66.1`, `v1.67.1`, and `v1.68.1` are not valid
+Patch-style tags such as `v1.65.1`, `v1.66.1`, `v1.67.1`, `v1.68.1`, and `v1.69.1` are not valid
 release versions. The `itwingSDK` Gradle build validates this rule during
 configuration, so a release build fails before publication when the supplied
 `version` property does not match `v1.<minor>` (or `1.<minor>`).
